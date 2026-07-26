@@ -1,392 +1,224 @@
 /**
  * TAPD 待办扩展 — 树形交互表格
  *
- * 使用 TAPD Bearer Token 认证（只需个人令牌，无需 apiUser/owner）。
- * 通过 /user_oauth/get_user_todo_story 获取当前用户的待办。
+ * 使用 TAPD Bearer Token 认证（只需个人令牌）。
+ * 通过 /user_oauth/get_user_todo_story 获取当前用户待办。
  *
  * 配置 ~/.pi/agent/tapd.json：
- * {
- *   "token": "你的TAPD个人令牌"
- * }
- *
- * 可选：
- * {
- *   "token": "...",
- *   "baseUrl": "https://api.tapd.cn"   // 默认值
- * }
+ * { "token": "你的TAPD个人令牌" }
  */
 
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { exec } from "node:child_process";
 import { join } from "node:path";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { DynamicBorder, getAgentDir } from "@earendil-works/pi-coding-agent";
-import {
-  Container,
-  Text,
-  visibleWidth,
-  truncateToWidth,
-} from "@earendil-works/pi-tui";
+import { Container, Text, Input, visibleWidth, truncateToWidth } from "@earendil-works/pi-tui";
 
 // ============ 配置 ============
 
-interface TapdConfig {
-  token: string;
-  baseUrl?: string;
-}
+interface TapdConfig { token: string; baseUrl?: string; }
 
 function loadConfig(): TapdConfig | null {
-  const configPath = join(getAgentDir(), "tapd.json");
-  if (!existsSync(configPath)) return null;
-  try {
-    return JSON.parse(readFileSync(configPath, "utf-8")) as TapdConfig;
-  } catch {
-    return null;
-  }
+  const p = join(getAgentDir(), "tapd.json");
+  if (!existsSync(p)) return null;
+  try { return JSON.parse(readFileSync(p, "utf-8")) as TapdConfig; } catch { return null; }
 }
 
-// ============ API 客户端 (Bearer Token) ============
+// ============ API 客户端 ============
 
 const DEFAULT_BASE = "https://api.tapd.cn";
 
-function apiUrl(config: TapdConfig, path: string, query?: Record<string, string>): string {
-  const base = (config.baseUrl ?? DEFAULT_BASE).replace(/\/$/, "");
-  const qs = query ? "?" + new URLSearchParams(query).toString() : "";
-  return base + path + qs;
+function apiUrl(c: TapdConfig, path: string, q?: Record<string, string>): string {
+  const base = (c.baseUrl ?? DEFAULT_BASE).replace(/\/$/, "");
+  return base + path + (q ? "?" + new URLSearchParams(q).toString() : "");
 }
 
-async function tapdGet<T>(url: string, config: TapdConfig, signal?: AbortSignal): Promise<T | null> {
+async function tapdGet<T>(url: string, c: TapdConfig, s?: AbortSignal): Promise<T | null> {
   try {
-    const resp = await fetch(url, {
-      headers: {
-        Authorization: `Bearer ${config.token}`,
-        "Content-Type": "application/json",
-      },
-      signal,
-    });
-    if (!resp.ok) {
-      console.error(`TAPD HTTP ${resp.status} for ${url}`);
-      return null;
-    }
-    const json: any = await resp.json();
-    if (json.status !== 1) {
-      console.error(`TAPD api error for ${url}: ${json.info ?? "unknown"}`);
-      return null;
-    }
-    return json as T;
+    const r = await fetch(url, { headers: { Authorization: `Bearer ${c.token}`, "Content-Type": "application/json" }, signal: s });
+    if (!r.ok) return null;
+    const j: any = await r.json();
+    return j.status === 1 ? (j as T) : null;
   } catch (err: any) {
     if (err.name === "AbortError") return null;
-    console.error(`TAPD fetch error for ${url}:`, err.message);
+    console.error("TAPD fetch error:", err.message);
     return null;
   }
 }
 
-// ============ TAPD 类型 ============
-
-interface TapdResponse<T> { status: number; data: T[]; info?: string; }
-
-interface TapdUserInfo {
-  nick: string;
-  name?: string;
-  id?: string;
-}
-
-interface TapdWorkspace {
-  Workspace: { id: string; name: string; pretty_name?: string; category?: string };
-}
-
-interface TapdTodoStory {
-  Story: { id: string; workspace_id: string };
-}
-
-interface TapdStoryFull {
-  Story: {
-    id: string;
-    name: string;
-    status: string;
-    v_status?: string;
-    priority?: string;
-    priority_label?: string;
-    owner: string;
-    developer?: string;
-    workspace_id: string;
-    parent_id?: string;
-    ancestor_id?: string;
-    iteration_id?: string;
-    workitem_type_id?: string;
-    begin?: string;
-    due?: string;
-    effort?: string;
-    effort_completed?: string;
-    remain?: string;
-    modified?: string;
-  };
-}
-
-interface TapdIterationRaw {
-  Iteration: { id: string; name: string; startdate?: string; enddate?: string };
-}
-
-interface TapdWorkitemTypeRaw {
-  WorkitemType: { id: string; name: string };
-}
-
-// ============ 本地数据模型 ============
-
-interface TapdItem {
-  id: string;
-  name: string;
-  status: string;
-  priority: string;
-  owner: string;
-  workspaceId: string;
-  workspaceName: string;
-  begin?: string;
-  due?: string;
-  iterationId?: string;
-  iterationName?: string;
-  parentId?: string;
-  ancestorId?: string;
-  workitemTypeName?: string;
-  effort?: string;
-  effortCompleted?: string;
-  remain?: string;
-  children: TapdItem[];
-  depth: number;
-  hasChildren: boolean;
-}
+interface TR<T> { status: number; data: T[]; }
 
 // ============ 数据获取 ============
 
-async function fetchUserInfo(config: TapdConfig, signal?: AbortSignal): Promise<TapdUserInfo | null> {
-  const url = apiUrl(config, "/users/info");
-  const resp = await tapdGet<{ status: number; data: TapdUserInfo }>(url, config, signal);
-  return resp?.data ?? null;
+async function fetchUserInfo(c: TapdConfig, s?: AbortSignal): Promise<{ nick: string } | null> {
+  const r = await tapdGet<{ status: number; data: { nick: string } }>(apiUrl(c, "/users/info"), c, s);
+  return r?.data ?? null;
 }
 
-async function fetchWorkspaces(nick: string, config: TapdConfig, signal?: AbortSignal): Promise<{ id: string; name: string }[]> {
-  const url = apiUrl(config, "/workspaces/user_participant_projects", { nick });
-  const resp = await tapdGet<TapdResponse<TapdWorkspace>>(url, config, signal);
-  if (!resp?.data) return [];
-  return resp.data.map((d) => d.Workspace).filter(Boolean).map((w) => ({ id: w.id, name: w.name }));
+async function fetchWorkspaces(nick: string, c: TapdConfig, s?: AbortSignal): Promise<{ id: string; name: string }[]> {
+  const r = await tapdGet<TR<{ Workspace: { id: string; name: string } }>>(apiUrl(c, "/workspaces/user_participant_projects", { nick }), c, s);
+  if (!r?.data) return [];
+  return r.data.map((d) => d.Workspace).filter(Boolean).map((w) => ({ id: w.id, name: w.name }));
 }
 
-async function fetchTodoStoryIds(workspaceId: string, config: TapdConfig, signal?: AbortSignal): Promise<string[]> {
+async function fetchTodoIds(wsId: string, c: TapdConfig, s?: AbortSignal): Promise<string[]> {
   const ids: string[] = [];
   let page = 1;
   while (true) {
-    const url = apiUrl(config, "/user_oauth/get_user_todo_story", {
-      workspace_id: workspaceId,
-      limit: "200",
-      page: String(page),
-    });
-    const resp = await tapdGet<TapdResponse<TapdTodoStory>>(url, config, signal);
-    if (!resp?.data || resp.data.length === 0) break;
-    for (const row of resp.data) {
-      if (row.Story?.id) ids.push(row.Story.id);
-    }
-    if (resp.data.length < 200) break;
+    const r = await tapdGet<TR<{ Story: { id: string } }>>(apiUrl(c, "/user_oauth/get_user_todo_story", { workspace_id: wsId, limit: "200", page: String(page) }), c, s);
+    if (!r?.data || r.data.length === 0) break;
+    for (const row of r.data) if (row.Story?.id) ids.push(row.Story.id);
+    if (r.data.length < 200) break;
     page++;
     if (page > 50) break;
   }
   return ids;
 }
 
-async function fetchStoriesByIds(workspaceId: string, ids: string[], config: TapdConfig, signal?: AbortSignal): Promise<TapdStoryFull[]> {
-  const all: TapdStoryFull[] = [];
-  const fields = "id,name,status,v_status,priority,priority_label,owner,developer,workspace_id,parent_id,ancestor_id,iteration_id,workitem_type_id,begin,due,effort,effort_completed,remain,modified";
-  for (const chunk of chunkArray(ids, 50)) {
-    const url = apiUrl(config, "/stories", {
-      workspace_id: workspaceId,
-      id: chunk.join(","),
-      fields,
-      with_v_status: "1",
-      limit: "200",
-    });
-    const resp = await tapdGet<TapdResponse<TapdStoryFull>>(url, config, signal);
-    if (resp?.data) {
-      for (const row of resp.data) if (row.Story?.id) all.push(row);
-    }
+const STORY_FIELDS = "id,name,status,v_status,priority,priority_label,owner,developer,workspace_id,parent_id,ancestor_id,iteration_id,workitem_type_id,begin,due,effort,effort_completed,remain,modified";
+
+async function fetchStories(wsId: string, ids: string[], c: TapdConfig, s?: AbortSignal): Promise<any[]> {
+  const all: any[] = [];
+  for (const chunk of chunkArr(ids, 50)) {
+    const r = await tapdGet<TR<{ Story: any }>>(apiUrl(c, "/stories", { workspace_id: wsId, id: chunk.join(","), fields: STORY_FIELDS, with_v_status: "1", limit: "200" }), c, s);
+    if (r?.data) for (const row of r.data) if (row.Story?.id) all.push(row.Story);
   }
   return all;
 }
 
-function chunkArray<T>(arr: T[], size: number): T[][] {
-  const chunks: T[][] = [];
-  for (let i = 0; i < arr.length; i += size) {
-    chunks.push(arr.slice(i, i + size));
-  }
-  return chunks;
+function chunkArr<T>(a: T[], sz: number): T[][] {
+  const r: T[][] = [];
+  for (let i = 0; i < a.length; i += sz) r.push(a.slice(i, i + sz));
+  return r;
 }
 
-async function fetchOpenIterations(workspaceId: string, config: TapdConfig, signal?: AbortSignal): Promise<{ id: string; name: string; startdate?: string; enddate?: string }[]> {
-  const items: { id: string; name: string; startdate?: string; enddate?: string }[] = [];
+async function fetchIterations(wsId: string, c: TapdConfig, s?: AbortSignal): Promise<{ id: string; name: string; startdate?: string; enddate?: string }[]> {
+  const items: any[] = [];
   let page = 1;
   while (true) {
-    const url = apiUrl(config, "/iterations", {
-      workspace_id: workspaceId,
-      status: "open",
-      limit: "200",
-      page: String(page),
-    });
-    const resp = await tapdGet<TapdResponse<TapdIterationRaw>>(url, config, signal);
-    if (!resp?.data || resp.data.length === 0) break;
-    for (const row of resp.data) {
-      const it = row.Iteration;
-      if (it?.id) items.push({ id: it.id, name: it.name, startdate: it.startdate, enddate: it.enddate });
-    }
-    if (resp.data.length < 200) break;
-    page++;
-    if (page > 50) break;
+    const r = await tapdGet<TR<{ Iteration: any }>>(apiUrl(c, "/iterations", { workspace_id: wsId, status: "open", limit: "200", page: String(page) }), c, s);
+    if (!r?.data || r.data.length === 0) break;
+    for (const row of r.data) { const it = row.Iteration; if (it?.id) items.push({ id: it.id, name: it.name, startdate: it.startdate, enddate: it.enddate }); }
+    if (r.data.length < 200) break;
+    page++; if (page > 50) break;
   }
   return items;
 }
 
-async function fetchWorkitemTypes(workspaceId: string, config: TapdConfig, signal?: AbortSignal): Promise<Map<string, string>> {
-  const map = new Map<string, string>();
+async function fetchTypeNames(wsId: string, c: TapdConfig, s?: AbortSignal): Promise<Map<string, string>> {
+  const m = new Map<string, string>();
   let page = 1;
   while (true) {
-    const url = apiUrl(config, "/workitem_types", {
-      workspace_id: workspaceId,
-      limit: "200",
-      page: String(page),
-    });
-    const resp = await tapdGet<TapdResponse<TapdWorkitemTypeRaw>>(url, config, signal);
-    if (!resp?.data || resp.data.length === 0) break;
-    for (const row of resp.data) {
-      const wt = row.WorkitemType;
-      if (wt?.id) map.set(wt.id, wt.name);
-    }
-    if (resp.data.length < 200) break;
-    page++;
-    if (page > 20) break;
+    const r = await tapdGet<TR<{ WorkitemType: { id: string; name: string } }>>(apiUrl(c, "/workitem_types", { workspace_id: wsId, limit: "200", page: String(page) }), c, s);
+    if (!r?.data || r.data.length === 0) break;
+    for (const row of r.data) { const wt = row.WorkitemType; if (wt?.id) m.set(wt.id, wt.name); }
+    if (r.data.length < 200) break;
+    page++; if (page > 20) break;
   }
-  return map;
+  return m;
 }
 
-function isCurrentIteration(startdate?: string, enddate?: string): boolean {
-  if (!startdate || !enddate) return false;
-  const today = new Date().toISOString().slice(0, 10);
-  return startdate <= today && enddate >= today;
+function isCurrent(it: { startdate?: string; enddate?: string }): boolean {
+  if (!it.startdate || !it.enddate) return false;
+  const t = new Date().toISOString().slice(0, 10);
+  return it.startdate <= t && it.enddate >= t;
+}
+
+// ============ 本地数据模型 ============
+
+interface TapdItem {
+  id: string; name: string; status: string; priority: string; owner: string;
+  workspaceId: string; workspaceName: string; begin?: string; due?: string;
+  iterationId?: string; iterationName?: string;
+  parentId?: string; workitemTypeName?: string;
+  children: TapdItem[]; depth: number; hasChildren: boolean;
+}
+
+// ============ 会话关联存储 ============
+
+interface SessionLink { id: string; createdAt: string; title?: string; sessionFile?: string; }
+interface TapdLinkRecord { workspaceId: string; storyId: string; name: string; sessions: SessionLink[]; }
+
+const LINKS_PATH = join(getAgentDir(), "tapd-links.json");
+
+function loadLinks(): Record<string, TapdLinkRecord> {
+  try { if (existsSync(LINKS_PATH)) return JSON.parse(readFileSync(LINKS_PATH, "utf-8")); } catch {}
+  return {};
+}
+function saveLinks(l: Record<string, TapdLinkRecord>) {
+  try { writeFileSync(LINKS_PATH, JSON.stringify(l, null, 2), "utf-8"); } catch {}
+}
+function linkKey(wsId: string, storyId: string): string { return `${wsId}_${storyId}`; }
+function getOrCreateLink(links: Record<string, TapdLinkRecord>, wsId: string, storyId: string, name: string): TapdLinkRecord {
+  const k = linkKey(wsId, storyId);
+  if (!links[k]) links[k] = { workspaceId: wsId, storyId, name, sessions: [] };
+  return links[k];
 }
 
 // ============ 树形构建 ============
 
-function buildTree(rawItems: TapdItem[]): TapdItem[] {
-  const idMap = new Map<string, TapdItem>();
+function buildTree(raw: TapdItem[]): TapdItem[] {
+  const m = new Map<string, TapdItem>();
   const roots: TapdItem[] = [];
-
-  for (const item of rawItems) {
-    idMap.set(item.id, item);
-    item.children = [];
-    item.depth = 0;
-    item.hasChildren = false;
+  for (const it of raw) { m.set(it.id, it); it.children = []; it.depth = 0; it.hasChildren = false; }
+  for (const it of raw) {
+    let p: TapdItem | undefined;
+    if (it.parentId && m.has(it.parentId)) p = m.get(it.parentId);
+    if (p && p.id !== it.id) { p.children.push(it); p.hasChildren = true; } else roots.push(it);
   }
-
-  for (const item of rawItems) {
-    let parent: TapdItem | undefined;
-    if (item.parentId && idMap.has(item.parentId)) {
-      parent = idMap.get(item.parentId);
-    }
-
-    if (parent && parent.id !== item.id) {
-      parent.children.push(item);
-      parent.hasChildren = true;
-    } else {
-      roots.push(item);
-    }
-  }
-
-  function setDepth(node: TapdItem, depth: number) {
-    node.depth = depth;
-    for (const child of node.children) setDepth(child, depth + 1);
-  }
-  for (const root of roots) setDepth(root, 0);
-
+  function setD(n: TapdItem, d: number) { n.depth = d; for (const c of n.children) setD(c, d + 1); }
+  for (const r of roots) setD(r, 0);
   return roots;
 }
 
 // ============ 格式化 ============
 
-function openUrl(url: string): void {
-  const cmd = process.platform === "win32"
-    ? `start "" "${url}"`
-    : process.platform === "darwin" ? `open "${url}"` : `xdg-open "${url}"`;
-  exec(cmd, (err) => { if (err) console.error("Failed to open URL:", err.message); });
+function tapdUrl(it: TapdItem): string {
+  return `https://www.tapd.cn/${it.workspaceId}/prong/stories/view/${it.id}`;
 }
 
-function tapdItemUrl(item: TapdItem): string {
-  return `https://www.tapd.cn/${item.workspaceId}/prong/stories/view/${item.id}`;
-}
-
-function getTypeLabel(item: TapdItem): string {
-  return item.workitemTypeName ?? "需求";
-}
-
-/** 按 TAPD 工作项类型名匹配对应 icon（来源：3个工作空间全量类型汇总） */
-function getTypeIcon(item: TapdItem): string {
-  const n = item.workitemTypeName ?? "";
-  // 精确/关键词匹配，越具体越靠前
+function getTypeIcon(it: TapdItem): string {
+  const n = it.workitemTypeName ?? "";
   if (n.includes("PR合并")) return "🔀";
   if (n.includes("文档") || n.includes("Doc")) return "📄";
   if (n.includes("搭建")) return "🏗️";
-  if (n.includes("数据") || n.includes("报表") || n.includes("统计")) return "📊";
+  if (n.includes("数据")) return "📊";
   if (n.includes("测试")) return "🧪";
-  if (n.includes("设计") || n.includes("UI") || n.includes("视觉")) return "🎨";
+  if (n.includes("设计") || n.includes("UI")) return "🎨";
   if (n.includes("开发") || n.includes("研发")) return "💻";
   if (n.includes("需求")) return "🎯";
-  if (n.includes("缺陷") || n.includes("Bug") || n.includes("bug")) return "🐛";
+  if (n.includes("缺陷") || n.includes("Bug")) return "🐛";
   if (n.includes("任务")) return "📝";
   if (n.includes("技术") || n.includes("架构")) return "🔧";
-  if (n.includes("优化") || n.includes("改进") || n.includes("性能")) return "✨";
-  if (n.includes("运维") || n.includes("部署") || n.includes("发布")) return "🚀";
-  if (n.includes("调研") || n.includes("分析") || n.includes("竞品")) return "🔍";
-  if (n.includes("重构") || n.includes("整理")) return "♻️";
+  if (n.includes("优化") || n.includes("改进")) return "✨";
+  if (n.includes("运维") || n.includes("部署")) return "🚀";
+  if (n.includes("调研") || n.includes("分析")) return "🔍";
+  if (n.includes("重构")) return "♻️";
   return "📋";
 }
 
-function numericPriority(p: string): string {
-  const map: Record<string, string> = { "4": "紧急", "3": "高", "2": "中", "1": "低", "5": "紧急" };
-  return map[p] ?? p;
+function prioritySymbol(raw: string): string {
+  const map: Record<string, string> = { "4": "紧急", "3": "高", "2": "中", "1": "低", "5": "紧急", "High": "高", "Middle": "中", "Low": "低", "Urgent": "紧急", "high": "高", "middle": "中", "low": "低", "urgent": "紧急", "紧急": "紧急", "高": "高", "中": "中", "低": "低" };
+  return map[raw] ?? raw.slice(0, 2);
 }
 
-const PRIORITY_SYMBOL: Record<string, string> = { "紧急": "紧急", "高": "高 ", "中": "中 ", "低": "低 ",
-  "High": "高 ", "Middle": "中 ", "Low": "低 ", "Urgent": "紧急",
-  "high": "高 ", "middle": "中 ", "low": "低 ", "urgent": "紧急",
-};
-
-function fmtPriority(raw: string): string {
-  const label = PRIORITY_SYMBOL[raw] ? raw : numericPriority(raw);
-  return PRIORITY_SYMBOL[label] ?? label;
+function padR(s: string, w: number): string {
+  const v = visibleWidth(s);
+  return v >= w ? truncateToWidth(s, w, "") : s + " ".repeat(w - v);
 }
 
-function padR(str: string, w: number): string {
-  const vw = visibleWidth(str);
-  return vw >= w ? truncateToWidth(str, w, "") : str + " ".repeat(w - vw);
-}
-
-function fmtDate(d?: string): string {
-  if (!d) return "";
-  return d.slice(0, 10);
-}
+function fmtDate(d?: string): string { return d?.slice(0, 10) ?? ""; }
 
 const sortOrder: Record<string, number> = { "紧急": 0, "高": 1, "中": 2, "低": 3 };
-
 function sortFn(a: TapdItem, b: TapdItem): number {
-  const pa = sortOrder[a.priority] ?? 99;
-  const pb = sortOrder[b.priority] ?? 99;
-  if (pa !== pb) return pa - pb;
-  return (a.due ?? "9999").localeCompare(b.due ?? "9999");
+  const pa = sortOrder[a.priority] ?? 99, pb = sortOrder[b.priority] ?? 99;
+  return pa !== pb ? pa - pb : (a.due ?? "9999").localeCompare(b.due ?? "9999");
 }
 
 // ============ 树形列表组件 ============
 
-interface FlatItem {
-  item: TapdItem;
-  indent: number;
-  expandable: boolean;
-  expanded: boolean;
-}
+interface FlatItem { item: TapdItem; indent: number; expandable: boolean; expanded: boolean; }
 
 class TreeList {
   private roots: TapdItem[] = [];
@@ -398,446 +230,606 @@ class TreeList {
   onSelect?: (item: FlatItem) => void;
   onCancel?: () => void;
 
-  setRoots(roots: TapdItem[]) {
-    this.roots = roots;
-    this.selectedIdx = 0;
-    this.rebuild();
+  getSelectedItem(): TapdItem | null {
+    if (this.selectedIdx >= 0 && this.selectedIdx < this.visible.length) return this.visible[this.selectedIdx].item;
+    return null;
   }
+
+  setRoots(r: TapdItem[]) { this.roots = r; this.selectedIdx = 0; this.rebuild(); }
 
   private rebuild() {
     this.visible = [];
     const walk = (nodes: TapdItem[]) => {
-      for (const node of nodes) {
-        this.visible.push({
-          item: node,
-          indent: node.depth,
-          expandable: node.hasChildren,
-          expanded: this.expandedIds.has(node.id),
-        });
-        if (node.hasChildren && this.expandedIds.has(node.id)) {
-          walk(node.children);
-        }
+      for (const n of nodes) {
+        this.visible.push({ item: n, indent: n.depth, expandable: n.hasChildren, expanded: this.expandedIds.has(n.id) });
+        if (n.hasChildren && this.expandedIds.has(n.id)) walk(n.children);
       }
     };
     walk(this.roots);
-    if (this.selectedIdx >= this.visible.length) {
-      this.selectedIdx = Math.max(0, this.visible.length - 1);
-    }
+    if (this.selectedIdx >= this.visible.length) this.selectedIdx = Math.max(0, this.visible.length - 1);
   }
 
   toggleExpand(idx: number) {
     if (idx < 0 || idx >= this.visible.length) return;
     const fi = this.visible[idx];
     if (!fi.expandable) return;
-    if (this.expandedIds.has(fi.item.id)) {
-      this.expandedIds.delete(fi.item.id);
-    } else {
-      this.expandedIds.add(fi.item.id);
-    }
+    if (this.expandedIds.has(fi.item.id)) this.expandedIds.delete(fi.item.id); else this.expandedIds.add(fi.item.id);
     this.rebuild();
-    const newIdx = this.visible.findIndex((v) => v.item.id === fi.item.id);
-    if (newIdx >= 0) this.selectedIdx = newIdx;
+    const i = this.visible.findIndex((v) => v.item.id === fi.item.id);
+    if (i >= 0) this.selectedIdx = i;
   }
-
   expand(idx: number) {
     if (idx < 0 || idx >= this.visible.length) return;
     const fi = this.visible[idx];
     if (!fi.expandable || fi.expanded) return;
     this.expandedIds.add(fi.item.id);
     this.rebuild();
-    const newIdx = this.visible.findIndex((v) => v.item.id === fi.item.id);
-    if (newIdx >= 0) this.selectedIdx = newIdx;
+    const i = this.visible.findIndex((v) => v.item.id === fi.item.id);
+    if (i >= 0) this.selectedIdx = i;
   }
-
   collapse(idx: number) {
     if (idx < 0 || idx >= this.visible.length) return;
     const fi = this.visible[idx];
     if (!fi.expandable || !fi.expanded) return;
     this.expandedIds.delete(fi.item.id);
     this.rebuild();
-    const newIdx = this.visible.findIndex((v) => v.item.id === fi.item.id);
-    if (newIdx >= 0) this.selectedIdx = newIdx;
+    const i = this.visible.findIndex((v) => v.item.id === fi.item.id);
+    if (i >= 0) this.selectedIdx = i;
   }
 
   handleInput(data: string): boolean {
-    if (data === "\x1b[A" || data === "k") {
-      if (this.selectedIdx > 0) this.selectedIdx--;
-      return true;
-    }
-    if (data === "\x1b[B" || data === "j") {
-      if (this.selectedIdx < this.visible.length - 1) this.selectedIdx++;
-      return true;
-    }
+    if (data === "\x1b[A" || data === "k") { if (this.selectedIdx > 0) this.selectedIdx--; return true; }
+    if (data === "\x1b[B" || data === "j") { if (this.selectedIdx < this.visible.length - 1) this.selectedIdx++; return true; }
     if (data === "\x1b[5~") { this.selectedIdx = Math.max(0, this.selectedIdx - 10); return true; }
     if (data === "\x1b[6~") { this.selectedIdx = Math.min(this.visible.length - 1, this.selectedIdx + 10); return true; }
     if (data === " ") { this.toggleExpand(this.selectedIdx); return true; }
     if (data === "\x1b[C") { this.expand(this.selectedIdx); return true; }
     if (data === "\x1b[D") { this.collapse(this.selectedIdx); return true; }
-    if (data === "\r" || data === "\n") {
-      if (this.visible.length > 0 && this.selectedIdx < this.visible.length) {
-        this.onSelect?.(this.visible[this.selectedIdx]);
-      }
-      return true;
-    }
+    if (data === "\r" || data === "\n") { if (this.visible.length > 0 && this.selectedIdx < this.visible.length) this.onSelect?.(this.visible[this.selectedIdx]); return true; }
     if (data === "\x1b") { this.onCancel?.(); return true; }
     return false;
   }
 
   render(width: number, theme: any): string[] {
     const maxW = width - 2;
-    if (this.visible.length === 0) {
-      return [theme.fg("dim", "  (无匹配项)")];
-    }
-
+    if (this.visible.length === 0) return [theme.fg("dim", "  (无)")];
     const half = Math.floor(this.maxVisible / 2);
     let start = Math.max(0, this.selectedIdx - half);
     let end = Math.min(this.visible.length, start + this.maxVisible);
     if (end - start < this.maxVisible) start = Math.max(0, end - this.maxVisible);
-
     const lines: string[] = [];
     for (let i = start; i < end; i++) {
-      const fi = this.visible[i];
-      const isSel = i === this.selectedIdx;
-      const item = fi.item;
-
+      const fi = this.visible[i], item = fi.item;
       const indent = "  ".repeat(fi.indent);
       const marker = fi.expandable ? (fi.expanded ? "▾ " : "▸ ") : "  ";
       const icon = getTypeIcon(item);
-
-      let line = indent + marker + icon;
-
       const prefixLen = visibleWidth(indent + marker + icon + " ");
       const titleW = Math.max(10, maxW - prefixLen - 10 - 8 - 12 - 12 - 4);
-      const statusW = 10;
-      const priorityW = 8;
-      const beginW = 12;
-      const dueW = 12;
-
+      let line = indent + marker + icon;
       line += " " + padR(truncateToWidth(item.name, titleW, "…"), titleW);
-      line += " " + padR(truncateToWidth(item.status, statusW, ""), statusW);
-      line += " " + padR(fmtPriority(item.priority), priorityW);
-      line += " " + padR(fmtDate(item.begin), beginW);
-      line += " " + padR(fmtDate(item.due), dueW);
-
-      if (isSel) {
-        line = theme.fg("accent", truncateToWidth(line, maxW, ""));
-      } else {
-        line = truncateToWidth(line, maxW, "");
-      }
-      lines.push(line);
+      line += " " + padR(truncateToWidth(item.status, 10, ""), 10);
+      line += " " + padR(prioritySymbol(item.priority), 8);
+      line += " " + padR(fmtDate(item.begin), 12);
+      line += " " + padR(fmtDate(item.due), 12);
+      lines.push(i === this.selectedIdx ? theme.fg("accent", truncateToWidth(line, maxW, "")) : truncateToWidth(line, maxW, ""));
     }
-
-    if (this.visible.length > this.maxVisible) {
-      lines.push(theme.fg("dim", `  ${start + 1}-${end}/${this.visible.length}`));
-    }
+    if (this.visible.length > this.maxVisible) lines.push(theme.fg("dim", `  ${start + 1}-${end}/${this.visible.length}`));
     return lines;
   }
 }
 
-// ============ 表格 UI ============
+// ============ 主表格 UI ============
 
-async function showTable(
-  ctx: ExtensionContext,
-  config: TapdConfig,
-  workspaces: { id: string; name: string }[],
-  _currentOnly: boolean,
-): Promise<void> {
-  const controller = new AbortController();
+async function fetchWsData(ws: { id: string; name: string }, c: TapdConfig, scope: "current" | "all", s?: AbortSignal): Promise<{ items: TapdItem[]; errors: string[] }> {
+  const items: TapdItem[] = [], errors: string[] = [];
+  const todoIds = await fetchTodoIds(ws.id, c, s);
+  if (todoIds.length === 0) return { items, errors };
+  const detailed = await fetchStories(ws.id, todoIds, c, s);
+  const iterations = await fetchIterations(ws.id, c, s);
+  const iterName = new Map<string, string>();
+  const currentIds = new Set<string>();
+  for (const it of iterations) {
+    iterName.set(it.id, it.name);
+    if (isCurrent(it)) currentIds.add(it.id);
+  }
+  if (scope === "current" && currentIds.size === 0) return { items, errors };
+  const typeNames = await fetchTypeNames(ws.id, c, s);
 
-  // 默认先加载当前迭代
-  ctx.ui.notify(`正在获取当前迭代待办...`, "info");
-  const currentResult = await fetchAllTodos(workspaces, config, "current", controller.signal);
-  let currentTree = buildTree(currentResult.items);
-  sortTree(currentTree);
-
-  if (currentResult.errors.length > 0) {
-    ctx.ui.notify(`部分工作空间获取失败: ${currentResult.errors.join(", ")}`, "warning");
+  for (const raw of detailed) {
+    const iterId = raw.iteration_id ?? undefined;
+    if (scope === "current" && !(iterId && currentIds.has(iterId))) continue;
+    items.push({
+      id: raw.id, name: raw.name, status: raw.v_status ?? raw.status,
+      priority: raw.priority_label ?? raw.priority ?? "-", owner: raw.owner,
+      workspaceId: raw.workspace_id, workspaceName: ws.name,
+      begin: raw.begin?.slice(0, 10), due: raw.due?.slice(0, 10),
+      iterationId: iterId, iterationName: iterId ? iterName.get(iterId) : undefined,
+      parentId: raw.parent_id ?? undefined,
+      workitemTypeName: raw.workitem_type_id ? (typeNames.get(raw.workitem_type_id) ?? undefined) : undefined,
+      children: [], depth: 0, hasChildren: false,
+    });
   }
 
-  // 所有迭代懒加载
+  // 补充缺失的父需求
+  const present = new Set(items.map((i) => i.id));
+  const missing = [...new Set(items.filter((i) => i.parentId && !present.has(i.parentId)).map((i) => i.parentId!))];
+  if (missing.length > 0) {
+    const parents = await fetchStories(ws.id, missing, c, s);
+    for (const raw of parents) {
+      const iterId = raw.iteration_id ?? undefined;
+      items.push({
+        id: raw.id, name: raw.name, status: raw.v_status ?? raw.status,
+        priority: raw.priority_label ?? raw.priority ?? "-", owner: raw.owner,
+        workspaceId: raw.workspace_id, workspaceName: ws.name,
+        begin: raw.begin?.slice(0, 10), due: raw.due?.slice(0, 10),
+        iterationId: iterId, iterationName: iterId ? iterName.get(iterId) : undefined,
+        parentId: raw.parent_id ?? undefined,
+        workitemTypeName: raw.workitem_type_id ? (typeNames.get(raw.workitem_type_id) ?? undefined) : undefined,
+        children: [], depth: 0, hasChildren: false,
+      });
+    }
+  }
+  return { items, errors };
+}
+
+async function fetchAll(workspaces: { id: string; name: string }[], c: TapdConfig, scope: "current" | "all", s: AbortSignal): Promise<{ items: TapdItem[]; errors: string[] }> {
+  const results = await Promise.all(workspaces.map((ws) => fetchWsData(ws, c, scope, s)));
+  const all: TapdItem[] = []; const errs: string[] = [];
+  for (const r of results) { all.push(...r.items); errs.push(...r.errors); }
+  return { items: all, errors: errs };
+}
+
+async function showTable(ctx: ExtensionContext, c: TapdConfig, workspaces: { id: string; name: string }[], _cur: boolean): Promise<boolean> {
+  const controller = new AbortController();
+
+  ctx.ui.notify("正在获取当前迭代待办...", "info");
+  const currResult = await fetchAll(workspaces, c, "current", controller.signal);
+  let currentTree = buildTree(currResult.items);
+  sortTree(currentTree);
+
+  if (currResult.errors.length > 0) ctx.ui.notify(`部分工作空间获取失败: ${currResult.errors.join(", ")}`, "warning");
+
   let allTree: TapdItem[] = [];
   let allLoaded = false;
-
-  let viewCurrentOnly = true;
+  let viewCurrent = true;
   let typeFilter: string | null = null;
 
   while (true) {
-    const tree = viewCurrentOnly ? currentTree : allTree;
-    const viewLabel = viewCurrentOnly ? "当前迭代" : "所有迭代";
+    const tree = viewCurrent ? currentTree : allTree;
+    const viewLabel = viewCurrent ? "当前迭代" : "所有迭代";
+    let display: TapdItem[];
+    if (typeFilter) { display = flatFilter(tree, typeFilter); } else { display = tree; }
 
-    // 按类型过滤并平铺（typeFilter 不为 null 时）
-    let displayTree: TapdItem[];
-    if (typeFilter) {
-      displayTree = flattenAndFilter(tree, typeFilter);
-    } else {
-      displayTree = tree;
-    }
+    const sel = await renderTable(ctx, display, viewLabel, typeFilter);
+    if (!sel) break;
 
-    const selected = await renderTreeTable(ctx, displayTree, viewLabel, typeFilter);
-
-    if (selected === "__TOGGLE__") {
-      viewCurrentOnly = !viewCurrentOnly;
-      // 切换到"所有"时才加载
-      if (!viewCurrentOnly && !allLoaded) {
+    if (sel.action === "toggle") {
+      viewCurrent = !viewCurrent;
+      if (!viewCurrent && !allLoaded) {
         ctx.ui.notify("正在获取所有迭代待办...", "info");
-        const allResult = await fetchAllTodos(workspaces, config, "all", controller.signal);
-        allTree = buildTree(allResult.items);
-        sortTree(allTree);
+        const allR = await fetchAll(workspaces, c, "all", controller.signal);
+        allTree = buildTree(allR.items); sortTree(allTree);
         allLoaded = true;
-        if (allResult.errors.length > 0) {
-          ctx.ui.notify(`部分工作空间获取失败: ${allResult.errors.join(", ")}`, "warning");
-        }
+        if (allR.errors.length > 0) ctx.ui.notify(`部分工作空间获取失败: ${allR.errors.join(", ")}`, "warning");
       }
       continue;
     }
-
-    if (selected === "__TYPE__") {
-      // 类型选项始终来自全量数据
-      const allTypes = collectTypes(allLoaded && allTree.length > 0 ? allTree : currentTree);
-      const opts = ["全部", ...allTypes];
-      const chosen = await ctx.ui.select("按类型筛选:", opts);
-      if (chosen && chosen !== "全部") {
-        typeFilter = chosen;
-      } else {
-        typeFilter = null;
-      }
+    if (sel.action === "type_filter") {
+      const types = collectTypes(allLoaded && allTree.length > 0 ? allTree : currentTree);
+      const pick = await ctx.ui.select("按类型筛选:", ["全部", ...types]);
+      typeFilter = pick && pick !== "全部" ? pick : null;
       continue;
     }
-    if (selected === null) break;
-    if (selected) {
-      openUrl(selected);
-      ctx.ui.notify("已在浏览器中打开", "info");
+    if (sel.action === "open" && sel.url) { openUrl(sel.url); ctx.ui.notify("已在浏览器中打开", "info"); continue; }
+    if (sel.action === "link_view" && sel.itemKey) {
+      const links = loadLinks();
+      const [wsId, storyId] = sel.itemKey.split("_");
+      const rec = links[sel.itemKey] ?? { workspaceId: wsId, storyId, name: sel.itemName!, sessions: [] };
+      const switched = await showSessionPicker(ctx, rec, sel.itemKey, sel.itemName!);
+      if (switched) return false; // 已切换会话，勿再写旧会话状态 / 阻塞已解除
       continue;
     }
     break;
   }
+  return true;
 }
 
-function sortTree(nodes: TapdItem[]) {
-  nodes.sort(sortFn);
-  for (const n of nodes) sortTree(n.children);
+function openUrl(url: string) {
+  const cmd = process.platform === "win32" ? `start "" "${url}"` : process.platform === "darwin" ? `open "${url}"` : `xdg-open "${url}"`;
+  exec(cmd, (err) => { if (err) console.error("Failed to open URL:", err.message); });
 }
 
-/** 收集树中所有唯一的 workitemTypeName */
+function sortTree(nodes: TapdItem[]) { nodes.sort(sortFn); for (const n of nodes) sortTree(n.children); }
+
 function collectTypes(forest: TapdItem[]): string[] {
   const seen = new Set<string>();
-  const walk = (nodes: TapdItem[]) => {
-    for (const n of nodes) {
-      const t = n.workitemTypeName;
-      if (t && !seen.has(t)) seen.add(t);
-      walk(n.children);
-    }
-  };
+  const walk = (ns: TapdItem[]) => { for (const n of ns) { if (n.workitemTypeName) seen.add(n.workitemTypeName); walk(n.children); } };
   walk(forest);
   return [...seen].sort();
 }
 
-/** 按类型过滤并平铺（所有 depth=0） */
-function flattenAndFilter(forest: TapdItem[], typeName: string): TapdItem[] {
-  const result: TapdItem[] = [];
-  const walk = (nodes: TapdItem[]) => {
-    for (const n of nodes) {
-      if (n.workitemTypeName === typeName) {
-        result.push({ ...n, depth: 0, hasChildren: false, children: [] });
-      }
-      walk(n.children);
-    }
-  };
+function flatFilter(forest: TapdItem[], tn: string): TapdItem[] {
+  const r: TapdItem[] = [];
+  const walk = (ns: TapdItem[]) => { for (const n of ns) { if (n.workitemTypeName === tn) r.push({ ...n, depth: 0, hasChildren: false, children: [] }); walk(n.children); } };
   walk(forest);
-  result.sort(sortFn);
-  return result;
+  r.sort(sortFn);
+  return r;
 }
 
-async function renderTreeTable(
-  _ctx: ExtensionContext,
-  forest: TapdItem[],
-  viewLabel: string,
-  typeFilter: string | null,
-): Promise<string | null> {
-  function countAll(nodes: TapdItem[]): number {
-    let c = 0;
-    for (const n of nodes) { c++; c += countAll(n.children); }
-    return c;
+function flattenItems(forest: TapdItem[]): TapdItem[] {
+  const r: TapdItem[] = [];
+  const walk = (ns: TapdItem[]) => { for (const n of ns) { r.push(n); walk(n.children); } };
+  walk(forest);
+  return r;
+}
+
+function searchFlat(forest: TapdItem[], query: string): TapdItem[] {
+  const q = query.trim().toLowerCase();
+  if (!q) return [];
+  const r = flattenItems(forest).filter((it) => {
+    return it.name.toLowerCase().includes(q)
+      || it.id.includes(q)
+      || it.status.toLowerCase().includes(q)
+      || it.priority.toLowerCase().includes(q)
+      || (it.owner?.toLowerCase().includes(q) ?? false)
+      || (it.workitemTypeName?.toLowerCase().includes(q) ?? false)
+      || it.workspaceName.toLowerCase().includes(q);
+  }).map((it) => ({ ...it, depth: 0, hasChildren: false, children: [] }));
+  r.sort(sortFn);
+  return r;
+}
+
+/** 从会话文件读取名称 */
+function readSessionTitle(f: string): string | null {
+  try {
+    if (!existsSync(f)) return null;
+    for (const line of readFileSync(f, "utf-8").split("\n").reverse()) {
+      try { const e = JSON.parse(line); if (e.type === "session_info" && e.name) return e.name; } catch {}
+    }
+    return null;
+  } catch { return null; }
+}
+
+// ============ 会话选择器（内嵌输入创建） ============
+
+/** @returns true 表示已创建/切换会话，调用方应退出，避免阻塞主循环 */
+async function showSessionPicker(ctx: ExtensionContext, rec: TapdLinkRecord, itemKey: string, itemName: string): Promise<boolean> {
+  type PickerAction =
+    | { type: "create"; title: string }
+    | { type: "switch"; sessionFile: string }
+    | null;
+
+  const opts: { link?: SessionLink; label: string; isCreate: boolean }[] = [];
+  for (const s of rec.sessions.slice().reverse()) {
+    const time = new Date(s.createdAt).toLocaleString("zh-CN");
+    let title = s.sessionFile ? (readSessionTitle(s.sessionFile) ?? s.title) : s.title;
+    if (!title) title = "(无标题)";
+    opts.push({ link: s, label: `${title}  │  ${time}${s.sessionFile ? " ◆" : ""}`, isCreate: false });
   }
-  const totalCount = countAll(forest);
+  opts.push({ isCreate: true, label: "📝 创建新会话" });
 
-  return await _ctx.ui.custom<string | null>((tui, theme, _kb, done) => {
-    const treeList = new TreeList();
-    treeList.setRoots(forest);
-    treeList.onSelect = (fi) => done(tapdItemUrl(fi.item));
-    treeList.onCancel = () => done(null);
+  const action = await ctx.ui.custom<PickerAction>((tui, theme, _kb, done) => {
+    let container = new Container();
+    let selectedIdx = 0;
+    let creating = false;
+    let pendingDelete: SessionLink | null = null;
+    const nameInput = new Input();
 
-    let currentWidth = 80;
-    let container: Container;
+    nameInput.onSubmit = (value) => {
+      done({ type: "create", title: value.trim() || itemName });
+    };
+    nameInput.onEscape = () => {
+      creating = false;
+      rebuild();
+      tui.requestRender();
+    };
 
-    function rebuildAll() {
-      // 列宽：标题=剩余, 状态=10, 优先=8, 开始=12, 结束=12
-      const titleW = Math.max(10, currentWidth - 2 - 5 - 10 - 8 - 12 - 12 - 4);
+    function enterCreate() {
+      creating = true;
+      pendingDelete = null;
+      nameInput.setValue(itemName);
+      (nameInput as any).cursor = itemName.length;
+      nameInput.focused = true;
+      rebuild();
+      tui.requestRender();
+    }
 
+    function applyDelete(link: SessionLink) {
+      if (link.sessionFile) {
+        exec(`trash "${link.sessionFile}"`, (err) => {
+          if (err) exec(`del /f /q "${link.sessionFile}"`, () => {});
+        });
+      }
+      const l2 = loadLinks();
+      for (const k of Object.keys(l2)) {
+        l2[k].sessions = l2[k].sessions.filter((s: any) => s.id !== link.id);
+        if (l2[k].sessions.length === 0) delete l2[k];
+      }
+      saveLinks(l2);
+      const idx = opts.findIndex((o) => o.link?.id === link.id);
+      if (idx >= 0) opts.splice(idx, 1);
+      if (selectedIdx >= opts.length) selectedIdx = Math.max(0, opts.length - 1);
+      ctx.ui.notify("已删除", "info");
+    }
+
+    function rebuild() {
       container = new Container();
       container.addChild(new DynamicBorder((s: string) => theme.fg("accent", s)));
+      container.addChild(new Text(theme.fg("accent", theme.bold(`「${itemName}」关联会话`)) + theme.fg("dim", `  │  ${opts.length} 项`), 1, 0));
 
-      container.addChild(new Text(
-        theme.fg("accent", theme.bold(`TAPD 待办 - ${viewLabel}`)) +
-        theme.fg("dim", `  |  ${totalCount} 项`) +
-        (typeFilter ? theme.fg("warning", `  [${typeFilter}]`) : ""),
-        1, 0,
-      ));
-
-      container.addChild(new Text(
-        "     " +
-        theme.fg("dim", padR("标题", titleW)) +
-        " " + theme.fg("dim", padR("状态", 10)) +
-        " " + theme.fg("dim", padR("优先", 8)) +
-        " " + theme.fg("dim", padR("开始", 12)) +
-        " " + theme.fg("dim", padR("结束", 12)),
-        1, 0,
-      ));
-
-      for (const line of treeList.render(currentWidth, theme)) {
-        container.addChild(new Text(line, 1, 0));
+      if (pendingDelete) {
+        container.addChild(new Text(theme.fg("error", `确认删除「${pendingDelete.title || "会话"}」？`), 1, 0));
+        container.addChild(new Text(theme.fg("dim", "Enter 确认  Esc/Ctrl+C 取消"), 1, 0));
+      } else if (creating) {
+        container.addChild(new Text(theme.fg("accent", "📝 创建新会话"), 1, 0));
+        container.addChild(new Text(theme.fg("dim", "会话名称（可选）:"), 1, 0));
+        container.addChild(nameInput);
+        container.addChild(new Text(theme.fg("dim", "Enter 确认  Esc 取消  Ctrl+C 退出"), 1, 0));
+      } else {
+        for (let i = 0; i < opts.length; i++) {
+          const o = opts[i];
+          const prefix = i === selectedIdx ? theme.fg("accent", "> ") : "  ";
+          if (o.isCreate) {
+            container.addChild(new Text(prefix + theme.fg("accent", o.label), 1, 0));
+          } else {
+            container.addChild(new Text(prefix + o.label, 1, 0));
+          }
+        }
+        container.addChild(new Text(theme.fg("dim", "Enter 选择  Ctrl+D 删除  Esc/Ctrl+C 返回"), 1, 0));
       }
 
-      container.addChild(new Text(
-        theme.fg("dim", "↑↓ 导航  Space/→/← 展开收起  Enter 打开  Tab 切换迭代  t 切换类型  Esc 退出"),
-        1, 0,
-      ));
       container.addChild(new DynamicBorder((s: string) => theme.fg("accent", s)));
     }
 
+    rebuild();
+
+    return {
+      render(w: number) { return container.render(w); },
+      invalidate() { container.invalidate(); },
+      handleInput(data: string) {
+        // 页内删除确认：禁止再嵌套 ctx.ui.confirm，否则取消后 custom 无法 done() 会堵死主循环
+        if (pendingDelete) {
+          if (data === "\r" || data === "\n") {
+            applyDelete(pendingDelete);
+            pendingDelete = null;
+            rebuild();
+            tui.requestRender();
+            return;
+          }
+          if (data === "\x1b" || data === "\x03") {
+            pendingDelete = null;
+            rebuild();
+            tui.requestRender();
+            return;
+          }
+          return;
+        }
+
+        if (data === "\x03") { done(null); return; }
+
+        if (creating) {
+          nameInput.handleInput(data);
+          tui.requestRender();
+          return;
+        }
+
+        if (data === "\x1b[A" || data === "k") { if (selectedIdx > 0) { selectedIdx--; rebuild(); tui.requestRender(); } return; }
+        if (data === "\x1b[B" || data === "j") { if (selectedIdx < opts.length - 1) { selectedIdx++; rebuild(); tui.requestRender(); } return; }
+
+        if (data === "\r" || data === "\n") {
+          const o = opts[selectedIdx];
+          if (o.isCreate) {
+            enterCreate();
+          } else if (o.link?.sessionFile) {
+            done({ type: "switch", sessionFile: o.link.sessionFile });
+          } else {
+            ctx.ui.notify("无可恢复文件", "warning");
+          }
+          return;
+        }
+
+        if (data === "\x04") {
+          const o = opts[selectedIdx];
+          if (o.isCreate || !o.link) return;
+          const link = o.link;
+          const curFile = ctx.sessionManager.getSessionFile();
+          if (curFile && link.sessionFile === curFile) {
+            ctx.ui.notify("不能删除当前会话", "warning");
+            return;
+          }
+          pendingDelete = link;
+          rebuild();
+          tui.requestRender();
+          return;
+        }
+
+        if (data === "\x1b") { done(null); return; }
+      },
+    };
+  });
+
+  if (!action) return false;
+
+  if (action.type === "switch") {
+    try {
+      await (ctx as any).switchSession(action.sessionFile);
+    } catch (e: any) {
+      ctx.ui.notify(`切换失败: ${e.message}`, "error");
+      return false;
+    }
+    return true;
+  }
+
+  // create
+  const [wsId, storyId] = itemKey.split("_");
+  const title = action.title;
+  const links = loadLinks();
+  const rec2 = getOrCreateLink(links, wsId, storyId, itemName);
+  const linkId = Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+  rec2.sessions.push({ id: linkId, createdAt: new Date().toISOString(), title });
+  saveLinks(links);
+  try {
+    await (ctx as any).newSession({
+      parentSession: undefined,
+      setup: (sm: any) => {
+        sm.appendMessage({
+          role: "user",
+          content: [{ type: "text", text: `开始处理 TAPD 需求「${title}」(ID: ${storyId})` }],
+          timestamp: Date.now(),
+        });
+      },
+      withSession: async (newCtx: any) => {
+        const sf = newCtx.sessionManager.getSessionFile?.() ?? "";
+        const links3 = loadLinks();
+        const rec3 = getOrCreateLink(links3, wsId, storyId, itemName);
+        if (sf) {
+          const lk = rec3.sessions.find((s: any) => s.id === linkId);
+          if (lk) lk.sessionFile = sf;
+        }
+        saveLinks(links3);
+      },
+    });
+  } catch (e: any) {
+    ctx.ui.notify(`创建失败: ${e.message}`, "error");
+    return false;
+  }
+  return true;
+}
+
+// ============ 表格渲染 ============
+
+async function renderTable(_ctx: ExtensionContext, forest: TapdItem[], viewLabel: string, typeFilter: string | null): Promise<{ action: string; url?: string; itemKey?: string; itemName?: string } | null> {
+  function countAll(ns: TapdItem[]): number { let c = 0; for (const n of ns) { c++; c += countAll(n.children); } return c; }
+  const total = countAll(forest);
+
+  return await _ctx.ui.custom<{ action: string; url?: string; itemKey?: string; itemName?: string } | null>((tui, theme, _kb, done) => {
+    const treeList = new TreeList();
+    treeList.setRoots(forest);
+    treeList.onCancel = () => done(null);
+
+    const searchInput = new Input();
+    let focusSearch = false;
+    let searching = false;
+    let shownCount = total;
+    let curW = 80, container: Container;
+
+    function applySearch() {
+      const q = searchInput.getValue().trim();
+      searching = q.length > 0;
+      if (!searching) {
+        treeList.setRoots(forest);
+        shownCount = total;
+      } else {
+        const matched = searchFlat(forest, q);
+        treeList.setRoots(matched);
+        shownCount = matched.length;
+      }
+    }
+
+    function clearSearch() {
+      searchInput.setValue("");
+      (searchInput as any).cursor = 0;
+      applySearch();
+    }
+
+    searchInput.onEscape = () => {
+      clearSearch();
+      focusSearch = false;
+      rebuildAll();
+      tui.requestRender();
+    };
+
+    function rebuildAll() {
+      const titleW = Math.max(10, curW - 2 - 5 - 10 - 8 - 12 - 12 - 4);
+      container = new Container();
+      container.addChild(new DynamicBorder((s: string) => theme.fg("accent", s)));
+      container.addChild(new Text(
+        theme.fg("accent", theme.bold(`TAPD 待办 - ${viewLabel}`))
+          + theme.fg("dim", `  │  ${shownCount}${searching ? "/" + total : ""} 项`)
+          + (typeFilter ? theme.fg("warning", `  [${typeFilter}]`) : "")
+          + (searching ? theme.fg("warning", "  [搜索]") : ""),
+        1, 0,
+      ));
+
+      searchInput.focused = focusSearch;
+      if (focusSearch) {
+        container.addChild(new Text(theme.fg("accent", "搜索"), 1, 0));
+        container.addChild(searchInput);
+      } else {
+        const q = searchInput.getValue();
+        container.addChild(new Text(theme.fg("dim", q ? `搜索: ${q}` : "搜索: (按 / 输入)"), 1, 0));
+      }
+
+      container.addChild(new Text("     " + theme.fg("dim", padR("标题", titleW)) + " " + theme.fg("dim", padR("状态", 10)) + " " + theme.fg("dim", padR("优先", 8)) + " " + theme.fg("dim", padR("开始", 12)) + " " + theme.fg("dim", padR("结束", 12)), 1, 0));
+      for (const line of treeList.render(curW, theme)) container.addChild(new Text(line, 1, 0));
+
+      const hint = focusSearch
+        ? "输入过滤  ↑↓ 选中  Enter 关联会话  Esc 清除并返回  Ctrl+C 退出"
+        : searching
+          ? "↑↓ 导航  Enter 关联会话  o 浏览器打开  / 搜索  Esc 清除搜索  Ctrl+C 退出"
+          : "↑↓ 导航  Space/→/← 展开收起  Enter 关联会话  o 浏览器打开  / 搜索  Tab 切换迭代  t 类型  Esc/Ctrl+C 退出";
+      container.addChild(new Text(theme.fg("dim", hint), 1, 0));
+      container.addChild(new DynamicBorder((s: string) => theme.fg("accent", s)));
+    }
     rebuildAll();
 
     return {
-      render(width: number) {
-        if (width !== currentWidth) { currentWidth = width; rebuildAll(); }
-        return container.render(width);
-      },
+      render(w: number) { if (w !== curW) { curW = w; rebuildAll(); } return container.render(w); },
       invalidate() { container.invalidate(); },
       handleInput(data: string) {
-        if (data === "\t" || data === "\x1b[Z") { done("__TOGGLE__"); return; }
-        if (data === "t") { done("__TYPE__"); return; }
+        if (focusSearch) {
+          if (data === "\x03") { done(null); return; }
+          if (data === "\x1b[A" || data === "\x1b[B" || data === "\x1b[5~" || data === "\x1b[6~") {
+            treeList.handleInput(data);
+            rebuildAll();
+            tui.requestRender();
+            return;
+          }
+          if (data === "\r" || data === "\n") {
+            const it = treeList.getSelectedItem();
+            if (it) done({ action: "link_view", itemKey: linkKey(it.workspaceId, it.id), itemName: it.name });
+            return;
+          }
+          searchInput.handleInput(data);
+          applySearch();
+          rebuildAll();
+          tui.requestRender();
+          return;
+        }
+
+        if (data === "\x03") { done(null); return; }
+        if (data === "\x1b") {
+          if (searchInput.getValue()) {
+            clearSearch();
+            rebuildAll();
+            tui.requestRender();
+            return;
+          }
+          done(null);
+          return;
+        }
+        if (data === "/") {
+          focusSearch = true;
+          rebuildAll();
+          tui.requestRender();
+          return;
+        }
+        if (data === "\t" || data === "\x1b[Z") { done({ action: "toggle" }); return; }
+        if (data === "t") { done({ action: "type_filter" }); return; }
+        if (data === "\r" || data === "\n") {
+          const it = treeList.getSelectedItem();
+          if (it) done({ action: "link_view", itemKey: linkKey(it.workspaceId, it.id), itemName: it.name });
+          return;
+        }
+        if (data === "o") {
+          const it = treeList.getSelectedItem();
+          if (it) done({ action: "open", url: tapdUrl(it) });
+          return;
+        }
         if (treeList.handleInput(data)) { rebuildAll(); tui.requestRender(); }
       },
     };
   });
-}
-
-async function fetchAllTodos(
-  workspaces: { id: string; name: string }[],
-  config: TapdConfig,
-  scope: "current" | "all",
-  signal: AbortSignal,
-): Promise<{ items: TapdItem[]; errors: string[] }> {
-  const results = await Promise.all(workspaces.map((ws) => fetchWsTodos(ws, config, scope, signal)));
-  const allItems: TapdItem[] = [];
-  const allErrors: string[] = [];
-  for (const r of results) { allItems.push(...r.items); allErrors.push(...r.errors); }
-  return { items: allItems, errors: allErrors };
-}
-
-async function fetchWsTodos(
-  ws: { id: string; name: string },
-  config: TapdConfig,
-  scope: "current" | "all",
-  signal?: AbortSignal,
-): Promise<{ items: TapdItem[]; errors: string[] }> {
-  const items: TapdItem[] = [];
-  const errors: string[] = [];
-
-  // 1. 获取我的待办 story ID 列表
-  const todoIds = await fetchTodoStoryIds(ws.id, config, signal);
-  if (todoIds.length === 0) return { items, errors };
-
-  // 2. 获取详细信息
-  const detailed = await fetchStoriesByIds(ws.id, todoIds, config, signal);
-
-  // 3. 获取迭代列表，判定"当前迭代"（不回落，没有当前迭代就是空）
-  const iterations = await fetchOpenIterations(ws.id, config, signal);
-  const iterNameMap = new Map<string, string>();
-  const currentIterIds = new Set<string>();
-  for (const it of iterations) {
-    iterNameMap.set(it.id, it.name);
-    if (isCurrentIteration(it.startdate, it.enddate)) { currentIterIds.add(it.id); }
-  }
-
-  // 当前迭代模式：如果没有当前迭代，直接返回空
-  if (scope === "current" && currentIterIds.size === 0) return { items, errors };
-
-  // 4. 获取工作项类型名称映射
-  const typeNames = await fetchWorkitemTypes(ws.id, config, signal);
-
-  // 5. 转换数据（当前迭代模式跳过不在其中的项）
-  for (const raw of detailed) {
-    const s = raw.Story;
-    const iterId = s.iteration_id ?? undefined;
-
-    // 当前迭代模式：跳过不在当前迭代的项
-    if (scope === "current" && !(iterId && currentIterIds.has(iterId))) continue;
-
-    items.push({
-      id: s.id,
-      name: s.name,
-      status: s.v_status ?? s.status,
-      priority: s.priority_label ?? s.priority ?? "-",
-      owner: s.owner,
-      workspaceId: s.workspace_id,
-      workspaceName: ws.name,
-      begin: s.begin?.slice(0, 10),
-      due: s.due?.slice(0, 10),
-      iterationId: iterId,
-      iterationName: iterId ? iterNameMap.get(iterId) : undefined,
-      parentId: s.parent_id ?? undefined,
-      ancestorId: s.ancestor_id ?? undefined,
-      workitemTypeName: s.workitem_type_id ? typeNames.get(s.workitem_type_id) : undefined,
-      effort: s.effort,
-      effortCompleted: s.effort_completed,
-      remain: s.remain,
-      children: [],
-      depth: 0,
-      hasChildren: false,
-    });
-  }
-
-  // 6. 检查缺失的父需求并补充
-  const presentIds = new Set(items.map((i) => i.id));
-  const missingParentIds = new Set<string>();
-  for (const item of items) {
-    if (item.parentId && !presentIds.has(item.parentId)) {
-      missingParentIds.add(item.parentId);
-    }
-  }
-
-  if (missingParentIds.size > 0) {
-    const parentStories = await fetchStoriesByIds(ws.id, [...missingParentIds], config, signal);
-    for (const raw of parentStories) {
-      const s = raw.Story;
-      const iterId = s.iteration_id ?? undefined;
-      items.push({
-        id: s.id,
-        name: s.name,
-        status: s.v_status ?? s.status,
-        priority: s.priority_label ?? s.priority ?? "-",
-        owner: s.owner,
-        workspaceId: s.workspace_id,
-        workspaceName: ws.name,
-        begin: s.begin?.slice(0, 10),
-        due: s.due?.slice(0, 10),
-        iterationId: iterId,
-        iterationName: iterId ? iterNameMap.get(iterId) : undefined,
-        parentId: s.parent_id ?? undefined,
-        ancestorId: s.ancestor_id ?? undefined,
-        workitemTypeName: s.workitem_type_id ? typeNames.get(s.workitem_type_id) : undefined,
-        effort: s.effort,
-        effortCompleted: s.effort_completed,
-        remain: s.remain,
-        children: [],
-        depth: 0,
-        hasChildren: false,
-      });
-    }
-  }
-
-  return { items, errors };
 }
 
 // ============ 扩展入口 ============
@@ -849,40 +841,24 @@ export default function tapdExtension(pi: ExtensionAPI) {
     description: "查看 TAPD 待办（树形表格）",
     handler: async (_args, ctx) => {
       const config = loadConfig();
-      if (!config) {
-        ctx.ui.notify(
-          `请先配置 ~/.pi/agent/tapd.json:\n{\n  "token": "你的TAPD个人令牌"\n}`,
-          "error",
-        );
-        return;
-      }
+      if (!config) { ctx.ui.notify('请先配置 ~/.pi/agent/tapd.json:\n{ "token": "你的TAPD个人令牌" }', "error"); return; }
 
-      // 获取当前用户
       ctx.ui.notify("正在连接 TAPD...", "info");
-      const userInfo = await fetchUserInfo(config);
-      if (!userInfo) {
-        ctx.ui.notify("TAPD 连接失败，请检查令牌是否有效", "error");
-        return;
-      }
+      const user = await fetchUserInfo(config);
+      if (!user) { ctx.ui.notify("TAPD 连接失败，请检查令牌", "error"); return; }
 
-      // 获取工作空间
-      ctx.ui.notify(`已连接 (${userInfo.nick})，正在获取工作空间...`, "info");
-      const workspaces = await fetchWorkspaces(userInfo.nick, config);
-      if (workspaces.length === 0) {
-        ctx.ui.notify("没有找到工作空间", "error");
-        return;
-      }
+      ctx.ui.notify(`已连接 (${user.nick})，正在获取工作空间...`, "info");
+      const workspaces = await fetchWorkspaces(user.nick, config);
+      if (workspaces.length === 0) { ctx.ui.notify("没有找到工作空间", "error"); return; }
 
-      let currentOnly = true;
+      let curOnly = true;
       const entries = ctx.sessionManager.getEntries();
-      const stateEntry = entries
-        .filter((e: { type: string; customType?: string }) => e.type === "custom" && e.customType === STATE_KEY)
-        .pop() as { data?: { currentOnly: boolean } } | undefined;
-      if (stateEntry?.data) currentOnly = stateEntry.data.currentOnly ?? true;
+      const se = entries.filter((e: any) => e.type === "custom" && e.customType === STATE_KEY).pop() as any;
+      if (se?.data) curOnly = se.data.currentOnly ?? true;
 
       ctx.ui.notify(`找到 ${workspaces.length} 个工作空间，正在获取待办...`, "info");
-      await showTable(ctx, config, workspaces, currentOnly);
-      pi.appendEntry(STATE_KEY, { currentOnly });
+      const ok = await showTable(ctx, config, workspaces, curOnly);
+      if (ok) pi.appendEntry(STATE_KEY, { currentOnly: curOnly });
     },
   });
 
@@ -891,9 +867,9 @@ export default function tapdExtension(pi: ExtensionAPI) {
     handler: async (ctx) => {
       const config = loadConfig();
       if (!config) { ctx.ui.notify("请先配置 ~/.pi/agent/tapd.json", "warning"); return; }
-      const userInfo = await fetchUserInfo(config);
-      if (!userInfo) { ctx.ui.notify("TAPD 连接失败", "error"); return; }
-      const workspaces = await fetchWorkspaces(userInfo.nick, config);
+      const user = await fetchUserInfo(config);
+      if (!user) { ctx.ui.notify("TAPD 连接失败", "error"); return; }
+      const workspaces = await fetchWorkspaces(user.nick, config);
       if (workspaces.length > 0) await showTable(ctx, config, workspaces, true);
     },
   });
