@@ -1,0 +1,27 @@
+{
+  "name": "@open-cursor/client",
+  "version": "0.1.0",
+  "description": "Cursor agent protocol client — ConnectRPC client, executor resources, KV store, git helpers, authentication",
+  "license": "MIT",
+  "files": [
+    "src/**/*.ts",
+    "README.md"
+  ],
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./*": "./src/*.ts"
+  },
+  "dependencies": {
+    "@bufbuild/protobuf": "1.10.0",
+    "@connectrpc/connect": "^1.7.0",
+    "@open-cursor/protocol": "file:../protocol"
+  },
+  "scripts": {
+    "typecheck": "tsc",
+    "test": "echo 'no tests yet'",
+    "clean": "rm -rf dist"
+  }
+}

@@ -26,6 +26,7 @@ import {
 import { isFast, setFast, toggleFast } from "./fast-state.js";
 import { createFastAwareFooter } from "./footer.js";
 import { LEVEL_TO_PI } from "./parse.js";
+import openCursorExtension from "../../vendor/open-cursor/pi-agent/src/index.js";
 
 type StreamSimple = (
   model: Model<Api>,
@@ -142,6 +143,9 @@ function toggleFastUi(ctx: ExtensionContext): void {
 }
 
 export default function (pi: ExtensionAPI) {
+  // Run the open-cursor provider extension first (registers cursor-agent provider, OAuth, session, etc.)
+  openCursorExtension(pi);
+
   pi.registerCommand("fast", {
     description: "Toggle Cursor Fast mode",
     handler: async (_args, ctx) => {

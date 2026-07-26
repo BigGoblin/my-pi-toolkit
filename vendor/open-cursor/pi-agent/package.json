@@ -1,0 +1,59 @@
+{
+  "name": "@open-cursor/pi-agent",
+  "version": "0.1.0",
+  "description": "Cursor agent provider extension for pi — use Cursor's models and agent directly from pi",
+  "keywords": [
+    "cursor",
+    "cursor-agent",
+    "cursor-cli",
+    "pi",
+    "pi-coding-agent",
+    "pi-package"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/open-cursor/open-cursor.git",
+    "directory": "integrations/pi-agent"
+  },
+  "files": [
+    "src/**/*.ts",
+    "README.md"
+  ],
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "import": "./src/index.ts"
+    },
+    "./src/*": {
+      "types": "./src/*.ts",
+      "import": "./src/*.ts"
+    }
+  },
+  "dependencies": {
+    "@bufbuild/protobuf": "1.10.0",
+    "@connectrpc/connect": "^1.7.0",
+    "yaml": "^2.9.0",
+    "@open-cursor/client": "file:../client",
+    "@open-cursor/protocol": "file:../protocol"
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-ai": "*",
+    "@earendil-works/pi-coding-agent": "*"
+  },
+  "pi": {
+    "extensions": [
+      "./src/index.ts"
+    ]
+  },
+  "scripts": {
+    "lint": "oxlint .",
+    "format": "oxfmt .",
+    "typecheck": "tsc",
+    "test": "tsx --test $(find test -name '*.test.ts' -o -name '*.test.mts' -o -name '*.test.js' | sort)",
+    "clean": "rm -rf dist"
+  }
+}

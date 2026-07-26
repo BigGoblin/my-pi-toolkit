@@ -1,0 +1,42 @@
+syntax = "proto3";
+
+package agent.v1;
+
+import "agent/v1/sandbox.proto";
+import "agent/v1/shell_exec.proto";
+
+message BackgroundShellSpawnArgs {
+  string command = 1;
+  string working_directory = 2;
+  string tool_call_id = 3;
+  ShellCommandParsingResult parsing_result = 4;
+  optional SandboxPolicy sandbox_policy = 5;
+  bool enable_write_shell_stdin_tool = 6;
+  optional string description = 7;
+  optional CommandClassifierResult classifier_result = 8;
+  optional SmartModeApproval output_notification = 9;
+  optional SmartModeApproval smart_mode_approval = 10;
+  optional HookApprovalRequirement hook_approval_requirement = 11;
+}
+
+message BackgroundShellSpawnResult {
+  oneof result {
+    BackgroundShellSpawnSuccess success = 1;
+    BackgroundShellSpawnError error = 2;
+    ShellRejected rejected = 3;
+    ShellPermissionDenied permission_denied = 4;
+  }
+}
+
+message BackgroundShellSpawnSuccess {
+  uint32 shell_id = 1;
+  string command = 2;
+  string working_directory = 3;
+  optional uint32 pid = 4;
+}
+
+message BackgroundShellSpawnError {
+  string command = 1;
+  string working_directory = 2;
+  string error = 3;
+}

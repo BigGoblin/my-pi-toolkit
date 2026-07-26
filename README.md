@@ -5,23 +5,27 @@ My personal pi coding agent toolkit — extensions, skills, prompts, and themes.
 ## Install
 
 ```bash
-# From git (recommended)
-pi install git:github.com/BigGoblin/my-pi-toolkit
-
-# Or from npm (after publishing)
-pi install npm:my-pi-toolkit@1.0.0
-```
-
-## Development
-
-Clone and install locally — no push needed during development:
-
-```bash
 git clone git@github.com:BigGoblin/my-pi-toolkit.git
+cd my-pi-toolkit
+npm install
 pi install ./my-pi-toolkit
 ```
 
-Edit extensions, then `/reload` in pi to apply changes.
+`settings.json` 的 `packages` 只需：
+
+```json
+"packages": ["E:\\my-pi-toolkit"]
+```
+
+不要再装 `npm:@open-cursor/pi-agent`（已 vendored 进本仓库）。
+
+## Development
+
+Edit extensions or `vendor/open-cursor/pi-agent`, then `/reload` in pi.
+
+```bash
+npm install   # after pulling dependency changes
+```
 
 ## Contents
 
@@ -29,15 +33,23 @@ Edit extensions, then `/reload` in pi to apply changes.
   - `hello` — smoke-test command
   - `tapd` — TAPD 待办树
   - `cursor-models` — 折叠 Cursor 扁平模型 + Fast 开关
+- **vendor/open-cursor/** — 本地化的 Cursor↔Pi 桥（源自 open-cursor，可自行修改）
+
+### vendor/open-cursor
+
+从 `@open-cursor/pi-agent` + `client` + `protocol` 拷贝而来，由本仓库的
+`package.json` → `pi.extensions` 直接加载：
+
+`./vendor/open-cursor/pi-agent/src/index.ts`
+
+改流式 usage / checkpoint / 协议行为：编辑 `vendor/open-cursor/pi-agent/src/`。
 
 ### cursor-models
 
-依赖已安装的 `npm:@open-cursor/pi-agent`。会把缓存里的扁平 ID（如 `cursor-grok-4.5-high-fast`）收成：
+叠在 vendored provider 之上，把扁平 ID（如 `cursor-grok-4.5-high-fast`）收成：
 
 - `/model`：一个家族模型（如 `cursor-grok-4.5`）
 - `Shift+Tab`：思考等级
-- `/fast` 或 `Ctrl+Shift+F`：Fast 开/关（状态栏：`(cursor-agent) cursor-grok-4.5 • high • fast`）
+- `/fast` 或 `Ctrl+Shift+F`：Fast 开/关（状态栏：`… • high • fast`）
 
-状态保存在 `~/.pi/agent/cursor-fast.json`。改完后在 pi 里 `/reload`。
-
-若默认模型仍是旧扁平 ID（如 `cursor-grok-4.5-high`），会话启动时会自动迁移到家族 ID；也可把 `settings.json` 的 `defaultModel` 改成家族名。
+状态保存在 `~/.pi/agent/cursor-fast.json`。

@@ -1,0 +1,39 @@
+{
+  "name": "@open-cursor/protocol",
+  "version": "0.1.0",
+  "description": "Cursor agent protocol definitions, generated code, and API clients",
+  "license": "MIT",
+  "files": [
+    "src/**/*.ts",
+    "proto/**/*",
+    "README.md"
+  ],
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./__generated__/*.js": "./src/__generated__/*.ts",
+    "./agent": "./src/agent.ts",
+    "./ai": "./src/ai.ts",
+    "./backoff": "./src/backoff.ts",
+    "./constants": "./src/constants.ts",
+    "./auth": "./src/auth.ts"
+  },
+  "dependencies": {
+    "@bufbuild/protobuf": "1.10.0",
+    "@connectrpc/connect": "^1.7.0",
+    "@connectrpc/connect-node": "^1.7.0"
+  },
+  "devDependencies": {
+    "@bufbuild/buf": "^1.65.0",
+    "@bufbuild/protoc-gen-es": "1.10.0",
+    "@connectrpc/protoc-gen-connect-es": "^1.7.0"
+  },
+  "scripts": {
+    "generate": "buf generate",
+    "typecheck": "tsc",
+    "test": "tsx --test $(find test -name '*.test.ts' -o -name '*.test.mts' -o -name '*.test.js' | sort)",
+    "clean": "rm -rf src/__generated__ dist"
+  }
+}

@@ -33,6 +33,14 @@ interface CacheFile {
 }
 
 const DEFAULT_COST = { input: 1.25, output: 6, cacheRead: 0.25, cacheWrite: 1.25 };
+const DEFAULT_CONTEXT_WINDOW = 200_000;
+
+/** Per-family context window (tokens). Cursor cache has no window metadata. */
+function contextWindowForFamily(familyId: string): number {
+  if (familyId === "cursor-grok-4.5") return 256_000;
+  if (familyId.startsWith("composer")) return 200_000;
+  return DEFAULT_CONTEXT_WINDOW;
+}
 
 const LEVEL_PREFERENCE: Array<LevelSuffix | null> = [
   null,
@@ -194,7 +202,7 @@ export function toProviderModels(families: Map<string, ModelFamily>): ProviderMo
       thinkingLevelMap: hasThinking ? thinkingLevelMap : undefined,
       input: ["text", "image"],
       cost: DEFAULT_COST,
-      contextWindow: 256000,
+      contextWindow: contextWindowForFamily(family.id),
       maxTokens: 30000,
     });
   }

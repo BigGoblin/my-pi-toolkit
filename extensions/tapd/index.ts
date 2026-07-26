@@ -11,7 +11,7 @@
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { exec } from "node:child_process";
 import { join } from "node:path";
-import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
+import type { ExtensionAPI, ExtensionCommandContext, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { DynamicBorder, getAgentDir } from "@earendil-works/pi-coding-agent";
 import { Container, Text, Input, visibleWidth, truncateToWidth } from "@earendil-works/pi-tui";
 
@@ -87,6 +87,38 @@ async function fetchStories(wsId: string, ids: string[], c: TapdConfig, s?: Abor
   return all;
 }
 
+const STORY_DETAIL_FIELDS = "id,name,description,status,v_status,priority,priority_label,owner,developer,workspace_id";
+
+async function fetchStoryDetail(wsId: string, storyId: string, c: TapdConfig, s?: AbortSignal): Promise<{ id: string; name: string; description?: string } | null> {
+  const r = await tapdGet<TR<{ Story: any }>>(apiUrl(c, "/stories", {
+    workspace_id: wsId,
+    id: storyId,
+    fields: STORY_DETAIL_FIELDS,
+    with_v_status: "1",
+    limit: "1",
+  }), c, s);
+  const story = r?.data?.[0]?.Story;
+  return story?.id ? story : null;
+}
+
+/** 将 TAPD 描述 HTML 转为可读纯文本 */
+function htmlToText(html: string): string {
+  return html
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<\/(?:p|div|h[1-6]|tr|li)>/gi, "\n")
+    .replace(/<li[^>]*>/gi, "- ")
+    .replace(/<[^>]+>/g, "")
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">")
+    .replace(/&amp;/gi, "&")
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;/gi, "'")
+    .replace(/[ \t]+\n/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
 function chunkArr<T>(a: T[], sz: number): T[][] {
   const r: T[][] = [];
   for (let i = 0; i < a.length; i += sz) r.push(a.slice(i, i + sz));
@@ -137,10 +169,18 @@ interface TapdItem {
 
 // ============ 会话关联存储 ============
 
-interface SessionLink { id: string; createdAt: string; title?: string; sessionFile?: string; }
+interface SessionLink {
+  id: string;
+  createdAt: string;
+  title?: string;
+  sessionFile?: string;
+  projectPaths?: string[];
+}
 interface TapdLinkRecord { workspaceId: string; storyId: string; name: string; sessions: SessionLink[]; }
 
 const LINKS_PATH = join(getAgentDir(), "tapd-links.json");
+const PATHS_HISTORY_PATH = join(getAgentDir(), "tapd-project-paths.json");
+const MAX_PATH_HISTORY = 30;
 
 function loadLinks(): Record<string, TapdLinkRecord> {
   try { if (existsSync(LINKS_PATH)) return JSON.parse(readFileSync(LINKS_PATH, "utf-8")); } catch {}
@@ -154,6 +194,57 @@ function getOrCreateLink(links: Record<string, TapdLinkRecord>, wsId: string, st
   const k = linkKey(wsId, storyId);
   if (!links[k]) links[k] = { workspaceId: wsId, storyId, name, sessions: [] };
   return links[k];
+}
+
+function loadPathHistory(): string[] {
+  try {
+    if (!existsSync(PATHS_HISTORY_PATH)) return [];
+    const raw = JSON.parse(readFileSync(PATHS_HISTORY_PATH, "utf-8"));
+    if (!Array.isArray(raw)) return [];
+    return raw.filter((p): p is string => typeof p === "string" && p.trim().length > 0);
+  } catch {
+    return [];
+  }
+}
+function rememberProjectPaths(paths: string[]) {
+  const cleaned = [...new Set(paths.map((p) => p.trim()).filter(Boolean))];
+  if (cleaned.length === 0) return;
+  const hist = loadPathHistory().filter((p) => !cleaned.includes(p));
+  try {
+    writeFileSync(PATHS_HISTORY_PATH, JSON.stringify([...cleaned, ...hist].slice(0, MAX_PATH_HISTORY), null, 2), "utf-8");
+  } catch {}
+}
+
+function storyUrl(wsId: string, storyId: string): string {
+  return `https://www.tapd.cn/${wsId}/prong/stories/view/${storyId}`;
+}
+
+function buildUnderstandPrompt(opts: {
+  title: string;
+  storyId: string;
+  url: string;
+  description: string;
+  projectPaths: string[];
+}): string {
+  const pathBlock = opts.projectPaths.length > 0
+    ? opts.projectPaths.map((p) => `- ${p}`).join("\n")
+    : "- （未指定，请在当前工作目录中查找相关代码）";
+  const desc = opts.description.trim() || "（无描述）";
+  return [
+    "请结合以下 TAPD 需求与本地项目代码，理解该需求，并输出一份简洁的理解总结。",
+    "总结请包含：目标、范围、关键改动点、风险/待确认项。不要复述整篇 PRD。",
+    "",
+    "## 需求",
+    `标题：${opts.title}`,
+    `链接：${opts.url}`,
+    `ID：${opts.storyId}`,
+    "",
+    "## 需求描述",
+    desc,
+    "",
+    "## 相关项目路径",
+    pathBlock,
+  ].join("\n");
 }
 
 // ============ 树形构建 ============
@@ -379,7 +470,15 @@ async function fetchAll(workspaces: { id: string; name: string }[], c: TapdConfi
   return { items: all, errors: errs };
 }
 
-async function showTable(ctx: ExtensionContext, c: TapdConfig, workspaces: { id: string; name: string }[], _cur: boolean): Promise<boolean> {
+type CreateDraft = { title: string; projectPaths: string[] };
+type PickerAction =
+  | { type: "create"; draft: CreateDraft }
+  | { type: "switch"; sessionFile: string };
+type TableOutcome =
+  | { kind: "done"; saveState: boolean }
+  | { kind: "session_action"; action: PickerAction; itemKey: string; itemName: string };
+
+async function showTable(ctx: ExtensionCommandContext, c: TapdConfig, workspaces: { id: string; name: string }[], _cur: boolean): Promise<TableOutcome> {
   const controller = new AbortController();
 
   ctx.ui.notify("正在获取当前迭代待办...", "info");
@@ -425,13 +524,15 @@ async function showTable(ctx: ExtensionContext, c: TapdConfig, workspaces: { id:
       const links = loadLinks();
       const [wsId, storyId] = sel.itemKey.split("_");
       const rec = links[sel.itemKey] ?? { workspaceId: wsId, storyId, name: sel.itemName!, sessions: [] };
-      const switched = await showSessionPicker(ctx, rec, sel.itemKey, sel.itemName!);
-      if (switched) return false; // 已切换会话，勿再写旧会话状态 / 阻塞已解除
+      const action = await showSessionPicker(ctx, rec, sel.itemKey, sel.itemName!);
+      if (action) {
+        return { kind: "session_action", action, itemKey: sel.itemKey, itemName: sel.itemName! };
+      }
       continue;
     }
     break;
   }
-  return true;
+  return { kind: "done", saveState: true };
 }
 
 function openUrl(url: string) {
@@ -490,46 +591,102 @@ function readSessionTitle(f: string): string | null {
   } catch { return null; }
 }
 
-// ============ 会话选择器（内嵌输入创建） ============
+// ============ 会话选择器 ============
 
-/** @returns true 表示已创建/切换会话，调用方应退出，避免阻塞主循环 */
-async function showSessionPicker(ctx: ExtensionContext, rec: TapdLinkRecord, itemKey: string, itemName: string): Promise<boolean> {
-  type PickerAction =
-    | { type: "create"; title: string }
-    | { type: "switch"; sessionFile: string }
-    | null;
-
+/** @returns 用户选择的会话操作；null 表示取消或返回列表 */
+async function showSessionPicker(ctx: ExtensionContext, rec: TapdLinkRecord, itemKey: string, itemName: string): Promise<PickerAction | null> {
   const opts: { link?: SessionLink; label: string; isCreate: boolean }[] = [];
   for (const s of rec.sessions.slice().reverse()) {
     const time = new Date(s.createdAt).toLocaleString("zh-CN");
     let title = s.sessionFile ? (readSessionTitle(s.sessionFile) ?? s.title) : s.title;
     if (!title) title = "(无标题)";
-    opts.push({ link: s, label: `${title}  │  ${time}${s.sessionFile ? " ◆" : ""}`, isCreate: false });
+    const pathHint = s.projectPaths?.length ? `  │  ${s.projectPaths.length} 项目` : "";
+    opts.push({ link: s, label: `${title}  │  ${time}${pathHint}${s.sessionFile ? " ◆" : ""}`, isCreate: false });
   }
   opts.push({ isCreate: true, label: "📝 创建新会话" });
 
-  const action = await ctx.ui.custom<PickerAction>((tui, theme, _kb, done) => {
+  const action = await ctx.ui.custom<PickerAction | null>((tui, theme, _kb, done) => {
     let container = new Container();
     let selectedIdx = 0;
-    let creating = false;
     let pendingDelete: SessionLink | null = null;
-    const nameInput = new Input();
 
-    nameInput.onSubmit = (value) => {
-      done({ type: "create", title: value.trim() || itemName });
-    };
-    nameInput.onEscape = () => {
-      creating = false;
+    // 创建流程：直接填写表单
+    let isCreating = false;
+    let selectedPaths: string[] = [];
+    let pathHistory = loadPathHistory();
+    let focus = 0; // form: 0=名称 1..=历史路径 pathHistory.length+1=路径输入 +2=创建
+    const nameInput = new Input();
+    const pathInput = new Input();
+
+    function focusCount(): number {
+      return pathHistory.length + 3; // name + histories + pathInput + submit
+    }
+    function histFocusStart(): number { return 1; }
+    function pathInputFocus(): number { return pathHistory.length + 1; }
+    function submitFocus(): number { return pathHistory.length + 2; }
+
+    function finishCreate() {
+      const title = nameInput.getValue().trim() || itemName;
+      const pendingPath = pathInput.getValue().trim();
+      const paths = [...selectedPaths];
+      if (pendingPath && !paths.includes(pendingPath)) paths.push(pendingPath);
+      done({
+        type: "create",
+        draft: { title, projectPaths: paths },
+      });
+    }
+
+    nameInput.onSubmit = () => {
+      focus = Math.min(focus + 1, focusCount() - 1);
+      syncInputFocus();
       rebuild();
       tui.requestRender();
     };
+    nameInput.onEscape = () => {
+      exitCreate();
+    };
+
+    pathInput.onSubmit = (value) => {
+      const p = value.trim();
+      if (p) {
+        if (!selectedPaths.includes(p)) selectedPaths.push(p);
+        rememberProjectPaths([p]);
+        pathHistory = loadPathHistory();
+        pathInput.setValue("");
+        (pathInput as any).cursor = 0;
+        focus = pathInputFocus();
+      }
+      syncInputFocus();
+      rebuild();
+      tui.requestRender();
+    };
+    pathInput.onEscape = () => {
+      exitCreate();
+    };
+
+    function syncInputFocus() {
+      nameInput.focused = isCreating && focus === 0;
+      pathInput.focused = isCreating && focus === pathInputFocus();
+    }
 
     function enterCreate() {
-      creating = true;
+      isCreating = true;
       pendingDelete = null;
+      selectedPaths = [];
+      pathHistory = loadPathHistory();
+      focus = 0;
       nameInput.setValue(itemName);
       (nameInput as any).cursor = itemName.length;
-      nameInput.focused = true;
+      pathInput.setValue("");
+      (pathInput as any).cursor = 0;
+      syncInputFocus();
+      rebuild();
+      tui.requestRender();
+    }
+
+    function exitCreate() {
+      isCreating = false;
+      syncInputFocus();
       rebuild();
       tui.requestRender();
     }
@@ -552,30 +709,106 @@ async function showSessionPicker(ctx: ExtensionContext, rec: TapdLinkRecord, ite
       ctx.ui.notify("已删除", "info");
     }
 
+    function togglePathAt(histIdx: number) {
+      const p = pathHistory[histIdx];
+      if (!p) return;
+      const i = selectedPaths.indexOf(p);
+      if (i >= 0) selectedPaths.splice(i, 1);
+      else selectedPaths.push(p);
+    }
+
+    const HINT_INDENT = "    ";
+    const SECTION_INDENT = "  ";
+
+    function cursor(active: boolean): string {
+      return active ? theme.fg("accent", "> ") : SECTION_INDENT;
+    }
+
+    function mark(active: boolean, text: string): string {
+      return cursor(active) + text;
+    }
+
+    function addBlankLine() {
+      container.addChild(new Text("", 1, 0));
+    }
+
+    function addCreatePageHeader() {
+      container.addChild(new Text(theme.bold("创建新会话"), 1, 0));
+      addBlankLine();
+    }
+
+    function addSectionTitle(label: string, optional = false) {
+      const suffix = optional ? theme.fg("muted", "（可选）") : "";
+      container.addChild(new Text(theme.bold(label) + suffix, 1, 0));
+    }
+
+    function addSubmitAction(active: boolean) {
+      const label = active
+        ? theme.fg("accent", theme.bold("[ 创建会话 ]"))
+        : theme.fg("dim", "[ 创建会话 ]");
+      container.addChild(new Text(SECTION_INDENT + label, 1, 0));
+    }
+
+    function addHelp(text: string) {
+      addBlankLine();
+      container.addChild(new Text(theme.fg("dim", text), 1, 0));
+    }
+
     function rebuild() {
       container = new Container();
       container.addChild(new DynamicBorder((s: string) => theme.fg("accent", s)));
-      container.addChild(new Text(theme.fg("accent", theme.bold(`「${itemName}」关联会话`)) + theme.fg("dim", `  │  ${opts.length} 项`), 1, 0));
+      container.addChild(new Text(theme.bold(`「${itemName}」关联会话`) + theme.fg("muted", `  │  ${opts.length} 项`), 1, 0));
 
       if (pendingDelete) {
-        container.addChild(new Text(theme.fg("error", `确认删除「${pendingDelete.title || "会话"}」？`), 1, 0));
-        container.addChild(new Text(theme.fg("dim", "Enter 确认  Esc/Ctrl+C 取消"), 1, 0));
-      } else if (creating) {
-        container.addChild(new Text(theme.fg("accent", "📝 创建新会话"), 1, 0));
-        container.addChild(new Text(theme.fg("dim", "会话名称（可选）:"), 1, 0));
-        container.addChild(nameInput);
-        container.addChild(new Text(theme.fg("dim", "Enter 确认  Esc 取消  Ctrl+C 退出"), 1, 0));
+        addBlankLine();
+        container.addChild(new Text(theme.fg("error", theme.bold(`确认删除「${pendingDelete.title || "会话"}」？`)), 1, 0));
+        addHelp("Enter 确认  Esc/Ctrl+C 取消");
+      } else if (isCreating) {
+        addBlankLine();
+        addCreatePageHeader();
+
+        addSectionTitle("会话名称", true);
+        if (focus === 0) {
+          container.addChild(nameInput);
+        } else {
+          const title = nameInput.getValue().trim() || itemName;
+          container.addChild(new Text(SECTION_INDENT + theme.fg("text", title), 1, 0));
+        }
+        addBlankLine();
+
+        addSectionTitle("项目路径", true);
+        container.addChild(new Text(SECTION_INDENT + theme.fg("muted", "可多选历史路径，或添加新路径"), 1, 0));
+        if (selectedPaths.length > 0) {
+          container.addChild(new Text(HINT_INDENT + theme.fg("muted", `已选 ${selectedPaths.length} 项: ${selectedPaths.join(" | ")}`), 1, 0));
+        }
+        for (let i = 0; i < pathHistory.length; i++) {
+          const p = pathHistory[i];
+          const checked = selectedPaths.includes(p) ? "[x]" : "[ ]";
+          const active = focus === histFocusStart() + i;
+          const row = active ? theme.bold(`${checked} ${p}`) : theme.fg("text", `${checked} ${p}`);
+          container.addChild(new Text(cursor(active) + row, 1, 0));
+        }
+        if (focus === pathInputFocus()) {
+          container.addChild(pathInput);
+        } else {
+          const pending = pathInput.getValue().trim();
+          const hint = pending || "添加路径…";
+          const row = pending ? theme.fg("text", hint) : theme.fg("muted", hint);
+          container.addChild(new Text(cursor(focus === pathInputFocus()) + row, 1, 0));
+        }
+        addBlankLine();
+
+        addSubmitAction(focus === submitFocus());
+        addHelp("↑↓ 切换  Space 勾选  Enter 确认  Esc 返回  Ctrl+C 退出");
       } else {
+        addBlankLine();
         for (let i = 0; i < opts.length; i++) {
           const o = opts[i];
-          const prefix = i === selectedIdx ? theme.fg("accent", "> ") : "  ";
-          if (o.isCreate) {
-            container.addChild(new Text(prefix + theme.fg("accent", o.label), 1, 0));
-          } else {
-            container.addChild(new Text(prefix + o.label, 1, 0));
-          }
+          const active = i === selectedIdx;
+          const label = active ? theme.bold(o.label) : theme.fg("text", o.label);
+          container.addChild(new Text(cursor(active) + label, 1, 0));
         }
-        container.addChild(new Text(theme.fg("dim", "Enter 选择  Ctrl+D 删除  Esc/Ctrl+C 返回"), 1, 0));
+        addHelp("Enter 选择  Ctrl+D 删除  Esc/Ctrl+C 返回");
       }
 
       container.addChild(new DynamicBorder((s: string) => theme.fg("accent", s)));
@@ -607,9 +840,54 @@ async function showSessionPicker(ctx: ExtensionContext, rec: TapdLinkRecord, ite
 
         if (data === "\x03") { done(null); return; }
 
-        if (creating) {
-          nameInput.handleInput(data);
-          tui.requestRender();
+        if (isCreating) {
+          if (data === "\x1b") {
+            exitCreate();
+            return;
+          }
+
+          // 输入框聚焦时：↑↓ 切焦点，其余交给 Input
+          if (focus === 0 || focus === pathInputFocus()) {
+            if (data === "\x1b[A" || data === "\x1b[B") {
+              if (data === "\x1b[A" && focus > 0) focus--;
+              if (data === "\x1b[B" && focus < focusCount() - 1) focus++;
+              syncInputFocus();
+              rebuild();
+              tui.requestRender();
+              return;
+            }
+            if (focus === 0) nameInput.handleInput(data);
+            else pathInput.handleInput(data);
+            tui.requestRender();
+            return;
+          }
+
+          if (data === "\x1b[A" || data === "k") {
+            if (focus > 0) { focus--; syncInputFocus(); rebuild(); tui.requestRender(); }
+            return;
+          }
+          if (data === "\x1b[B" || data === "j") {
+            if (focus < focusCount() - 1) { focus++; syncInputFocus(); rebuild(); tui.requestRender(); }
+            return;
+          }
+          if (data === " ") {
+            if (focus >= histFocusStart() && focus < pathInputFocus()) {
+              togglePathAt(focus - histFocusStart());
+              rebuild();
+              tui.requestRender();
+            }
+            return;
+          }
+          if (data === "\r" || data === "\n") {
+            if (focus >= histFocusStart() && focus < pathInputFocus()) {
+              togglePathAt(focus - histFocusStart());
+              rebuild();
+              tui.requestRender();
+            } else if (focus === submitFocus()) {
+              finishCreate();
+            }
+            return;
+          }
           return;
         }
 
@@ -648,52 +926,67 @@ async function showSessionPicker(ctx: ExtensionContext, rec: TapdLinkRecord, ite
     };
   });
 
-  if (!action) return false;
+  return action;
+}
 
-  if (action.type === "switch") {
-    try {
-      await (ctx as any).switchSession(action.sessionFile);
-    } catch (e: any) {
-      ctx.ui.notify(`切换失败: ${e.message}`, "error");
-      return false;
-    }
-    return true;
-  }
-
-  // create
+async function createTapdSession(
+  ctx: ExtensionCommandContext,
+  config: TapdConfig,
+  itemKey: string,
+  itemName: string,
+  draft: CreateDraft,
+): Promise<void> {
   const [wsId, storyId] = itemKey.split("_");
-  const title = action.title;
+  const { title, projectPaths } = draft;
+  rememberProjectPaths(projectPaths);
+
+  const url = storyUrl(wsId, storyId);
+
+  const detail = await fetchStoryDetail(wsId, storyId, config);
+  const description = detail?.description ? htmlToText(String(detail.description)) : "";
+  const understandPrompt = buildUnderstandPrompt({
+    title: detail?.name || title,
+    storyId,
+    url,
+    description,
+    projectPaths,
+  });
+
   const links = loadLinks();
   const rec2 = getOrCreateLink(links, wsId, storyId, itemName);
   const linkId = Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
-  rec2.sessions.push({ id: linkId, createdAt: new Date().toISOString(), title });
+  rec2.sessions.push({
+    id: linkId,
+    createdAt: new Date().toISOString(),
+    title,
+    projectPaths: projectPaths.length > 0 ? projectPaths : undefined,
+  });
   saveLinks(links);
-  try {
-    await (ctx as any).newSession({
-      parentSession: undefined,
-      setup: (sm: any) => {
-        sm.appendMessage({
-          role: "user",
-          content: [{ type: "text", text: `开始处理 TAPD 需求「${title}」(ID: ${storyId})` }],
-          timestamp: Date.now(),
-        });
-      },
-      withSession: async (newCtx: any) => {
-        const sf = newCtx.sessionManager.getSessionFile?.() ?? "";
-        const links3 = loadLinks();
-        const rec3 = getOrCreateLink(links3, wsId, storyId, itemName);
-        if (sf) {
-          const lk = rec3.sessions.find((s: any) => s.id === linkId);
-          if (lk) lk.sessionFile = sf;
-        }
-        saveLinks(links3);
-      },
-    });
-  } catch (e: any) {
-    ctx.ui.notify(`创建失败: ${e.message}`, "error");
-    return false;
+
+  const result = await ctx.newSession({
+    parentSession: undefined,
+    setup: (sm) => {
+      sm.appendMessage({
+        role: "user",
+        content: [{ type: "text", text: understandPrompt }],
+        timestamp: Date.now(),
+      });
+    },
+    withSession: async (replacementCtx) => {
+      const sf = replacementCtx.sessionManager.getSessionFile?.() ?? "";
+      const links3 = loadLinks();
+      const rec3 = getOrCreateLink(links3, wsId, storyId, itemName);
+      if (sf) {
+        const lk = rec3.sessions.find((s) => s.id === linkId);
+        if (lk) lk.sessionFile = sf;
+      }
+      saveLinks(links3);
+    },
+  });
+
+  if (result.cancelled) {
+    throw new Error("创建会话已取消");
   }
-  return true;
 }
 
 // ============ 表格渲染 ============
@@ -857,8 +1150,21 @@ export default function tapdExtension(pi: ExtensionAPI) {
       if (se?.data) curOnly = se.data.currentOnly ?? true;
 
       ctx.ui.notify(`找到 ${workspaces.length} 个工作空间，正在获取待办...`, "info");
-      const ok = await showTable(ctx, config, workspaces, curOnly);
-      if (ok) pi.appendEntry(STATE_KEY, { currentOnly: curOnly });
+      const outcome = await showTable(ctx, config, workspaces, curOnly);
+      if (outcome.kind === "session_action") {
+        const { action, itemKey, itemName } = outcome;
+        try {
+          if (action.type === "switch") {
+            await ctx.switchSession(action.sessionFile);
+          } else {
+            await createTapdSession(ctx, config, itemKey, itemName, action.draft);
+          }
+        } catch {
+          // 会话可能已替换，勿再使用旧 ctx
+        }
+        return;
+      }
+      if (outcome.saveState) pi.appendEntry(STATE_KEY, { currentOnly: curOnly });
     },
   });
 
