@@ -11,6 +11,7 @@
     "@connectrpc/connect-node": "^1.7.0",
     "@open-cursor/client": "file:./vendor/open-cursor/client",
     "@open-cursor/protocol": "file:./vendor/open-cursor/protocol",
+    "marked": "18.0.5",
     "yaml": "^2.9.0"
   },
   "peerDependencies": {

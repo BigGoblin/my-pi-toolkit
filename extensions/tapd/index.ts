@@ -13,6 +13,7 @@ import { exec } from "node:child_process";
 import { dirname, join } from "node:path";
 import type { ExtensionAPI, ExtensionCommandContext, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { DynamicBorder, getAgentDir } from "@earendil-works/pi-coding-agent";
+import { marked } from "marked";
 import { Container, Text, Input, visibleWidth, truncateToWidth } from "@earendil-works/pi-tui";
 import type { AutocompleteItem } from "@earendil-works/pi-tui";
 
@@ -44,6 +45,22 @@ async function tapdGet<T>(url: string, c: TapdConfig, s?: AbortSignal): Promise<
   } catch (err: any) {
     if (err.name === "AbortError") return null;
     console.error("TAPD fetch error:", err.message);
+    return null;
+  }
+}
+
+async function tapdPost<T>(url: string, c: TapdConfig, body: Record<string, unknown>): Promise<T | null> {
+  try {
+    const r = await fetch(url, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${c.token}`, "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    if (!r.ok) return null;
+    const j: any = await r.json();
+    return j.status === 1 ? (j as T) : null;
+  } catch (err: any) {
+    console.error("TAPD POST error:", err.message);
     return null;
   }
 }
@@ -177,6 +194,8 @@ interface SessionLink {
   sessionFile?: string;
   projectPaths?: string[];
   understandingFile?: string;
+  designSubtaskId?: string;
+  designSubtaskUrl?: string;
 }
 interface TapdLinkRecord { workspaceId: string; storyId: string; name: string; sessions: SessionLink[]; }
 
@@ -208,8 +227,16 @@ function safeRequirementDirName(name: string): string {
   return safe || "未命名需求";
 }
 
-function getUnderstandingDocPath(cwd: string, requirementName: string): string {
-  return join(cwd, ".pi", "docs", safeRequirementDirName(requirementName), "understanding.md");
+function getTapdDocPath(cwd: string, requirementId: string, fileName: string): string {
+  return join(cwd, ".pi", "docs", safeRequirementDirName(requirementId), fileName);
+}
+
+function getUnderstandingDocPath(cwd: string, requirementId: string): string {
+  return getTapdDocPath(cwd, requirementId, "understanding.md");
+}
+
+function getCollaborationDocPath(cwd: string, requirementId: string): string {
+  return getTapdDocPath(cwd, requirementId, "collaboration.md");
 }
 
 function loadPathHistory(): string[] {
@@ -1072,7 +1099,9 @@ async function createTapdSession(
   const detail = await fetchStoryDetail(wsId, storyId, config);
   const description = detail?.description ? htmlToText(String(detail.description)) : "";
   const requirementTitle = detail?.name || title;
-  const understandingFile = getUnderstandingDocPath(ctx.cwd, requirementTitle);
+  // Use the TAPD story ID as the stable directory name so renaming the
+  // requirement does not create a second document directory.
+  const understandingFile = getUnderstandingDocPath(ctx.cwd, storyId);
   mkdirSync(dirname(understandingFile), { recursive: true });
 
   const requirementPrompt = buildUnderstandPrompt({
@@ -1121,6 +1150,101 @@ async function createTapdSession(
   if (result.cancelled) {
     throw new Error("创建会话已取消");
   }
+}
+
+function findCurrentTapdSession(ctx: ExtensionCommandContext): {
+  links: Record<string, TapdLinkRecord>;
+  key: string;
+  record: TapdLinkRecord;
+  session: SessionLink;
+} | null {
+  const sessionFile = ctx.sessionManager.getSessionFile?.() ?? "";
+  if (!sessionFile) return null;
+  const links = loadLinks();
+  for (const [key, record] of Object.entries(links)) {
+    const session = record.sessions.find((s) => s.sessionFile === sessionFile);
+    if (session) return { links, key, record, session };
+  }
+  return null;
+}
+
+async function createDesignSubtask(ctx: ExtensionCommandContext, config: TapdConfig, effortArg?: string): Promise<void> {
+  const current = findCurrentTapdSession(ctx);
+  if (!current) {
+    ctx.ui.notify("当前会话没有关联 TAPD 需求，请先从 TAPD 创建或切换关联会话", "warning");
+    return;
+  }
+  if (current.session.designSubtaskId) {
+    ctx.ui.notify(`当前会话已创建设计子需求：${current.session.designSubtaskUrl ?? current.session.designSubtaskId}`, "info");
+    return;
+  }
+
+  const collaborationFile = getCollaborationDocPath(ctx.cwd, current.record.storyId);
+  if (!existsSync(collaborationFile)) {
+    ctx.ui.notify(`未找到协作文档，请先执行 /tapd collaboration：${collaborationFile}`, "warning");
+    return;
+  }
+  const markdown = readFileSync(collaborationFile, "utf-8").trim();
+  if (!markdown) {
+    ctx.ui.notify("协作文档为空，无法创建设计子需求", "warning");
+    return;
+  }
+
+  let effort = effortArg?.trim() ?? "";
+  if (!effort) {
+    const input = await ctx.ui.input("预估工时", "请输入 TAPD 工作量数值，例如 2");
+    if (input === undefined || input === null) return;
+    effort = input.trim();
+  }
+  const effortValue = Number(effort);
+  if (!Number.isFinite(effortValue) || effortValue <= 0) {
+    ctx.ui.notify("预估工时必须是大于 0 的数字", "error");
+    return;
+  }
+
+  const title = `前端-${current.record.name}设计`;
+  const confirmed = await ctx.ui.confirm(
+    "创建 TAPD 设计子需求",
+    `标题：${title}\n父需求：${current.record.name} (${current.record.storyId})\n预估工时：${effort}\n内容：${collaborationFile}`,
+  );
+  if (!confirmed) return;
+
+  ctx.ui.notify("正在创建 TAPD 设计子需求...", "info");
+  const workitemTypes = await tapdGet<TR<{ WorkitemType: { id: string; name: string; english_name?: string } }>>(
+    apiUrl(config, "/workitem_types", { workspace_id: current.record.workspaceId, english_name: "design", status: "3", limit: "200" }),
+    config,
+  );
+  const designType = workitemTypes?.data?.map((row) => row.WorkitemType).find((type) => type?.english_name === "design")
+    ?? workitemTypes?.data?.map((row) => row.WorkitemType).find((type) => type?.name === "设计子需求");
+  if (!designType?.id) {
+    ctx.ui.notify("当前工作空间未找到“设计子需求”类型", "error");
+    return;
+  }
+
+  const description = await marked.parse(markdown, { gfm: true, breaks: false });
+  const created = await tapdPost<{ status: number; data?: { Story?: { id: string } } }>(
+    apiUrl(config, "/stories"),
+    config,
+    {
+      workspace_id: current.record.workspaceId,
+      name: title,
+      description,
+      parent_id: current.record.storyId,
+      workitem_type_id: designType.id,
+      effort: String(effortValue),
+    },
+  );
+  const childId = created?.data?.Story?.id;
+  if (!childId) {
+    ctx.ui.notify("创建设计子需求失败，请检查 TAPD 权限和接口返回", "error");
+    return;
+  }
+
+  const childUrl = storyUrl(current.record.workspaceId, childId);
+  current.session.designSubtaskId = childId;
+  current.session.designSubtaskUrl = childUrl;
+  saveLinks(current.links);
+  ctx.ui.notify(`设计子需求已创建：${childUrl}`, "success");
 }
 
 async function sendTapdWorkflowPrompt(
@@ -1299,6 +1423,11 @@ export default function tapdExtension(pi: ExtensionAPI) {
           label: "collaboration",
           description: "生成供产品、后端和前端 Leader 评审的协作文档",
         },
+        {
+          value: "design-sub",
+          label: "design-sub",
+          description: "根据 collaboration.md 创建设计子需求",
+        },
       ];
       const filtered = items.filter((item) => item.value.startsWith(prefix));
       return filtered.length > 0 ? filtered : null;
@@ -1318,6 +1447,10 @@ export default function tapdExtension(pi: ExtensionAPI) {
       }
       if (sub === "collaboration") {
         await sendTapdWorkflowPrompt(pi, ctx, COLLABORATION_TRIGGER_PROMPT);
+        return;
+      }
+      if (sub === "design-sub") {
+        await createDesignSubtask(ctx, config, args.trim().split(/\s+/)[1]);
         return;
       }
 
