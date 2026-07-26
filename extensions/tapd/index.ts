@@ -8,12 +8,13 @@
  * { "token": "你的TAPD个人令牌" }
  */
 
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { exec } from "node:child_process";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import type { ExtensionAPI, ExtensionCommandContext, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { DynamicBorder, getAgentDir } from "@earendil-works/pi-coding-agent";
 import { Container, Text, Input, visibleWidth, truncateToWidth } from "@earendil-works/pi-tui";
+import type { AutocompleteItem } from "@earendil-works/pi-tui";
 
 // ============ 配置 ============
 
@@ -175,6 +176,7 @@ interface SessionLink {
   title?: string;
   sessionFile?: string;
   projectPaths?: string[];
+  understandingFile?: string;
 }
 interface TapdLinkRecord { workspaceId: string; storyId: string; name: string; sessions: SessionLink[]; }
 
@@ -196,6 +198,20 @@ function getOrCreateLink(links: Record<string, TapdLinkRecord>, wsId: string, st
   return links[k];
 }
 
+function safeRequirementDirName(name: string): string {
+  const safe = name
+    .trim()
+    .replace(/[<>:"/\\|?*\u0000-\u001F]/g, "_")
+    .replace(/[. ]+$/g, "")
+    .slice(0, 120)
+    .trim();
+  return safe || "未命名需求";
+}
+
+function getUnderstandingDocPath(cwd: string, requirementName: string): string {
+  return join(cwd, ".pi", "docs", safeRequirementDirName(requirementName), "understanding.md");
+}
+
 function loadPathHistory(): string[] {
   try {
     if (!existsSync(PATHS_HISTORY_PATH)) return [];
@@ -215,6 +231,13 @@ function rememberProjectPaths(paths: string[]) {
   } catch {}
 }
 
+function removeProjectPathFromHistory(path: string) {
+  const hist = loadPathHistory().filter((p) => p !== path);
+  try {
+    writeFileSync(PATHS_HISTORY_PATH, JSON.stringify(hist, null, 2), "utf-8");
+  } catch {}
+}
+
 function storyUrl(wsId: string, storyId: string): string {
   return `https://www.tapd.cn/${wsId}/prong/stories/view/${storyId}`;
 }
@@ -225,14 +248,14 @@ function buildUnderstandPrompt(opts: {
   url: string;
   description: string;
   projectPaths: string[];
+  understandingFile: string;
 }): string {
   const pathBlock = opts.projectPaths.length > 0
     ? opts.projectPaths.map((p) => `- ${p}`).join("\n")
     : "- （未指定，请在当前工作目录中查找相关代码）";
   const desc = opts.description.trim() || "（无描述）";
   return [
-    "请结合以下 TAPD 需求与本地项目代码，理解该需求，并输出一份简洁的理解总结。",
-    "总结请包含：目标、范围、关键改动点、风险/待确认项。不要复述整篇 PRD。",
+    "以下为 TAPD 需求上下文，供后续需求理解使用。",
     "",
     "## 需求",
     `标题：${opts.title}`,
@@ -244,8 +267,21 @@ function buildUnderstandPrompt(opts: {
     "",
     "## 相关项目路径",
     pathBlock,
+    "",
+    "## 理解文档输出路径",
+    opts.understandingFile,
   ].join("\n");
 }
+
+const ANALYZE_TRIGGER_PROMPT = [
+  "请基于上文 TAPD 需求信息，结合相关项目代码完成需求理解，并输出文档。",
+  "",
+  "要求：",
+  "1. 撰写需求理解文档，包含：目标、范围（做/不做）、与现有代码的关系、验收标准、风险/待确认项。",
+  "2. 不要复述整篇 PRD，不要输出技术方案，不要修改代码。",
+  "3. 将完整文档写入上文「理解文档输出路径」指定的文件。",
+  "4. 写完后简要总结要点，并告知文档路径，等待我确认后再设计方案。",
+].join("\n");
 
 // ============ 树形构建 ============
 
@@ -609,6 +645,7 @@ async function showSessionPicker(ctx: ExtensionContext, rec: TapdLinkRecord, ite
     let container = new Container();
     let selectedIdx = 0;
     let pendingDelete: SessionLink | null = null;
+    let pendingDeletePath: string | null = null;
 
     // 创建流程：直接填写表单
     let isCreating = false;
@@ -672,8 +709,18 @@ async function showSessionPicker(ctx: ExtensionContext, rec: TapdLinkRecord, ite
     function enterCreate() {
       isCreating = true;
       pendingDelete = null;
-      selectedPaths = [];
-      pathHistory = loadPathHistory();
+      pendingDeletePath = null;
+      const currentPath = ctx.cwd.trim();
+      if (currentPath) {
+        // Keep the current project visible in the history list so its checked
+        // state is explicit and can still be toggled off by the user.
+        rememberProjectPaths([currentPath]);
+        pathHistory = loadPathHistory();
+        selectedPaths = [currentPath];
+      } else {
+        selectedPaths = [];
+        pathHistory = loadPathHistory();
+      }
       focus = 0;
       nameInput.setValue(itemName);
       (nameInput as any).cursor = itemName.length;
@@ -715,6 +762,22 @@ async function showSessionPicker(ctx: ExtensionContext, rec: TapdLinkRecord, ite
       const i = selectedPaths.indexOf(p);
       if (i >= 0) selectedPaths.splice(i, 1);
       else selectedPaths.push(p);
+    }
+
+    function applyDeletePath(path: string) {
+      const histIdx = pathHistory.indexOf(path);
+      if (histIdx < 0) return;
+      removeProjectPathFromHistory(path);
+      selectedPaths = selectedPaths.filter((p) => p !== path);
+      pathHistory = loadPathHistory();
+      if (focus > histFocusStart() + histIdx) focus--;
+      else if (focus === histFocusStart() + histIdx) {
+        focus = pathHistory.length > 0
+          ? Math.min(histFocusStart() + histIdx, histFocusStart() + pathHistory.length - 1)
+          : pathInputFocus();
+      }
+      syncInputFocus();
+      ctx.ui.notify("已删除历史路径", "info");
     }
 
     const HINT_INDENT = "    ";
@@ -763,6 +826,11 @@ async function showSessionPicker(ctx: ExtensionContext, rec: TapdLinkRecord, ite
         addBlankLine();
         container.addChild(new Text(theme.fg("error", theme.bold(`确认删除「${pendingDelete.title || "会话"}」？`)), 1, 0));
         addHelp("Enter 确认  Esc/Ctrl+C 取消");
+      } else if (pendingDeletePath) {
+        addBlankLine();
+        container.addChild(new Text(theme.fg("error", theme.bold("确认从历史中删除该路径？")), 1, 0));
+        container.addChild(new Text(HINT_INDENT + pendingDeletePath, 1, 0));
+        addHelp("Enter 确认  Esc/Ctrl+C 取消");
       } else if (isCreating) {
         addBlankLine();
         addCreatePageHeader();
@@ -777,7 +845,7 @@ async function showSessionPicker(ctx: ExtensionContext, rec: TapdLinkRecord, ite
         addBlankLine();
 
         addSectionTitle("项目路径", true);
-        container.addChild(new Text(SECTION_INDENT + theme.fg("muted", "可多选历史路径，或添加新路径"), 1, 0));
+        container.addChild(new Text(SECTION_INDENT + theme.fg("muted", "可多选历史路径，或添加新路径；Ctrl+D 删除历史项"), 1, 0));
         if (selectedPaths.length > 0) {
           container.addChild(new Text(HINT_INDENT + theme.fg("muted", `已选 ${selectedPaths.length} 项: ${selectedPaths.join(" | ")}`), 1, 0));
         }
@@ -799,7 +867,7 @@ async function showSessionPicker(ctx: ExtensionContext, rec: TapdLinkRecord, ite
         addBlankLine();
 
         addSubmitAction(focus === submitFocus());
-        addHelp("↑↓ 切换  Space 勾选  Enter 确认  Esc 返回  Ctrl+C 退出");
+        addHelp("↑↓ 切换  Space 勾选  Enter 确认  Ctrl+D 删历史  Esc 返回  Ctrl+C 退出\n    创建后输入 /tapd analyze 开始需求理解");
       } else {
         addBlankLine();
         for (let i = 0; i < opts.length; i++) {
@@ -831,6 +899,23 @@ async function showSessionPicker(ctx: ExtensionContext, rec: TapdLinkRecord, ite
           }
           if (data === "\x1b" || data === "\x03") {
             pendingDelete = null;
+            rebuild();
+            tui.requestRender();
+            return;
+          }
+          return;
+        }
+
+        if (pendingDeletePath) {
+          if (data === "\r" || data === "\n") {
+            applyDeletePath(pendingDeletePath);
+            pendingDeletePath = null;
+            rebuild();
+            tui.requestRender();
+            return;
+          }
+          if (data === "\x1b" || data === "\x03") {
+            pendingDeletePath = null;
             rebuild();
             tui.requestRender();
             return;
@@ -875,6 +960,17 @@ async function showSessionPicker(ctx: ExtensionContext, rec: TapdLinkRecord, ite
               togglePathAt(focus - histFocusStart());
               rebuild();
               tui.requestRender();
+            }
+            return;
+          }
+          if (data === "\x04") {
+            if (focus >= histFocusStart() && focus < pathInputFocus()) {
+              const p = pathHistory[focus - histFocusStart()];
+              if (p) {
+                pendingDeletePath = p;
+                rebuild();
+                tui.requestRender();
+              }
             }
             return;
           }
@@ -941,15 +1037,19 @@ async function createTapdSession(
   rememberProjectPaths(projectPaths);
 
   const url = storyUrl(wsId, storyId);
-
   const detail = await fetchStoryDetail(wsId, storyId, config);
   const description = detail?.description ? htmlToText(String(detail.description)) : "";
-  const understandPrompt = buildUnderstandPrompt({
-    title: detail?.name || title,
+  const requirementTitle = detail?.name || title;
+  const understandingFile = getUnderstandingDocPath(ctx.cwd, requirementTitle);
+  mkdirSync(dirname(understandingFile), { recursive: true });
+
+  const requirementPrompt = buildUnderstandPrompt({
+    title: requirementTitle,
     storyId,
     url,
     description,
     projectPaths,
+    understandingFile,
   });
 
   const links = loadLinks();
@@ -960,6 +1060,7 @@ async function createTapdSession(
     createdAt: new Date().toISOString(),
     title,
     projectPaths: projectPaths.length > 0 ? projectPaths : undefined,
+    understandingFile,
   });
   saveLinks(links);
 
@@ -968,7 +1069,7 @@ async function createTapdSession(
     setup: (sm) => {
       sm.appendMessage({
         role: "user",
-        content: [{ type: "text", text: understandPrompt }],
+        content: [{ type: "text", text: requirementPrompt }],
         timestamp: Date.now(),
       });
     },
@@ -981,12 +1082,25 @@ async function createTapdSession(
         if (lk) lk.sessionFile = sf;
       }
       saveLinks(links3);
+      replacementCtx.ui.notify("会话已创建，输入 /tapd analyze 开始需求理解", "info");
     },
   });
 
   if (result.cancelled) {
     throw new Error("创建会话已取消");
   }
+}
+
+async function runTapdAnalyze(pi: ExtensionAPI, ctx: ExtensionCommandContext): Promise<void> {
+  if (!ctx.isIdle()) {
+    ctx.ui.notify("Agent 正在执行，请稍后再试", "warning");
+    return;
+  }
+
+  // This command is registered by the extension instance bound to the current
+  // session, so use its current pi. Never retain the ReplacedSessionContext
+  // from the newSession() callback for a later command invocation.
+  pi.sendUserMessage(ANALYZE_TRIGGER_PROMPT);
 }
 
 // ============ 表格渲染 ============
@@ -1131,10 +1245,25 @@ export default function tapdExtension(pi: ExtensionAPI) {
   const STATE_KEY = "tapd-view-state";
 
   pi.registerCommand("tapd", {
-    description: "查看 TAPD 待办（树形表格）",
-    handler: async (_args, ctx) => {
+    description: "查看 TAPD 待办；/tapd analyze 分析当前关联需求",
+    getArgumentCompletions: (prefix: string): AutocompleteItem[] | null => {
+      const items: AutocompleteItem[] = [{
+        value: "analyze",
+        label: "analyze",
+        description: "分析当前关联需求并生成理解文档",
+      }];
+      const filtered = items.filter((item) => item.value.startsWith(prefix));
+      return filtered.length > 0 ? filtered : null;
+    },
+    handler: async (args, ctx) => {
       const config = loadConfig();
       if (!config) { ctx.ui.notify('请先配置 ~/.pi/agent/tapd.json:\n{ "token": "你的TAPD个人令牌" }', "error"); return; }
+
+      const sub = args.trim().split(/\s+/)[0];
+      if (sub === "analyze") {
+        await runTapdAnalyze(pi, ctx);
+        return;
+      }
 
       ctx.ui.notify("正在连接 TAPD...", "info");
       const user = await fetchUserInfo(config);

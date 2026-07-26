@@ -33,8 +33,8 @@ interface WriteOpPattern {
 }
 
 const writeOpPatterns: WriteOpPattern[] = [
-	// 重定向（排除 /dev/null、NUL 等设备）
-	{ name: "redirect", re: /(?:>>|>|2>|1>)\s*(\S+)/g },
+	// 重定向：要求 > 前有空白或行首，避免误匹配 length>0、??> 等代码
+	{ name: "redirect", re: /(?:\s(>>|>)|(?:^|\s)(2>|1>))\s*(\S+)/g },
 	// cp / mv / rm 的最后一个参数（目标路径）
 	{ name: "cp/mv/rm", re: /\b(cp|mv|rm)\s+(-[a-zA-Z]+\s+)*.*?\s+(\S+)\b/g }, // 组3=路径
 	// mkdir / rmdir / touch / tee
@@ -96,11 +96,14 @@ export default function (pi: ExtensionAPI) {
 // ─── 路径检测 ───────────────────────────────────────────────────────
 
 function isOutsideProject(absPath: string, projectRoot: string): boolean {
-	const rel = relative(projectRoot, absPath);
-	return (
-		rel.startsWith(".." + sep) ||
-		(rel.length > 0 && rel.split(sep)[0] === "..")
-	);
+	const resolvedPath = resolve(absPath);
+	const resolvedRoot = resolve(projectRoot);
+	const rel = relative(resolvedRoot, resolvedPath);
+	if (!rel) return false;
+	if (rel.startsWith(".." + sep) || rel.split(sep)[0] === "..") return true;
+	// Windows 跨盘符时 relative() 会返回绝对路径
+	if (/^[a-zA-Z]:[\\/]/.test(rel) || rel.startsWith("\\\\")) return true;
+	return false;
 }
 
 function isDevice(raw: string): boolean {
@@ -115,6 +118,8 @@ function looksLikePath(s: string): boolean {
 	if (clean.startsWith("-")) return false;
 	if (/^\d+$/.test(clean)) return false;
 	if (clean.startsWith("$")) return false;
+	// 排除代码片段（如 ternary、正则、JS 表达式）
+	if (/['";?&=|<>{}()]/.test(clean)) return false;
 	if (/^[a-zA-Z]:[\\/]/i.test(clean)) return true;
 	if (clean.includes("/") || clean.includes("\\")) return true;
 	if (clean.startsWith(".") || clean.startsWith("~")) return true;
@@ -145,23 +150,22 @@ function findWriteTargets(command: string, projectRoot: string): string[] {
 		pattern.re.lastIndex = 0;
 		let m: RegExpExecArray | null;
 		while ((m = pattern.re.exec(command)) !== null) {
-			// 不同正则把路径放在不同的捕获组
-			const pathCapture =
-				m[3] ?? m[2] ?? m[1] ?? "";
+			const pathCapture = m.slice(1).filter((g): g is string => Boolean(g)).pop() ?? "";
 			if (pathCapture) tryAdd(pathCapture);
 		}
 	}
 
 	// 额外：提取引号包裹的路径作为补充（写命令即使引号嵌套也能抓到）
 	// 但只从写操作上下文中提取，避免误伤纯读命令
-	const writeKeywords = /\b(cp|mv|rm|mkdir|rmdir|touch|tee|ln|chmod|chown|install|dd|sed)\b/gi;
-	const hasWriteKeyword = writeKeywords.test(command);
-	const hasRedirect = /[>|]\s*[^|>]*[>/]/.test(command);
+	const writeKeywords =
+		/\b(cp|mv|rm|mkdir|rmdir|touch|tee|ln|chmod|chown|install|dd)\b/i.test(command) ||
+		/\bsed\s+-i\b/i.test(command);
+	const hasRedirect = hasShellRedirect(command);
 	const hasPowerShell = /\b(Rename-Item|Move-Item|Copy-Item|Remove-Item|Out-File|Add-Content|Set-Content)\b/i.test(
 		command,
 	);
 
-	if (hasWriteKeyword || hasRedirect || hasPowerShell) {
+	if (writeKeywords || hasRedirect || hasPowerShell) {
 		const quotedRe = /"([^"]+)"|'([^']*)'/g;
 		let m: RegExpExecArray | null;
 		while ((m = quotedRe.exec(command)) !== null) {
@@ -171,6 +175,17 @@ function findWriteTargets(command: string, projectRoot: string): string[] {
 	}
 
 	return [...results];
+}
+
+function hasShellRedirect(command: string): boolean {
+	const re = /(?:\s(>>|>)|(?:^|\s)(2>|1>))\s*(\S+)/g;
+	re.lastIndex = 0;
+	let m: RegExpExecArray | null;
+	while ((m = re.exec(command)) !== null) {
+		const target = m[3] ?? "";
+		if (target && !isDevice(target)) return true;
+	}
+	return false;
 }
 
 // ─── 拦截/确认 ─────────────────────────────────────────────────────
