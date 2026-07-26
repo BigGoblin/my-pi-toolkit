@@ -6,7 +6,8 @@
   "license": "MIT",
   "pi": {
     "extensions": [
-      "./extensions/hello.ts"
+      "./extensions/hello.ts",
+      "./extensions/tapd/index.ts"
     ],
     "skills": [],
     "prompts": [],
