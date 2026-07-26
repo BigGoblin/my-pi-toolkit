@@ -7,7 +7,8 @@
   "pi": {
     "extensions": [
       "./extensions/hello.ts",
-      "./extensions/tapd/index.ts"
+      "./extensions/tapd/index.ts",
+      "./extensions/cursor-models/index.ts"
     ],
     "skills": [],
     "prompts": [],
