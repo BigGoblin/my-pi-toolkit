@@ -50,6 +50,6 @@ npm install   # after pulling dependency changes
 
 - `/model`：一个家族模型（如 `cursor-grok-4.5`）
 - `Shift+Tab`：思考等级
-- `/fast` 或 `Ctrl+Shift+F`：Fast 开/关（状态栏：`… • high • fast`）
+- `/fast` 或 `Ctrl+Shift+F`：Fast 开/关
 
 状态保存在 `~/.pi/agent/cursor-fast.json`。

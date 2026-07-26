@@ -24,7 +24,6 @@ import {
   type ModelFamily,
 } from "./collapse.js";
 import { isFast, setFast, toggleFast } from "./fast-state.js";
-import { createFastAwareFooter } from "./footer.js";
 import { LEVEL_TO_PI } from "./parse.js";
 import openCursorExtension from "../../vendor/open-cursor/pi-agent/src/index.js";
 
@@ -40,9 +39,6 @@ type StreamSimple = (
  */
 let upstreamStream: StreamSimple | undefined;
 let families = new Map<string, ModelFamily>();
-let lastCtx: ExtensionContext | null = null;
-let requestFooterRender: (() => void) | undefined;
-let footerInstalled = false;
 
 function refreshFamilies(): Map<string, ModelFamily> {
   families = buildFamilies(readCachedModels());
@@ -51,32 +47,6 @@ function refreshFamilies(): Map<string, ModelFamily> {
 
 function collapsedModels(): ProviderModelConfig[] {
   return toProviderModels(refreshFamilies());
-}
-
-function refreshFastUi(ctx: ExtensionContext): void {
-  lastCtx = ctx;
-  // Clear legacy separate status line; fast is shown inline in the model footer.
-  ctx.ui.setStatus("cursor-fast", undefined);
-  requestFooterRender?.();
-}
-
-function ensureFooter(ctx: ExtensionContext): void {
-  if (footerInstalled) {
-    refreshFastUi(ctx);
-    return;
-  }
-  lastCtx = ctx;
-  ctx.ui.setFooter(
-    createFastAwareFooter(
-      () => lastCtx,
-      () => families,
-      (requestRender) => {
-        requestFooterRender = requestRender;
-      },
-    ),
-  );
-  footerInstalled = true;
-  refreshFastUi(ctx);
 }
 
 function applyProvider(pi: ExtensionAPI, ctx: ExtensionContext): void {
@@ -118,7 +88,6 @@ async function migrateActiveModel(pi: ExtensionAPI, ctx: ExtensionContext): Prom
   if (model.id === hit.family.id) return;
 
   if (hit.fast) setFast(true);
-  refreshFastUi(ctx);
 
   const canonical = ctx.modelRegistry.find("cursor-agent", hit.family.id);
   if (!canonical) return;
@@ -138,7 +107,6 @@ function toggleFastUi(ctx: ExtensionContext): void {
   }
 
   const next = toggleFast();
-  refreshFastUi(ctx);
   ctx.ui.notify(next ? "Fast: on" : "Fast: off", "info");
 }
 
@@ -162,21 +130,13 @@ export default function (pi: ExtensionAPI) {
 
   pi.on("session_start", async (_event, ctx) => {
     applyProvider(pi, ctx);
-    ensureFooter(ctx);
     await migrateActiveModel(pi, ctx);
-    refreshFastUi(ctx);
   });
 
   pi.on("model_select", async (event, ctx) => {
-    lastCtx = ctx;
     if (event.model.provider === "cursor-agent") {
       applyProvider(pi, ctx);
     }
-    refreshFastUi(ctx);
   });
 
-  pi.on("thinking_level_select", async (_event, ctx) => {
-    lastCtx = ctx;
-    refreshFastUi(ctx);
-  });
 }
