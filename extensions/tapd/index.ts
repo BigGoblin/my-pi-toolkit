@@ -283,6 +283,38 @@ const ANALYZE_TRIGGER_PROMPT = [
   "4. 写完后简要总结要点，并告知文档路径，等待我确认后再设计方案。",
 ].join("\n");
 
+const DESIGN_TRIGGER_PROMPT = [
+  "我已确认需求理解文档。请基于该文档和相关项目代码输出可执行的技术设计方案。",
+  "",
+  "要求：",
+  "1. 先读取上文「理解文档输出路径」对应的 understanding.md；如果文件不存在，停止并提示我先执行 /tapd analyze。",
+  "2. 设计方案应包含：方案概述、现状分析、总体设计、详细改动、数据与接口设计、边界与异常处理、兼容性与影响范围、测试方案、实施步骤、风险与待确认项。",
+  "3. 详细改动按模块或文件说明修改目的、关键类/函数和主要逻辑；必要时使用 Mermaid 图。",
+  "4. 建立“验收标准 → 设计改动 → 测试场景”的对应关系，确保没有遗漏。",
+  "5. 不要修改业务代码，不要直接实施方案。",
+  "6. 将完整方案写入 understanding.md 同目录下的 design.md。",
+  "7. 写完后简要总结设计要点并告知文档路径，等待我确认后再实施。",
+].join("\n");
+
+const COLLABORATION_TRIGGER_PROMPT = [
+  "请以前端视角编写一份精简的设计评审协作文档，供产品、后端和前端 Leader 共同评审。",
+  "",
+  "要求：",
+  "1. 先读取上文「理解文档输出路径」对应的 understanding.md；如果文件不存在，停止并提示我先执行 /tapd analyze。",
+  "2. 如果同目录存在 design.md，将其作为实现方案参考；如果不存在，仍可结合需求理解和项目代码完成文档。",
+  "3. 根据需求复杂度控制篇幅：简单需求优先控制在 800～1500 个中文字符、1～2 页；只有确有必要时才展开。",
+  "4. 不要包含“需求背景与目标”和“范围说明”，也不要重复 understanding.md 中已经明确的需求内容。",
+  "5. 文档优先只保留四部分：产品与交互变化、前端实现思路、前后端协作点、评审与验收；没有实际内容的部分可以省略。",
+  "6. 产品与交互变化用简短列表或一个表格说明受影响入口及预期表现，不逐项复述相同规则。",
+  "7. 前端实现思路使用 3～6 条模块级说明，讲清主要改动、数据流转和能力复用；不要列具体文件、函数、代码或大段状态管理细节。",
+  "8. 后端已提供接口资料时，只整理与本次改动直接相关的接口变化；后端未提供时，只列需要确认的业务能力，不推测字段、状态码、接口地址或示例报文。",
+  "9. 评审与验收只保留关键场景以及会影响方案或验收的待确认问题，不要按参会角色重复罗列。",
+  "10. 不要描述没有变化的 loading、权限、防重复提交等通用行为；“保持现状”只在容易误解时提一次。",
+  "11. 简单流程不要生成 Mermaid 图；不要包含排期、负责人或上线计划；不要修改代码。",
+  "12. 将完整文档写入 understanding.md 同目录下的 collaboration.md。",
+  "13. 写完后用几句话总结评审重点并告知文档路径。",
+].join("\n");
+
 // ============ 树形构建 ============
 
 function buildTree(raw: TapdItem[]): TapdItem[] {
@@ -1091,7 +1123,11 @@ async function createTapdSession(
   }
 }
 
-async function runTapdAnalyze(pi: ExtensionAPI, ctx: ExtensionCommandContext): Promise<void> {
+async function sendTapdWorkflowPrompt(
+  pi: ExtensionAPI,
+  ctx: ExtensionCommandContext,
+  prompt: string,
+): Promise<void> {
   if (!ctx.isIdle()) {
     ctx.ui.notify("Agent 正在执行，请稍后再试", "warning");
     return;
@@ -1100,7 +1136,7 @@ async function runTapdAnalyze(pi: ExtensionAPI, ctx: ExtensionCommandContext): P
   // This command is registered by the extension instance bound to the current
   // session, so use its current pi. Never retain the ReplacedSessionContext
   // from the newSession() callback for a later command invocation.
-  pi.sendUserMessage(ANALYZE_TRIGGER_PROMPT);
+  pi.sendUserMessage(prompt);
 }
 
 // ============ 表格渲染 ============
@@ -1245,13 +1281,25 @@ export default function tapdExtension(pi: ExtensionAPI) {
   const STATE_KEY = "tapd-view-state";
 
   pi.registerCommand("tapd", {
-    description: "查看 TAPD 待办；/tapd analyze 分析当前关联需求",
+    description: "查看 TAPD 待办；生成需求理解、技术设计或协作评审文档",
     getArgumentCompletions: (prefix: string): AutocompleteItem[] | null => {
-      const items: AutocompleteItem[] = [{
-        value: "analyze",
-        label: "analyze",
-        description: "分析当前关联需求并生成理解文档",
-      }];
+      const items: AutocompleteItem[] = [
+        {
+          value: "analyze",
+          label: "analyze",
+          description: "分析当前关联需求并生成理解文档",
+        },
+        {
+          value: "design",
+          label: "design",
+          description: "基于已确认的需求理解生成设计方案",
+        },
+        {
+          value: "collaboration",
+          label: "collaboration",
+          description: "生成供产品、后端和前端 Leader 评审的协作文档",
+        },
+      ];
       const filtered = items.filter((item) => item.value.startsWith(prefix));
       return filtered.length > 0 ? filtered : null;
     },
@@ -1261,7 +1309,15 @@ export default function tapdExtension(pi: ExtensionAPI) {
 
       const sub = args.trim().split(/\s+/)[0];
       if (sub === "analyze") {
-        await runTapdAnalyze(pi, ctx);
+        await sendTapdWorkflowPrompt(pi, ctx, ANALYZE_TRIGGER_PROMPT);
+        return;
+      }
+      if (sub === "design") {
+        await sendTapdWorkflowPrompt(pi, ctx, DESIGN_TRIGGER_PROMPT);
+        return;
+      }
+      if (sub === "collaboration") {
+        await sendTapdWorkflowPrompt(pi, ctx, COLLABORATION_TRIGGER_PROMPT);
         return;
       }
 
