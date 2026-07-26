@@ -20,6 +20,7 @@
   },
   "pi": {
     "extensions": [
+      "./extensions/project-guard/index.ts",
       "./extensions/tapd/index.ts",
       "./extensions/cursor-models/index.ts",
       "./extensions/context7/index.ts"
