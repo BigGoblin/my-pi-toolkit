@@ -1,0 +1,15 @@
+{
+  "name": "my-pi-toolkit",
+  "version": "1.0.0",
+  "description": "My pi extensions, skills, prompts, and themes",
+  "author": "",
+  "license": "MIT",
+  "pi": {
+    "extensions": [
+      "./extensions/hello.ts"
+    ],
+    "skills": [],
+    "prompts": [],
+    "themes": []
+  }
+}
