@@ -12,8 +12,12 @@
     "@open-cursor/client": "file:./vendor/open-cursor/client",
     "@open-cursor/protocol": "file:./vendor/open-cursor/protocol",
     "marked": "18.0.5",
+    "pi-lens": "3.8.72",
     "yaml": "^2.9.0"
   },
+  "bundledDependencies": [
+    "pi-lens"
+  ],
   "peerDependencies": {
     "@earendil-works/pi-ai": "*",
     "@earendil-works/pi-coding-agent": "*",
@@ -24,10 +28,13 @@
       "./extensions/project-guard/index.ts",
       "./extensions/tapd/index.ts",
       "./extensions/cursor-models/index.ts",
-      "./extensions/context7/index.ts"
+      "./extensions/context7/index.ts",
+      "./node_modules/pi-lens/dist/index.js"
     ],
     "skills": [
-      "./skills/context7"
+      "./skills/context7",
+      "./skills/pi-package-bundler",
+      "./node_modules/pi-lens/skills"
     ],
     "prompts": [],
     "themes": []

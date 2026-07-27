@@ -19,6 +19,9 @@ pi install ./my-pi-toolkit
 
 不要再装 `npm:@open-cursor/pi-agent`（已 vendored 进本仓库）。
 
+本包已内置 `pi-lens`。安装本包后，在任意项目启动 `pi` 都会自动加载
+pi-lens，不需要在每个项目单独执行 `pi install npm:pi-lens`。
+
 ## Development
 
 Edit extensions or `vendor/open-cursor/pi-agent`, then `/reload` in pi.
@@ -40,6 +43,11 @@ npm install   # after pulling dependency changes
   - `cursor-models` — 折叠 Cursor 扁平模型 + Fast 开关
 - **docs/tapd-api.md** — TAPD Open API 官方资料与接口索引
 - **vendor/open-cursor/** — 本地化的 Cursor↔Pi 桥（源自 open-cursor，可自行修改）
+- **pi-lens** — 随本包分发的 LSP、诊断、格式化与代码分析扩展
+- **skills/pi-package-bundler** — 将用户指定的 Pi package 集成并随本包分发
+
+给出 npm 包名或 package 链接即可触发该流程，也可以使用
+`/skill:pi-package-bundler` 手动加载技能。
 
 ### vendor/open-cursor
 
