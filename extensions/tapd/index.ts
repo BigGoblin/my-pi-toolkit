@@ -113,7 +113,7 @@ async function createDesignSubtask(ctx: ExtensionCommandContext, config: TapdCon
     return;
   }
 
-  const collaborationFile = getCollaborationDocPath(ctx.cwd, current.record.storyId);
+  const collaborationFile = getCollaborationDocPath(ctx.cwd, `story-${current.record.storyId}`);
   if (!existsSync(collaborationFile)) {
     ctx.ui.notify(`未找到协作文档，请先执行 /tapd collaboration：${collaborationFile}`, "warning");
     return;
