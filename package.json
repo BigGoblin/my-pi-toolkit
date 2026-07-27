@@ -13,10 +13,12 @@
     "@open-cursor/protocol": "file:./vendor/open-cursor/protocol",
     "marked": "18.0.5",
     "pi-lens": "3.8.72",
+    "pi-permission-modes": "2.2.0",
     "yaml": "^2.9.0"
   },
   "bundledDependencies": [
-    "pi-lens"
+    "pi-lens",
+    "pi-permission-modes"
   ],
   "peerDependencies": {
     "@earendil-works/pi-ai": "*",
@@ -25,11 +27,11 @@
   },
   "pi": {
     "extensions": [
-      "./extensions/project-guard/index.ts",
       "./extensions/tapd/index.ts",
       "./extensions/cursor-models/index.ts",
       "./extensions/context7/index.ts",
-      "./node_modules/pi-lens/dist/index.js"
+      "./node_modules/pi-lens/dist/index.js",
+      "./node_modules/pi-permission-modes/src/index.ts"
     ],
     "skills": [
       "./skills/context7",
@@ -38,5 +40,9 @@
     ],
     "prompts": [],
     "themes": []
-  }
+  },
+  "bundleDependencies": [
+    "pi-lens",
+    "pi-permission-modes"
+  ]
 }
