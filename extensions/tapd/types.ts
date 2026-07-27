@@ -1,0 +1,76 @@
+/** TAPD 扩展共享类型。 */
+
+export interface TapdConfig {
+  token: string;
+  baseUrl?: string;
+}
+
+export interface TapdResponse<T> {
+  status: number;
+  data: T[];
+}
+
+export type TapdItemKind = "story" | "bug";
+
+export interface TapdItem {
+  id: string;
+  kind: TapdItemKind;
+  name: string;
+  status: string;
+  priority: string;
+  owner: string;
+  severity?: string;
+  workspaceId: string;
+  workspaceName: string;
+  begin?: string;
+  due?: string;
+  iterationId?: string;
+  iterationName?: string;
+  parentId?: string;
+  workitemTypeName?: string;
+  children: TapdItem[];
+  depth: number;
+  hasChildren: boolean;
+}
+
+export interface TapdWorkspace {
+  id: string;
+  name: string;
+}
+
+export interface SessionLink {
+  id: string;
+  createdAt: string;
+  title?: string;
+  sessionFile?: string;
+  projectPaths?: string[];
+  understandingFile?: string;
+  designSubtaskId?: string;
+  designSubtaskUrl?: string;
+}
+
+/** storyId 保留用于兼容历史 tapd-links.json。 */
+export interface TapdLinkRecord {
+  workspaceId: string;
+  storyId: string;
+  name: string;
+  sessions: SessionLink[];
+  kind?: TapdItemKind;
+  itemId?: string;
+}
+
+export type CreateDraft = { title: string; projectPaths: string[] };
+
+export type PickerAction =
+  | { type: "create"; draft: CreateDraft }
+  | { type: "switch"; sessionFile: string };
+
+export type TableOutcome =
+  | { kind: "done"; saveState: boolean }
+  | { kind: "session_action"; action: PickerAction; itemKey: string; itemName: string };
+
+export interface ItemKey {
+  kind: TapdItemKind;
+  wsId: string;
+  itemId: string;
+}

@@ -31,8 +31,14 @@ npm install   # after pulling dependency changes
 
 - **extensions/** — Custom pi extensions
   - `hello` — smoke-test command
-  - `tapd` — TAPD 待办树
+  - `tapd` — TAPD 待办树（需求 / Bug Tab）
+    - `api.ts` — TAPD API 与数据获取
+    - `model.ts` — 数据模型、树构建与格式化
+    - `storage.ts` — 会话关联与路径历史
+    - `prompts.ts` — 需求工作流提示词
+    - `ui.ts` — 列表、Tab 与会话选择器
   - `cursor-models` — 折叠 Cursor 扁平模型 + Fast 开关
+- **docs/tapd-api.md** — TAPD Open API 官方资料与接口索引
 - **vendor/open-cursor/** — 本地化的 Cursor↔Pi 桥（源自 open-cursor，可自行修改）
 
 ### vendor/open-cursor
