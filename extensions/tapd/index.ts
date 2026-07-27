@@ -10,7 +10,7 @@
 
 import { existsSync, mkdirSync, readFileSync } from "node:fs";
 import { dirname } from "node:path";
-import type { ExtensionAPI, ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
+import type { ExtensionAPI, ExtensionCommandContext, SessionManager } from "@earendil-works/pi-coding-agent";
 import { marked } from "marked";
 import type { AutocompleteItem } from "@earendil-works/pi-tui";
 import {
@@ -73,14 +73,14 @@ async function createTapdSession(
 
   const result = await ctx.newSession({
     parentSession: undefined,
-    setup: (sm) => {
+    setup: async (sm: SessionManager) => {
       sm.appendMessage({
         role: "user",
         content: [{ type: "text", text: requirementPrompt }],
         timestamp: Date.now(),
       });
     },
-    withSession: async (replacementCtx) => {
+    withSession: async (replacementCtx: ExtensionCommandContext) => {
       const sf = replacementCtx.sessionManager.getSessionFile?.() ?? "";
       const links3 = loadLinks();
       const rec3 = getOrCreateLink(links3, wsId, itemId, itemName, parsed.kind);
@@ -144,10 +144,22 @@ async function createDesignSubtask(ctx: ExtensionCommandContext, config: TapdCon
   if (!confirmed) return;
 
   ctx.ui.notify("正在创建 TAPD 设计子需求...", "info");
-  const workitemTypes = await tapdGet<TapdResponse<{ WorkitemType: { id: string; name: string; english_name?: string } }>>(
-    apiUrl(config, "/workitem_types", { workspace_id: current.record.workspaceId, english_name: "design", status: "3", limit: "200" }),
-    config,
-  );
+  const [parentStory, user, workitemTypes] = await Promise.all([
+    fetchStoryDetail(current.record.workspaceId, current.record.storyId, config),
+    fetchUserInfo(config),
+    tapdGet<TapdResponse<{ WorkitemType: { id: string; name: string; english_name?: string } }>>(
+      apiUrl(config, "/workitem_types", { workspace_id: current.record.workspaceId, english_name: "design", status: "3", limit: "200" }),
+      config,
+    ),
+  ]);
+  if (!parentStory) {
+    ctx.ui.notify("获取父需求详情失败，无法继承需求字段", "error");
+    return;
+  }
+  if (!user?.nick) {
+    ctx.ui.notify("获取当前 TAPD 用户失败，无法设置处理人和开发人员", "error");
+    return;
+  }
   const designType = workitemTypes?.data?.map((row) => row.WorkitemType).find((type) => type?.english_name === "design")
     ?? workitemTypes?.data?.map((row) => row.WorkitemType).find((type) => type?.name === "设计子需求");
   if (!designType?.id) {
@@ -156,6 +168,11 @@ async function createDesignSubtask(ctx: ExtensionCommandContext, config: TapdCon
   }
 
   const description = await marked.parse(markdown, { gfm: true, breaks: false });
+  const inheritedFields = Object.fromEntries(
+    ["priority_label", "iteration_id", "category_id", "release_id", "module", "version", "source", "feature", "label", "cc", "begin", "due"]
+      .map((field) => [field, parentStory[field as keyof typeof parentStory]])
+      .filter((entry): entry is [string, string] => typeof entry[1] === "string" && entry[1] !== ""),
+  );
   const created = await tapdPost<{ status: number; data?: { Story?: { id: string } } }>(
     apiUrl(config, "/stories"),
     config,
@@ -166,6 +183,9 @@ async function createDesignSubtask(ctx: ExtensionCommandContext, config: TapdCon
       parent_id: current.record.storyId,
       workitem_type_id: designType.id,
       effort: String(effortValue),
+      owner: user.nick,
+      developer: user.nick,
+      ...inheritedFields,
     },
   );
   const childId = created?.data?.Story?.id;
@@ -230,7 +250,7 @@ export default function tapdExtension(pi: ExtensionAPI) {
       const filtered = items.filter((item) => item.value.startsWith(prefix));
       return filtered.length > 0 ? filtered : null;
     },
-    handler: async (args, ctx) => {
+    handler: async (args: string, ctx: ExtensionCommandContext) => {
       const config = loadConfig();
       if (!config) { ctx.ui.notify('请先配置 ~/.pi/agent/tapd.json:\n{ "token": "你的TAPD个人令牌" }', "error"); return; }
 
@@ -286,7 +306,7 @@ export default function tapdExtension(pi: ExtensionAPI) {
 
   pi.registerShortcut("ctrl+shift+t", {
     description: "打开 TAPD 待办",
-    handler: async (ctx) => {
+    handler: async (ctx: ExtensionCommandContext) => {
       const config = loadConfig();
       if (!config) { ctx.ui.notify("请先配置 ~/.pi/agent/tapd.json", "warning"); return; }
       const user = await fetchUserInfo(config);

@@ -79,7 +79,7 @@ async function fetchTodoIds(wsId: string, c: TapdConfig, kind: "story" | "bug", 
 }
 
 const STORY_FIELDS = "id,name,status,v_status,priority,priority_label,owner,developer,workspace_id,parent_id,ancestor_id,iteration_id,workitem_type_id,begin,due,effort,effort_completed,remain,modified";
-const STORY_DETAIL_FIELDS = "id,name,description,status,v_status,priority,priority_label,owner,developer,workspace_id";
+const STORY_DETAIL_FIELDS = "id,name,description,status,v_status,priority,priority_label,owner,developer,workspace_id,iteration_id,category_id,release_id,module,version,source,feature,label,cc,begin,due";
 const BUG_FIELDS = "id,title,description,status,v_status,priority,priority_label,severity,current_owner,iteration_id,begin,due,modified,workspace_id";
 
 async function fetchItems<T>(endpoint: string, field: "Story" | "Bug", wsId: string, ids: string[], fields: string, c: TapdConfig, signal?: AbortSignal): Promise<T[]> {
@@ -101,7 +101,25 @@ async function fetchBugs(wsId: string, ids: string[], c: TapdConfig, signal?: Ab
   return fetchItems<any>("/bugs", "Bug", wsId, ids, BUG_FIELDS, c, signal);
 }
 
-export async function fetchStoryDetail(wsId: string, storyId: string, c: TapdConfig, signal?: AbortSignal): Promise<{ id: string; name: string; description?: string } | null> {
+export interface TapdStoryDetail {
+  id: string;
+  name: string;
+  description?: string;
+  priority_label?: string;
+  iteration_id?: string;
+  category_id?: string;
+  release_id?: string;
+  module?: string;
+  version?: string;
+  source?: string;
+  feature?: string;
+  label?: string;
+  cc?: string;
+  begin?: string;
+  due?: string;
+}
+
+export async function fetchStoryDetail(wsId: string, storyId: string, c: TapdConfig, signal?: AbortSignal): Promise<TapdStoryDetail | null> {
   const response = await tapdGet<TapdResponse<{ Story: any }>>(apiUrl(c, "/stories", {
     workspace_id: wsId, id: storyId, fields: STORY_DETAIL_FIELDS, with_v_status: "1", limit: "1",
   }), c, signal);
@@ -213,7 +231,7 @@ async function fetchStoryWorkspace(ws: TapdWorkspace, c: TapdConfig, scope: "cur
     items.push(item);
   }
   const present = new Set(items.map((item) => item.id));
-  const missing = [...new Set(items.filter((item) => item.parentId && !present.has(item.parentId)).map((item) => item.parentId!))];
+  const missing = Array.from(new Set(items.filter((item) => item.parentId && !present.has(item.parentId)).map((item) => item.parentId!)));
   if (missing.length > 0) for (const raw of await fetchStories(ws.id, missing, c, signal)) items.push(mapStory(raw));
   return { items, errors };
 }
