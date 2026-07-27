@@ -30,8 +30,8 @@
       "./extensions/tapd/index.ts",
       "./extensions/cursor-models/index.ts",
       "./extensions/context7/index.ts",
-      "./node_modules/pi-lens/dist/index.js",
-      "./node_modules/pi-permission-modes/src/index.ts"
+      "./extensions/pi-lens/index.js",
+      "./extensions/permission-modes/index.ts"
     ],
     "skills": [
       "./skills/context7",
