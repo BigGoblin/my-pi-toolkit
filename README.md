@@ -1,6 +1,6 @@
 # my-pi-toolkit
 
-My personal pi coding agent toolkit — extensions, skills, prompts, and themes.
+My personal Pi coding-agent toolkit：集中分发自定义扩展、Skills 和本地化 provider。
 
 ## Install
 
@@ -11,61 +11,72 @@ npm install
 pi install ./my-pi-toolkit
 ```
 
-`settings.json` 的 `packages` 只需：
+`settings.json` 的 `packages` 只需配置本仓库路径，例如：
 
 ```json
-"packages": ["E:\\my-pi-toolkit"]
+{
+  "packages": ["E:\\my-pi-toolkit"]
+}
 ```
 
-不要再装 `npm:@open-cursor/pi-agent`（已 vendored 进本仓库）。
+不要再单独安装 `npm:@open-cursor/pi-agent`，Open Cursor 已 vendored 到本仓库。
 
-本包已内置 `pi-lens` 和 `pi-permission-modes`。安装本包后，在任意项目启动
-`pi` 都会自动加载它们，不需要在每个项目单独执行 `pi install npm:pi-lens`
-或 `pi install npm:pi-permission-modes`。
+本包也已内置 `pi-lens` 和 `pi-permission-modes`。安装本包后，在任意项目启动 Pi 都会自动加载，无需在每个项目重复安装。
+
+## Components
+
+### Extensions
+
+扩展总览见 [`extensions/README.md`](extensions/README.md)。每个主要扩展在自己的目录中维护详细 README。
+
+| 扩展 | 简介 | 详细文档 |
+| --- | --- | --- |
+| TAPD | TAPD 待办、需求分析、技术设计、协作评审、Bug 定位和子需求同步 | [`extensions/tapd/README.md`](extensions/tapd/README.md) |
+| Context7 | 为 Agent 提供第三方库最新文档查询工具 | [`extensions/context7/README.md`](extensions/context7/README.md) |
+| Cursor Models | 折叠 Cursor 模型家族并提供 Fast 模式 | [`extensions/cursor-models/README.md`](extensions/cursor-models/README.md) |
+| Permission Modes | 随 toolkit 分发权限模式与沙箱扩展 | [`extensions/permission-modes/README.md`](extensions/permission-modes/README.md) |
+| Pi Lens | 随 toolkit 分发 LSP、诊断、AST 搜索和代码分析能力 | [`extensions/pi-lens/README.md`](extensions/pi-lens/README.md) |
+| Hello | 简单的加载 smoke test | `extensions/hello.ts` |
+
+### Skills
+
+- [`skills/context7`](skills/context7/)：指导 Agent 查询第三方库最新文档。
+- [`skills/pi-package-bundler`](skills/pi-package-bundler/)：将指定 Pi package 集成并随本包分发。
+- `node_modules/pi-lens/skills`：Pi Lens 自带的代码导航、AST 规则和诊断 Skills。
+
+给出 npm 包名、pi.dev 页面、npm 页面或 GitHub 链接即可触发 package bundler，也可以使用：
+
+```text
+/skill:pi-package-bundler
+```
+
+### Vendored provider
+
+[`vendor/open-cursor/`](vendor/open-cursor/) 是本地化的 Cursor ↔ Pi 桥，由 `package.json` 的 `pi.extensions` 直接加载。
+
+需要修改流式 usage、checkpoint 或协议行为时，编辑：
+
+```text
+vendor/open-cursor/pi-agent/src/
+```
+
+### Documentation
+
+- [`docs/tapd-api.md`](docs/tapd-api.md)：TAPD Open API 官方资料与接口索引。
+- [`AGENTS.md`](AGENTS.md)：仓库内 Agent 开发规范。
 
 ## Development
 
-Edit extensions or `vendor/open-cursor/pi-agent`, then `/reload` in pi.
+修改扩展或 vendored provider 后，在 Pi 中重新加载运行时：
 
-```bash
-npm install   # after pulling dependency changes
+```text
+/reload
 ```
 
-## Contents
+拉取依赖变化后执行：
 
-- **extensions/** — Custom pi extensions
-  - `hello` — smoke-test command
-  - `tapd` — TAPD 待办树（需求 / Bug Tab）
-    - `api.ts` — TAPD API 与数据获取
-    - `model.ts` — 数据模型、树构建与格式化
-    - `storage.ts` — 会话关联与路径历史
-    - `prompts.ts` — 需求工作流提示词
-    - `ui.ts` — 列表、Tab 与会话选择器
-  - `cursor-models` — 折叠 Cursor 扁平模型 + Fast 开关
-- **docs/tapd-api.md** — TAPD Open API 官方资料与接口索引
-- **vendor/open-cursor/** — 本地化的 Cursor↔Pi 桥（源自 open-cursor，可自行修改）
-- **pi-lens** — 随本包分发的 LSP、诊断、格式化与代码分析扩展
-- **pi-permission-modes** — 随本包分发的可切换权限模式与沙箱扩展（替代原 project-guard）
-- **skills/pi-package-bundler** — 将用户指定的 Pi package 集成并随本包分发
+```bash
+npm install
+```
 
-给出 npm 包名或 package 链接即可触发该流程，也可以使用
-`/skill:pi-package-bundler` 手动加载技能。
-
-### vendor/open-cursor
-
-从 `@open-cursor/pi-agent` + `client` + `protocol` 拷贝而来，由本仓库的
-`package.json` → `pi.extensions` 直接加载：
-
-`./vendor/open-cursor/pi-agent/src/index.ts`
-
-改流式 usage / checkpoint / 协议行为：编辑 `vendor/open-cursor/pi-agent/src/`。
-
-### cursor-models
-
-叠在 vendored provider 之上，把扁平 ID（如 `cursor-grok-4.5-high-fast`）收成：
-
-- `/model`：一个家族模型（如 `cursor-grok-4.5`）
-- `Shift+Tab`：思考等级
-- `/fast` 或 `Ctrl+Shift+F`：Fast 开/关
-
-状态保存在 `~/.pi/agent/cursor-fast.json`。
+扩展加载列表和依赖版本统一维护在 [`package.json`](package.json)。
