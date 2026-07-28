@@ -31,15 +31,17 @@
       "./extensions/model-manager/index.ts",
       "./extensions/context7/index.ts",
       "./extensions/search-subagent/index.ts",
-      "./extensions/pi-lens/index.js"
+      "./extensions/pi-lens/index.js",
+      "./extensions/startup-dashboard/index.ts"
     ],
     "skills": [
       "./skills/context7",
-      "./skills/pi-package-bundler",
       "./node_modules/pi-lens/skills"
     ],
     "prompts": [],
-    "themes": []
+    "themes": [
+      "./themes"
+    ]
   },
   "bundleDependencies": [
     "pi-lens"

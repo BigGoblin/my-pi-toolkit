@@ -37,12 +37,17 @@ pi install ./my-pi-toolkit
 | Cursor Models | 折叠 Cursor 模型家族并提供 Fast 模式 | [`extensions/cursor-models/README.md`](extensions/cursor-models/README.md) |
 | Model Manager | 为新对话应用可配置的默认模型和思考等级 | [`extensions/model-manager/README.md`](extensions/model-manager/README.md) |
 | Pi Lens | 随 toolkit 分发 LSP、诊断、AST 搜索和代码分析能力 | [`extensions/pi-lens/README.md`](extensions/pi-lens/README.md) |
+| M-PI Dashboard | M-PI 响应式启动面板、自定义 Header 与模型 Footer | [`extensions/startup-dashboard/README.md`](extensions/startup-dashboard/README.md) |
 | Hello | 简单的加载 smoke test | `extensions/hello.ts` |
+
+### Themes
+
+- `toolkit-midnight`：为 M-PI Dashboard 设计的低亮度深色青紫主题，可通过 `/settings` 选择。
 
 ### Skills
 
 - [`skills/context7`](skills/context7/)：指导 Agent 查询第三方库最新文档。
-- [`skills/pi-package-bundler`](skills/pi-package-bundler/)：将指定 Pi package 集成并随本包分发。
+- [`.pi/skills/pi-package-bundler`](.pi/skills/pi-package-bundler/)：仅在当前 toolkit 项目中可用，将指定 Pi package 集成并随本包分发。
 - `node_modules/pi-lens/skills`：Pi Lens 自带的代码导航、AST 规则和诊断 Skills。
 
 给出 npm 包名、pi.dev 页面、npm 页面或 GitHub 链接即可触发 package bundler，也可以使用：
