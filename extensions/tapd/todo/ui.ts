@@ -13,12 +13,12 @@ import {
 	visibleWidth,
 	truncateToWidth,
 } from "@earendil-works/pi-tui";
-import { fetchAll } from "./api.js";
+import { fetchAll } from "../core/workspace-api.js";
 import {
 	cleanupStaleSessionLinks,
 	deleteLinkedSession,
 	scanStaleSessionLinks,
-} from "./cleanup.js";
+} from "../sessions/cleanup.js";
 import {
 	buildTree,
 	collectTypes,
@@ -40,7 +40,7 @@ import {
 	readSessionTitle,
 	rememberProjectPaths,
 	removeProjectPathFromHistory,
-} from "./storage.js";
+} from "../sessions/storage.js";
 import type {
 	PickerAction,
 	SessionLink,
@@ -49,7 +49,7 @@ import type {
 	TapdItem,
 	TapdItemKind,
 	TapdLinkRecord,
-} from "./types.js";
+} from "../types.js";
 
 // ============ 树形列表组件 ============
 

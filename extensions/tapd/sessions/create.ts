@@ -4,10 +4,13 @@ import type {
 	ExtensionCommandContext,
 	SessionManager,
 } from "@earendil-works/pi-coding-agent";
-import { fetchBugDetail, fetchStoryDetail, htmlToText } from "./api.js";
+import { fetchBugDetail, fetchStoryDetail, htmlToText } from "../core/api.js";
 import { removeSessionLink } from "./cleanup.js";
-import { bugUrl, storyUrl } from "./model.js";
-import { buildBugContextPrompt, buildUnderstandPrompt } from "./prompts.js";
+import { bugUrl, storyUrl } from "../todo/model.js";
+import {
+	buildBugContextPrompt,
+	buildUnderstandPrompt,
+} from "../documents/prompts.js";
 import {
 	getOrCreateLink,
 	getTapdDocPath,
@@ -16,7 +19,7 @@ import {
 	rememberProjectPaths,
 	saveLinks,
 } from "./storage.js";
-import type { CreateDraft, TapdConfig } from "./types.js";
+import type { CreateDraft, TapdConfig } from "../types.js";
 
 export async function createTapdSession(
 	ctx: ExtensionCommandContext,

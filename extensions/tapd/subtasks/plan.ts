@@ -1,5 +1,9 @@
 import type { ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
-import type { DevelopmentTaskSuggestion, SubtaskPlan, SubtaskPlanItem } from "./types.js";
+import type {
+	DevelopmentTaskSuggestion,
+	SubtaskPlan,
+	SubtaskPlanItem,
+} from "../types.js";
 
 async function inputPositiveEffort(
 	ctx: ExtensionCommandContext,

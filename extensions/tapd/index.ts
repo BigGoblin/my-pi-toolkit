@@ -6,17 +6,22 @@ import type {
 	SessionStartEvent,
 } from "@earendil-works/pi-coding-agent";
 import type { AutocompleteItem } from "@earendil-works/pi-tui";
-import { fetchUserInfo, fetchWorkspaces, loadConfig } from "./api.js";
-import { cleanupStaleSessionLinks } from "./cleanup.js";
+import { fetchUserInfo, fetchWorkspaces } from "./core/api.js";
+import { loadConfig } from "./core/config.js";
+import { cleanupStaleSessionLinks } from "./sessions/cleanup.js";
 import {
 	ANALYZE_TRIGGER_PROMPT,
 	COLLABORATION_TRIGGER_PROMPT,
 	DESIGN_TRIGGER_PROMPT,
-} from "./prompts.js";
-import { createTapdSession } from "./session.js";
-import { createSubtasks } from "./subtasks.js";
-import { showTable } from "./ui.js";
-import { locateTapdBug, sendTapdWorkflowPrompt } from "./workflows.js";
+} from "./documents/prompts.js";
+import { createTapdSession } from "./sessions/create.js";
+import { createSubtasks } from "./subtasks/sync.js";
+import { showTable } from "./todo/ui.js";
+import {
+	locateTapdBug,
+	sendTapdWorkflowPrompt,
+} from "./documents/workflows.js";
+import { runTapdGitCommand } from "./git/commands.js";
 
 export default function tapdExtension(pi: ExtensionAPI) {
 	const STATE_KEY = "tapd-view-state";
@@ -56,6 +61,18 @@ export default function tapdExtension(pi: ExtensionAPI) {
 					label: "sub-task",
 					description: "根据 design.md 创建设计和开发子需求",
 				},
+				{
+					value: "git-status",
+					label: "git-status",
+					description: "查看 TAPD Git 工作流状态",
+				},
+				{ value: "branch", label: "branch", description: "创建 TAPD 关联分支" },
+				{
+					value: "commit",
+					label: "commit",
+					description: "提交并推送 TAPD 关联改动",
+				},
+				{ value: "mr", label: "mr", description: "创建或更新 MR 并回写 TAPD" },
 			];
 			const filtered = items.filter((item) => item.value.startsWith(prefix));
 			return filtered.length > 0 ? filtered : null;
@@ -73,6 +90,7 @@ export default function tapdExtension(pi: ExtensionAPI) {
 			const trimmedArgs = args.trim();
 			const [sub = "", ...restArgs] = trimmedArgs.split(/\s+/);
 			const additionalInstructions = restArgs.join(" ").trim();
+			if (await runTapdGitCommand(pi, sub, restArgs, ctx, config)) return;
 			if (sub === "bug") {
 				await locateTapdBug(pi, ctx, config);
 				return;

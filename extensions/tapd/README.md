@@ -12,6 +12,10 @@ TAPD 需求与缺陷工作流扩展。提供待办列表、会话关联、需求
 | `/tapd collaboration [补充要求]` | 生成供产品、后端和前端 Leader 评审的 `collaboration.md` |
 | `/tapd sub-task` | 根据 `design.md` 创建或同步设计、开发子需求 |
 | `/tapd bug` | 获取当前 Bug 完整信息并让 Agent 定位代码原因 |
+| `/tapd git-status` | 查看当前会话关联事项、Git 分支、upstream 与工作区状态 |
+| `/tapd branch [--base origin/dev]` | 获取 TAPD keyword，并从指定基础分支创建关联分支 |
+| `/tapd commit [--no-push]` | 使用 TAPD keyword 生成提交信息，提交并默认推送；仓库检查、TAPD 请求、暂存、commit 和 push 阶段会实时显示在对话中 |
+| `/tapd mr [--target dev] [--no-delete-source-branch]` | 创建或更新 GitLab MR，并回写全部关联 TAPD 事项；需求/任务一次执行完成，Bug 首次执行会先让 Agent 生成根因草稿，再次执行才创建 MR 和更新 TAPD |
 
 工作流命令支持附加自然语言和 `@文件`：
 
@@ -61,26 +65,41 @@ TAPD 会话关联保存在 `~/.pi/agent/tapd-links.json`。扩展会在会话启
 ```json
 {
   "token": "TAPD 个人令牌",
-  "baseUrl": "可选的 API Base URL"
+  "baseUrl": "可选的 TAPD API Base URL",
+  "gitlab": {
+    "token": "可选；也可使用 GITLAB_PERSONAL_ACCESS_TOKEN",
+    "baseUrl": "可选；默认从 origin 推导 https://host/api/v4"
+  }
 }
 ```
 
 TAPD Open API 索引见 [`../../docs/tapd-api.md`](../../docs/tapd-api.md)。
 
+## Git workflow
+
+- 默认从 `origin/dev` 创建 `bug/{short_id}` 或 `feature/{short_id}`，并使用 `--no-track`。
+- 工作区有未提交改动时会先弹出确认；确认后由 Git 尝试把当前改动带到从 `origin/dev` 创建的新分支。若与基础分支冲突，Git 会安全终止，不会自动 stash、丢弃改动或强制切换。
+- Bug 提交为 `fix: {KEYWORD}`；需求/任务提交为 `feat: {KEYWORD}`。KEYWORD 原样保留。
+- 没有 upstream 时首次推送使用 `git push -u origin HEAD`。
+- MR 会扫描 `merge-base..HEAD` 的全部提交，不只处理第一条 TAPD 关联。
+- Bug 默认标签为 `二组`、`迭代bug(每日发布)`，状态更新为 `已解决`，负责人为 `沈瑞昀`。
+- 需求/任务默认标签为 `二组`、`迭代任务(随迭代发布)`，状态更新为 `开发完成`，不修改负责人。
+- 纯需求/任务的 `/tapd mr` 保持一次执行完成，不触发 Agent 根因分析。
+- 含 Bug 的 `/tapd mr` 首次执行会先分析修复 diff 和 `git blame` 候选，允许 UI 选择或手动输入 commit，然后把 TAPD Bug、修复 patch 和已确认 commit 交给 Agent。Agent 只生成结构化根因草稿并保存在仓库 `.pi/tapd-root-cause/`，本次不创建 MR、不更新 TAPD。
+- Agent 分析完成后再次执行 `/tapd mr`，扩展只接受与当前 `HEAD` 匹配的草稿，打开编辑器供用户最终确认，再创建或更新 MR 并回写 TAPD。TAPD 流转和备注写入成功后自动删除草稿；用户取消或流程失败时保留草稿以便重试。选择“未能定位”时使用 TAPD 真实候选值 `其他(历史缺陷)`。
+- 引入 commit 经验证后，会拉取远端 tags，优先取直接指向 commit 的第一个 tag，否则取第一个包含该 commit 的 tag。
+- 合入版本从 TAPD `/bugs/get_fields_info` 的“合入版本”候选值中选择。普通版本精确匹配；`.0` 等存在多个迭代候选时，根据引入 commit 中 TAPD keyword 关联事项的迭代唯一匹配；关联事项没有迭代时会列出候选值让用户手动选择。
+- tag 在候选值中完全不存在时，按规则选择候选值中的 `其他(历史缺陷)`；若该选项也不存在则不修改合入版本。
+- 工作流不会修改 git config，不会自动 stash、hard reset 或 force-push。
+
 ## Modules
 
-| 文件 | 职责 |
+| 目录/文件 | 职责 |
 | --- | --- |
-| `index.ts` | 命令、快捷键和扩展入口 |
-| `api.ts` | TAPD API、认证与数据获取 |
-| `model.ts` | TAPD 条目模型、树构建与格式化 |
-| `storage.ts` | 会话关联、文档路径和项目路径历史 |
-| `cleanup.ts` | 失效关联扫描、会话文件删除和关联清理 |
-| `prompts.ts` | analyze、design、collaboration、Bug 工作流提示词 |
-| `session.ts` | 创建 TAPD 关联会话 |
-| `subtask-parser.ts` | 解析 `design.md` 中的子需求 JSON |
-| `subtask-plan.ts` | 子需求计划确认、工时输入和同步计划 |
-| `subtasks.ts` | 创建及同步 TAPD 子需求 |
-| `workflows.ts` | 工作流消息发送与 Bug 定位 |
-| `ui.ts` | 待办列表、Tab、筛选与会话选择器 |
-| `types.ts` | 共享类型 |
+| `index.ts` / `types.ts` | 扩展组装入口与跨领域共享类型 |
+| `core/` | 配置、HTTP 客户端、基础 TAPD API |
+| `sessions/` | TAPD 会话关联、创建和失效清理 |
+| `documents/` | analyze、design、collaboration 与 Bug 定位文档工作流 |
+| `subtasks/` | 子需求解析、确认计划与 TAPD 同步 |
+| `todo/` | 待办模型、列表和会话选择 UI |
+| `git/` | Git 仓库、TAPD keyword、GitLab MR、状态回写和根因备注 |

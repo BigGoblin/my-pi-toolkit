@@ -1,8 +1,14 @@
 /** TAPD 扩展共享类型。 */
 
+export interface GitLabConfig {
+	token?: string;
+	baseUrl?: string;
+}
+
 export interface TapdConfig {
 	token: string;
 	baseUrl?: string;
+	gitlab?: GitLabConfig;
 }
 
 export interface TapdResponse<T> {

@@ -1,9 +1,11 @@
-import type { DevelopmentTaskSuggestion } from "./types.js";
+import type { DevelopmentTaskSuggestion } from "../types.js";
 
 const SUBTASKS_START = "<!-- TAPD_SUBTASKS_START -->";
 const SUBTASKS_END = "<!-- TAPD_SUBTASKS_END -->";
 
-export function parseDevelopmentTasks(markdown: string): DevelopmentTaskSuggestion[] {
+export function parseDevelopmentTasks(
+	markdown: string,
+): DevelopmentTaskSuggestion[] {
 	const start = markdown.indexOf(SUBTASKS_START);
 	const end = markdown.indexOf(SUBTASKS_END, start + SUBTASKS_START.length);
 	if (start < 0 || end < 0) throw new Error("缺少 TAPD 子需求拆分标记");

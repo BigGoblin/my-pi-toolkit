@@ -2,31 +2,23 @@ import { createHash } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
 import type { ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
 import { marked } from "marked";
-import {
-	apiUrl,
-	fetchStoryDetail,
-	fetchUserInfo,
-	tapdGet,
-	tapdPost,
-} from "./api.js";
-import { storyUrl } from "./model.js";
+import { fetchStoryDetail, fetchUserInfo } from "../core/api.js";
+import { apiUrl, tapdGet, tapdPost } from "../core/http.js";
+import { storyUrl } from "../todo/model.js";
 import {
 	findSessionLink,
 	getCollaborationDocPath,
 	getTapdDocPath,
 	saveLinks,
-} from "./storage.js";
-import { parseDevelopmentTasks } from "./subtask-parser.js";
-import {
-	buildSubtaskPlan,
-	buildSynchronizedSubtaskPlan,
-} from "./subtask-plan.js";
+} from "../sessions/storage.js";
+import { parseDevelopmentTasks } from "./parser.js";
+import { buildSubtaskPlan, buildSynchronizedSubtaskPlan } from "./plan.js";
 import type {
 	DevelopmentTaskSuggestion,
 	SubtaskPlanItem,
 	TapdConfig,
 	TapdResponse,
-} from "./types.js";
+} from "../types.js";
 export async function createSubtasks(
 	ctx: ExtensionCommandContext,
 	config: TapdConfig,

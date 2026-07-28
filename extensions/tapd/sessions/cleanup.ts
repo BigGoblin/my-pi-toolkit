@@ -1,7 +1,7 @@
 import { spawnSync } from "node:child_process";
 import { existsSync, unlinkSync } from "node:fs";
 import { loadLinks, saveLinks } from "./storage.js";
-import type { SessionLink, TapdLinkRecord } from "./types.js";
+import type { SessionLink, TapdLinkRecord } from "../types.js";
 
 const PENDING_SESSION_GRACE_MS = 10 * 60 * 1000;
 

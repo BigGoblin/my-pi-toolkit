@@ -1,9 +1,12 @@
-import type { ExtensionAPI, ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
-import { fetchBugDetail, htmlToText } from "./api.js";
-import { bugUrl } from "./model.js";
+import type {
+	ExtensionAPI,
+	ExtensionCommandContext,
+} from "@earendil-works/pi-coding-agent";
+import { fetchBugDetail, htmlToText } from "../core/api.js";
+import { bugUrl } from "../todo/model.js";
 import { buildBugLocatePrompt } from "./prompts.js";
-import { findSessionLink } from "./storage.js";
-import type { TapdConfig } from "./types.js";
+import { findSessionLink } from "../sessions/storage.js";
+import type { TapdConfig } from "../types.js";
 
 export async function sendTapdWorkflowPrompt(
 	pi: ExtensionAPI,
