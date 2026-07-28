@@ -13,13 +13,11 @@
     "@open-cursor/protocol": "file:./vendor/open-cursor/protocol",
     "marked": "18.0.5",
     "pi-lens": "3.8.72",
-    "pi-permission-modes": "2.2.0",
     "typebox": "^1.1.38",
     "yaml": "^2.9.0"
   },
   "bundledDependencies": [
-    "pi-lens",
-    "pi-permission-modes"
+    "pi-lens"
   ],
   "peerDependencies": {
     "@earendil-works/pi-ai": "*",
@@ -32,8 +30,7 @@
       "./extensions/cursor-models/index.ts",
       "./extensions/context7/index.ts",
       "./extensions/search-subagent/index.ts",
-      "./extensions/pi-lens/index.js",
-      "./extensions/permission-modes/index.ts"
+      "./extensions/pi-lens/index.js"
     ],
     "skills": [
       "./skills/context7",
@@ -44,7 +41,6 @@
     "themes": []
   },
   "bundleDependencies": [
-    "pi-lens",
-    "pi-permission-modes"
+    "pi-lens"
   ]
 }

@@ -21,7 +21,7 @@ pi install ./my-pi-toolkit
 
 不要再单独安装 `npm:@open-cursor/pi-agent`，Open Cursor 已 vendored 到本仓库。
 
-本包也已内置 `pi-lens` 和 `pi-permission-modes`。安装本包后，在任意项目启动 Pi 都会自动加载，无需在每个项目重复安装。
+本包也已内置 `pi-lens`。安装本包后，在任意项目启动 Pi 都会自动加载，无需在每个项目重复安装。
 
 ## Components
 
@@ -35,7 +35,6 @@ pi install ./my-pi-toolkit
 | Context7 | 为 Agent 提供第三方库最新文档查询工具 | [`extensions/context7/README.md`](extensions/context7/README.md) |
 | Search Subagent | 为大规模跨文件检索提供独立、只读的 Search 子 Agent | [`extensions/search-subagent/README.md`](extensions/search-subagent/README.md) |
 | Cursor Models | 折叠 Cursor 模型家族并提供 Fast 模式 | [`extensions/cursor-models/README.md`](extensions/cursor-models/README.md) |
-| Permission Modes | 随 toolkit 分发权限模式与沙箱扩展 | [`extensions/permission-modes/README.md`](extensions/permission-modes/README.md) |
 | Pi Lens | 随 toolkit 分发 LSP、诊断、AST 搜索和代码分析能力 | [`extensions/pi-lens/README.md`](extensions/pi-lens/README.md) |
 | Hello | 简单的加载 smoke test | `extensions/hello.ts` |
 

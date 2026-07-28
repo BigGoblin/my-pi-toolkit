@@ -26,6 +26,7 @@ import {
 	createBranch,
 	git,
 	pushCurrentBranch,
+	readRepositoryRoot,
 	readRepositoryState,
 	refExists,
 } from "./repository.js";
@@ -59,30 +60,18 @@ export async function runCreateBranch(
 	baseRef = DEFAULT_GIT_WORKFLOW_POLICY.baseRef,
 ): Promise<string> {
 	const object = currentTapdObject(ctx);
-	const repository = await readRepositoryState(ctx.cwd);
-	if (repository.dirty) {
-		const confirmed = await ctx.ui.confirm(
-			"工作区存在未提交改动",
-			[
-				`将尝试从 ${baseRef} 创建 TAPD 分支，并把当前未提交改动带到新分支。`,
-				"如果改动与基础分支冲突，Git 会安全终止切换；扩展不会自动 stash、丢弃改动或强制切换。",
-			].join("\n"),
-		);
-		if (!confirmed) throw new Error("用户取消创建分支");
-	}
-	if (!(await refExists(repository.root, baseRef)))
+	const root = await readRepositoryRoot(ctx.cwd);
+	if (!(await refExists(root, baseRef)))
 		throw new Error(`基础分支不存在: ${baseRef}`);
 	const keyword = parseKeyword(
 		await fetchCommitKeyword(config, object),
 		object,
 	);
 	const branch = `${branchPrefix(keyword.kind)}/${keyword.shortId}`;
-	if (await refExists(repository.root, `refs/heads/${branch}`))
+	if (await refExists(root, `refs/heads/${branch}`))
 		throw new Error(`本地分支已存在: ${branch}`);
-	await createBranch(repository.root, branch, baseRef);
-	return repository.dirty
-		? `已从 ${baseRef} 创建分支 ${branch}，并保留当前未提交改动（未设置 upstream）`
-		: `已从 ${baseRef} 创建分支 ${branch}（未设置 upstream）`;
+	await createBranch(root, branch, baseRef);
+	return `已从 ${baseRef} 创建分支 ${branch}（未设置 upstream）`;
 }
 
 export async function runCommitPush(

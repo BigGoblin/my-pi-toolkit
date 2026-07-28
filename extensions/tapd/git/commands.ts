@@ -17,7 +17,7 @@ function optionValue(args: string[], name: string): string | undefined {
 
 const LOADING_MESSAGES: Record<string, string> = {
 	"git-status": "正在检查 TAPD 关联和 Git 仓库状态...",
-	branch: "正在获取 TAPD keyword 并检查基础分支...",
+	branch: "正在获取 TAPD keyword 并创建分支...",
 	commit: "正在检查改动并生成 TAPD 提交信息...",
 	mr: "正在扫描提交、创建 MR 并同步 TAPD...",
 };

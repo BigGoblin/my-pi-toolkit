@@ -24,6 +24,10 @@ async function optionalGit(
 	}
 }
 
+export async function readRepositoryRoot(cwd: string): Promise<string> {
+	return git(cwd, ["rev-parse", "--show-toplevel"]);
+}
+
 export async function readRepositoryState(
 	cwd: string,
 	includeUntracked = true,
