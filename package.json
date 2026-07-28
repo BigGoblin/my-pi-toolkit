@@ -28,6 +28,7 @@
     "extensions": [
       "./extensions/tapd/index.ts",
       "./extensions/cursor-models/index.ts",
+      "./extensions/model-manager/index.ts",
       "./extensions/context7/index.ts",
       "./extensions/search-subagent/index.ts",
       "./extensions/pi-lens/index.js"
