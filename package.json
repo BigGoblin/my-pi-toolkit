@@ -14,6 +14,7 @@
     "marked": "18.0.5",
     "pi-lens": "3.8.72",
     "pi-permission-modes": "2.2.0",
+    "typebox": "^1.1.38",
     "yaml": "^2.9.0"
   },
   "bundledDependencies": [
@@ -30,6 +31,7 @@
       "./extensions/tapd/index.ts",
       "./extensions/cursor-models/index.ts",
       "./extensions/context7/index.ts",
+      "./extensions/search-subagent/index.ts",
       "./extensions/pi-lens/index.js",
       "./extensions/permission-modes/index.ts"
     ],

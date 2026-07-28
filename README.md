@@ -33,6 +33,7 @@ pi install ./my-pi-toolkit
 | --- | --- | --- |
 | TAPD | TAPD 待办、需求分析、技术设计、协作评审、Bug 定位和子需求同步 | [`extensions/tapd/README.md`](extensions/tapd/README.md) |
 | Context7 | 为 Agent 提供第三方库最新文档查询工具 | [`extensions/context7/README.md`](extensions/context7/README.md) |
+| Search Subagent | 为大规模跨文件检索提供独立、只读的 Search 子 Agent | [`extensions/search-subagent/README.md`](extensions/search-subagent/README.md) |
 | Cursor Models | 折叠 Cursor 模型家族并提供 Fast 模式 | [`extensions/cursor-models/README.md`](extensions/cursor-models/README.md) |
 | Permission Modes | 随 toolkit 分发权限模式与沙箱扩展 | [`extensions/permission-modes/README.md`](extensions/permission-modes/README.md) |
 | Pi Lens | 随 toolkit 分发 LSP、诊断、AST 搜索和代码分析能力 | [`extensions/pi-lens/README.md`](extensions/pi-lens/README.md) |

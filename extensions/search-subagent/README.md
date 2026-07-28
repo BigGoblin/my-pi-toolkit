@@ -1,0 +1,86 @@
+# Search Subagent
+
+`search` 是面向大规模代码库检索的只读子 Agent。主 Agent 判断任务需要跨多个目录、多个文件或梳理分散调用关系时，会自动调用它；用户也可以明确要求“使用 search 子 Agent”。
+
+## 能力与安全边界
+
+子 Agent 在独立的 Pi 进程和上下文窗口中运行，并固定使用以下工具：
+
+```text
+read, grep, find, ls
+```
+
+它不能使用 `bash`、`edit`、`write`，也不能由工具调用方临时扩大权限、切换目录或覆盖模型。子进程禁用普通扩展自动发现，只显式加载 toolkit 自带的 Cursor provider 和 `.gitignore` 访问守卫，并通过 `--tools read,grep,find,ls` 强制工具白名单；同时禁用 Skills、提示模板和上下文文件。
+
+适合：
+
+- 涉及至少约 5 个文件或多个目录的检索
+- 全仓库定位分散实现
+- 架构、入口、依赖关系和调用流侦察
+- 收集带文件路径、行号的实现证据
+
+不适合：
+
+- 已知单个文件的读取
+- 一个简单 `grep` 即可完成的精确查询
+- 修改文件、运行测试或执行命令
+
+## 模型配置
+
+用户级配置：
+
+```text
+~/.pi/agent/search-subagent.json
+```
+
+```json
+{
+  "model": "anthropic/claude-haiku-4-5"
+}
+```
+
+受信任项目可以覆盖用户配置：
+
+```text
+.pi/search-subagent.json
+```
+
+```json
+{
+  "model": "openai/gpt-5-mini"
+}
+```
+
+优先级：
+
+1. 受信任项目的 `.pi/search-subagent.json`
+2. 用户级 `~/.pi/agent/search-subagent.json`
+3. 当前主 Agent 模型
+
+未受信任项目的项目配置不会被读取。配置文件不是合法 JSON、`model` 为空或 Pi 无法解析/使用指定模型时，工具会明确失败，不会静默换用其他模型。
+
+子进程禁用全部普通扩展，只显式加载本 toolkit 的 `extensions/cursor-models/index.ts` 和 `extensions/search-subagent/gitignore-guard.ts`；前者注册 `cursor-agent` provider，后者在每次文件工具调用前使用 `git check-ignore --no-index` 执行项目 `.gitignore` 规则。最终可调用工具仍被 `--tools read,grep,find,ls` 限定。若指定模型依赖其他未加载的自定义 provider 或凭据，工具会返回模型启动错误。
+
+## 使用
+
+通常无需手动操作：工具描述会指导主 Agent 在广泛检索时自动调用。
+
+也可以明确要求：
+
+```text
+使用 search 子 Agent 查找所有权限校验入口，并梳理调用关系。
+```
+
+工具参数只有一个：
+
+```json
+{
+  "task": "查找所有权限校验入口，给出文件、行号和主要调用关系"
+}
+```
+
+运行期间，主对话等待工具完成，并在工具区域流式显示最近的 `read`、`grep`、`find`、`ls` 调用。所有路径是否允许访问由当前 Git 项目的 `.gitignore` 决定：被忽略的文件或目录会在工具执行前直接阻止；未被忽略的路径可以正常检索。非 Git 项目没有 `.gitignore` 守卫。按 Escape 会取消主任务并终止子进程。完成后，主 Agent只接收压缩后的检索报告；展开工具结果可以查看更完整的信息。
+
+## 输出限制
+
+返回主 Agent 的文本最多约 50 KB 或 2000 行，超出部分会截断，以避免挤占主会话上下文。完整最终输出仍保存在工具结果的 `details` 中。
