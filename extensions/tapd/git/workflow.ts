@@ -35,6 +35,7 @@ import {
 	deleteBugRootCauseDraft,
 	loadBugRootCauseDraft,
 } from "./root-cause-draft.js";
+import { updateStoryForMergeRequest } from "./story-workflow.js";
 import { fetchCommitKeyword, updateTapdStatus } from "./tapd-api.js";
 
 export async function describeGitStatus(
@@ -219,7 +220,13 @@ export async function runMergeRequest(
 			);
 		itemProgress("正在准备 TAPD 流转...");
 		const transition = DEFAULT_GIT_WORKFLOW_POLICY.transitions[item.kind];
-		if (item.kind !== "bug") {
+		if (item.kind === "story") {
+			updates.push(
+				...(await updateStoryForMergeRequest(config, item, itemProgress)),
+			);
+			continue;
+		}
+		if (item.kind === "task") {
 			itemProgress(`正在更新状态为 ${transition.status}...`);
 			await updateTapdStatus(
 				config,

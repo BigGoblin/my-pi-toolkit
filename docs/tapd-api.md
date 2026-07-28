@@ -69,7 +69,7 @@
 ## Git 工作流接口约定
 
 - `GET /svn_commits/get_scm_copy_keywords` 使用 `workspace_id`、`object_id`、`type=story|task|bug`，返回的 `data` 必须原样用于 commit keyword。
-- 短 ID 调用 SCM、更新和评论接口时转换为 TAPD 云环境长 ID：`11 + workspace_id + 9 位左补零 object_id`；已经是长 ID 时不再转换。
+- 短 ID 调用需求/缺陷详情、子需求查询、SCM、更新和评论接口时转换为 TAPD 云环境长 ID：`11 + workspace_id + 9 位左补零 object_id`；已经是长 ID 时不再转换。
 - 更新状态优先传 `v_status`，允许使用项目中的中文状态名称。
 - Bug 流转备注使用 `entry_type=bug_remark`；`author` 从 keyword 的 `--user=...` 提取，不能用报告人替代。
 - `GET /bugs/get_fields_info` 返回 Bug 标准字段及候选值；合入版本字段必须按 `label=合入版本` 动态定位，当前项目字段名为 `version_fix`。

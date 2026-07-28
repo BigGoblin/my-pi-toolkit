@@ -1,5 +1,6 @@
 import type { TapdConfig } from "../types.js";
 import { apiUrl, tapdGet, tapdPost } from "../core/http.js";
+import { longTapdObjectId } from "../core/object-id.js";
 import type { LinkedTapdObject, TapdGitKind } from "./types.js";
 
 interface TapdDataResponse<T> {
@@ -22,11 +23,6 @@ export interface MergeVersionMatch {
 	reason?: string;
 }
 
-function longObjectId(workspaceId: string, objectId: string): string {
-	if (!/^\d{1,9}$/.test(objectId)) return objectId;
-	return `11${workspaceId}${objectId.padStart(9, "0")}`;
-}
-
 export async function fetchCommitKeyword(
 	config: TapdConfig,
 	object: LinkedTapdObject,
@@ -34,7 +30,7 @@ export async function fetchCommitKeyword(
 	const response = await tapdGet<TapdDataResponse<string>>(
 		apiUrl(config, "/svn_commits/get_scm_copy_keywords", {
 			workspace_id: object.workspaceId,
-			object_id: longObjectId(object.workspaceId, object.objectId),
+			object_id: longTapdObjectId(object.workspaceId, object.objectId),
 			type: object.kind,
 		}),
 		config,
@@ -52,7 +48,7 @@ export async function updateTapdStatus(
 ): Promise<void> {
 	const body: Record<string, unknown> = {
 		workspace_id: object.workspaceId,
-		id: longObjectId(object.workspaceId, object.objectId),
+		id: longTapdObjectId(object.workspaceId, object.objectId),
 		v_status: status,
 		...extraFields,
 	};
@@ -200,7 +196,7 @@ export async function fetchObjectIterationCode(
 	>(
 		apiUrl(config, path, {
 			workspace_id: object.workspaceId,
-			id: longObjectId(object.workspaceId, object.objectId),
+			id: longTapdObjectId(object.workspaceId, object.objectId),
 			fields: "id,iteration_id",
 			limit: "1",
 		}),
@@ -234,7 +230,7 @@ export async function createBugRemark(
 		config,
 		{
 			workspace_id: object.workspaceId,
-			entry_id: longObjectId(object.workspaceId, object.objectId),
+			entry_id: longTapdObjectId(object.workspaceId, object.objectId),
 			entry_type: "bug_remark",
 			author,
 			description,

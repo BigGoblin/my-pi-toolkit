@@ -84,7 +84,7 @@ TAPD Open API 索引见 [`../../docs/tapd-api.md`](../../docs/tapd-api.md)。
 - 提交默认使用当前操作系统 PATH 中的 `git`。仅当运行于 WSL，且 Git hook 因 Windows CRLF shebang 报出 `sh\\r: No such file or directory` 时，才自动改用 Windows `git.exe` 重试；重试成功后将仓库记录在 `~/.pi/agent/tapd-git-runtime.json`，该仓库后续在 WSL 中提交时直接使用 Windows Git。原生 Windows、Linux 和 macOS 环境始终使用各自 PATH 中的 `git`。可用 `TAPD_WINDOWS_GIT_PATH` 指定 WSL 可执行的 `git.exe` 完整路径。
 - MR 会扫描 `merge-base..HEAD` 的全部提交，不只处理第一条 TAPD 关联。
 - Bug 默认标签为 `二组`、`迭代bug(每日发布)`，状态更新为 `已解决`，负责人为 `沈瑞昀`。
-- 需求/任务默认标签为 `二组`、`迭代任务(随迭代发布)`，状态更新为 `开发完成`，不修改负责人。
+- 需求/任务默认标签为 `二组`、`迭代任务(随迭代发布)`。关联项是开发子需求或 TAPD 任务时直接更新为 `开发完成`；关联项是顶层功能需求时，仅在处理人为当前 Token 用户时更新功能需求本身，并同时把其下所有处理人为当前用户的直属开发子需求更新为 `开发完成`。其他处理人的需求不会被修改，所有更新均不修改负责人。
 - 纯需求/任务的 `/tapd mr` 保持一次执行完成，不触发 Agent 根因分析。
 - 含 Bug 的 `/tapd mr` 首次执行会先分析修复 diff 和 `git blame` 候选，允许 UI 选择或手动输入 commit，然后把 TAPD Bug、修复 patch 和已确认 commit 交给 Agent。Agent 只生成结构化根因草稿并保存在仓库 `.pi/tapd-root-cause/`，本次不创建 MR、不更新 TAPD。
 - Agent 分析完成后再次执行 `/tapd mr`，扩展只接受与当前 `HEAD` 匹配的草稿，打开编辑器供用户最终确认，再创建或更新 MR 并回写 TAPD。TAPD 流转和备注写入成功后自动删除草稿；用户取消或流程失败时保留草稿以便重试。选择“未能定位”时使用 TAPD 真实候选值 `其他(历史缺陷)`。
