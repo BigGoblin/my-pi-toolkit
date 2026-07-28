@@ -81,6 +81,7 @@ TAPD Open API 索引见 [`../../docs/tapd-api.md`](../../docs/tapd-api.md)。
 - 工作区有未提交改动时会先弹出确认；确认后由 Git 尝试把当前改动带到从 `origin/dev` 创建的新分支。若与基础分支冲突，Git 会安全终止，不会自动 stash、丢弃改动或强制切换。
 - Bug 提交为 `fix: {KEYWORD}`；需求/任务提交为 `feat: {KEYWORD}`。KEYWORD 原样保留。
 - 没有 upstream 时首次推送使用 `git push -u origin HEAD`。
+- 提交默认使用当前操作系统 PATH 中的 `git`。仅当运行于 WSL，且 Git hook 因 Windows CRLF shebang 报出 `sh\\r: No such file or directory` 时，才自动改用 Windows `git.exe` 重试；重试成功后将仓库记录在 `~/.pi/agent/tapd-git-runtime.json`，该仓库后续在 WSL 中提交时直接使用 Windows Git。原生 Windows、Linux 和 macOS 环境始终使用各自 PATH 中的 `git`。可用 `TAPD_WINDOWS_GIT_PATH` 指定 WSL 可执行的 `git.exe` 完整路径。
 - MR 会扫描 `merge-base..HEAD` 的全部提交，不只处理第一条 TAPD 关联。
 - Bug 默认标签为 `二组`、`迭代bug(每日发布)`，状态更新为 `已解决`，负责人为 `沈瑞昀`。
 - 需求/任务默认标签为 `二组`、`迭代任务(随迭代发布)`，状态更新为 `开发完成`，不修改负责人。

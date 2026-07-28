@@ -1,16 +1,48 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
+import {
+	prefersWindowsGit,
+	rememberWindowsGitProject,
+	shouldRetryCommitWithWindowsGit,
+	windowsGitExecutable,
+} from "./git-runtime.js";
 import type { GitRepositoryState } from "./types.js";
 
 const execFileAsync = promisify(execFile);
 
-export async function git(cwd: string, args: string[]): Promise<string> {
-	const result = await execFileAsync("git", args, {
+async function runGit(
+	executable: string,
+	cwd: string,
+	args: string[],
+): Promise<string> {
+	const result = await execFileAsync(executable, args, {
 		cwd,
 		encoding: "utf8",
 		maxBuffer: 10 * 1024 * 1024,
 	});
 	return result.stdout.trim();
+}
+
+export async function git(cwd: string, args: string[]): Promise<string> {
+	return runGit("git", cwd, args);
+}
+
+async function commitWithPreferredGit(
+	root: string,
+	subject: string,
+): Promise<void> {
+	const args = ["commit", "-m", subject];
+	if (prefersWindowsGit(root)) {
+		await runGit(windowsGitExecutable(), root, args);
+		return;
+	}
+	try {
+		await git(root, args);
+	} catch (error) {
+		if (!shouldRetryCommitWithWindowsGit(error)) throw error;
+		await runGit(windowsGitExecutable(), root, args);
+		rememberWindowsGitProject(root);
+	}
 }
 
 async function optionalGit(
@@ -84,7 +116,7 @@ export async function commitAll(
 	onPhase?.("stage");
 	await git(cwd, ["add", "--all"]);
 	onPhase?.("commit");
-	await git(cwd, ["commit", "-m", subject]);
+	await commitWithPreferredGit(cwd, subject);
 	return git(cwd, ["rev-parse", "--short", "HEAD"]);
 }
 
