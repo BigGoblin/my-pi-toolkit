@@ -1,10 +1,21 @@
 import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
-import type { ExtensionCommandContext, SessionManager } from "@earendil-works/pi-coding-agent";
+import type {
+	ExtensionCommandContext,
+	SessionManager,
+} from "@earendil-works/pi-coding-agent";
 import { fetchBugDetail, fetchStoryDetail, htmlToText } from "./api.js";
+import { removeSessionLink } from "./cleanup.js";
 import { bugUrl, storyUrl } from "./model.js";
 import { buildBugContextPrompt, buildUnderstandPrompt } from "./prompts.js";
-import { getOrCreateLink, getTapdDocPath, loadLinks, parseItemKey, rememberProjectPaths, saveLinks } from "./storage.js";
+import {
+	getOrCreateLink,
+	getTapdDocPath,
+	loadLinks,
+	parseItemKey,
+	rememberProjectPaths,
+	saveLinks,
+} from "./storage.js";
 import type { CreateDraft, TapdConfig } from "./types.js";
 
 export async function createTapdSession(
@@ -75,34 +86,42 @@ export async function createTapdSession(
 	});
 	saveLinks(links);
 
-	const result = await ctx.newSession({
-		parentSession: undefined,
-		setup: async (sm: SessionManager) => {
-			sm.appendMessage({
-				role: "user",
-				content: [{ type: "text", text: sessionPrompt }],
-				timestamp: Date.now(),
-			});
-		},
-		withSession: async (replacementCtx: ExtensionCommandContext) => {
-			const sf = replacementCtx.sessionManager.getSessionFile?.() ?? "";
-			const links3 = loadLinks();
-			const rec3 = getOrCreateLink(links3, wsId, itemId, itemName, parsed.kind);
-			if (sf) {
-				const lk = rec3.sessions.find((s) => s.id === linkId);
-				if (lk) lk.sessionFile = sf;
-			}
-			saveLinks(links3);
-			replacementCtx.ui.notify(
-				parsed.kind === "bug"
-					? "Bug 会话已创建，输入 /tapd bug 获取完整缺陷信息并定位原因"
-					: "会话已创建，输入 /tapd analyze 开始需求理解",
-				"info",
-			);
-		},
-	});
-
-	if (result.cancelled) {
-		throw new Error("创建会话已取消");
+	try {
+		const result = await ctx.newSession({
+			parentSession: undefined,
+			setup: async (sm: SessionManager) => {
+				sm.appendMessage({
+					role: "user",
+					content: [{ type: "text", text: sessionPrompt }],
+					timestamp: Date.now(),
+				});
+			},
+			withSession: async (replacementCtx: ExtensionCommandContext) => {
+				const sf = replacementCtx.sessionManager.getSessionFile?.() ?? "";
+				const links3 = loadLinks();
+				const rec3 = getOrCreateLink(
+					links3,
+					wsId,
+					itemId,
+					itemName,
+					parsed.kind,
+				);
+				if (sf) {
+					const lk = rec3.sessions.find((s) => s.id === linkId);
+					if (lk) lk.sessionFile = sf;
+				}
+				saveLinks(links3);
+				replacementCtx.ui.notify(
+					parsed.kind === "bug"
+						? "Bug 会话已创建，输入 /tapd bug 获取完整缺陷信息并定位原因"
+						: "会话已创建，输入 /tapd analyze 开始需求理解",
+					"info",
+				);
+			},
+		});
+		if (result.cancelled) throw new Error("创建会话已取消");
+	} catch (error) {
+		removeSessionLink(linkId);
+		throw error;
 	}
 }

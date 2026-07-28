@@ -1,4 +1,4 @@
-import { exec, execFile } from "node:child_process";
+import { execFile } from "node:child_process";
 import type {
 	ExtensionCommandContext,
 	ExtensionContext,
@@ -14,6 +14,11 @@ import {
 	truncateToWidth,
 } from "@earendil-works/pi-tui";
 import { fetchAll } from "./api.js";
+import {
+	cleanupStaleSessionLinks,
+	deleteLinkedSession,
+	scanStaleSessionLinks,
+} from "./cleanup.js";
 import {
 	buildTree,
 	collectTypes,
@@ -35,7 +40,6 @@ import {
 	readSessionTitle,
 	rememberProjectPaths,
 	removeProjectPathFromHistory,
-	saveLinks,
 } from "./storage.js";
 import type {
 	PickerAction,
@@ -312,6 +316,25 @@ export async function showTable(
 			typeFilter = pick && pick !== "全部" ? pick : null;
 			continue;
 		}
+		if (sel.action === "cleanup") {
+			const preview = scanStaleSessionLinks();
+			if (preview.removedSessions === 0) {
+				ctx.ui.notify("没有发现失效的 TAPD 会话关联", "info");
+				continue;
+			}
+			const confirmed = await ctx.ui.confirm(
+				"清理失效会话关联",
+				`发现 ${preview.removedSessions} 条失效会话关联，涉及清理 ${preview.removedRecords} 个空 TAPD 记录。\n\n只会清理本地关联，不会删除 TAPD 条目或项目文档。`,
+			);
+			if (confirmed) {
+				const result = cleanupStaleSessionLinks();
+				ctx.ui.notify(
+					`已清理 ${result.removedSessions} 条失效会话关联`,
+					"success",
+				);
+			}
+			continue;
+		}
 		if (sel.action === "open" && sel.url) {
 			const error = await openUrl(sel.url);
 			if (error)
@@ -520,22 +543,21 @@ async function showSessionPicker(
 			}
 
 			function applyDelete(link: SessionLink) {
-				if (link.sessionFile) {
-					exec(`trash "${link.sessionFile}"`, (err) => {
-						if (err) exec(`del /f /q "${link.sessionFile}"`, () => {});
-					});
+				const result = deleteLinkedSession(link);
+				if (!result.ok) {
+					ctx.ui.notify(`删除会话失败：${result.error ?? "未知错误"}`, "error");
+					return;
 				}
-				const l2 = loadLinks();
-				for (const k of Object.keys(l2)) {
-					l2[k].sessions = l2[k].sessions.filter((s: any) => s.id !== link.id);
-					if (l2[k].sessions.length === 0) delete l2[k];
-				}
-				saveLinks(l2);
 				const idx = opts.findIndex((o) => o.link?.id === link.id);
 				if (idx >= 0) opts.splice(idx, 1);
 				if (selectedIdx >= opts.length)
 					selectedIdx = Math.max(0, opts.length - 1);
-				ctx.ui.notify("已删除", "info");
+				ctx.ui.notify(
+					result.method === "missing"
+						? "会话文件已不存在，关联记录已清理"
+						: "会话及关联记录已删除",
+					"info",
+				);
 			}
 
 			function togglePathAt(histIdx: number) {
@@ -1075,7 +1097,7 @@ async function renderTable(
 						? "↑↓ 导航  Enter 关联会话  o 浏览器打开  / 搜索  Esc 清除搜索  Ctrl+C 退出"
 						: "↑↓ 导航  Space/→/← 展开收起  Enter 关联会话  o 浏览器打开  / 搜索  Tab 切换需求/Bug  i 切换迭代" +
 							(kind === "story" ? "  t 类型" : "") +
-							"  Esc/Ctrl+C 退出";
+							"  c 清理失效关联  Esc/Ctrl+C 退出";
 				container.addChild(new Text(theme.fg("dim", hint), 1, 0));
 				container.addChild(
 					new DynamicBorder((s: string) => theme.fg("accent", s)),
@@ -1158,6 +1180,10 @@ async function renderTable(
 					}
 					if (data === "t" && kind === "story") {
 						done({ action: "type_filter" });
+						return;
+					}
+					if (data === "c") {
+						done({ action: "cleanup" });
 						return;
 					}
 					if (data === "\r" || data === "\n") {

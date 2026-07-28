@@ -40,6 +40,14 @@ TAPD 需求与缺陷工作流扩展。提供待办列表、会话关联、需求
 - 开发子需求描述包含自身开发范围、验收标准和依赖关系。
 - 文档更新后再次执行 `/tapd sub-task` 会同步已有子需求并创建新增项；设计中移除的旧项不会自动删除。
 
+## Session link cleanup
+
+TAPD 会话关联保存在 `~/.pi/agent/tapd-links.json`。扩展会在会话启动和打开 `/tapd` 主界面时自动清理会话文件已不存在的关联，以及超过 10 分钟仍未完成创建的临时关联。
+
+在 TAPD 主界面按 `c` 可以预览并确认清理失效关联。该操作只清理本地关联数据，不会删除 TAPD 需求、Bug、子需求或项目文档。
+
+在关联会话列表按 `Ctrl+D` 删除会话时，只有会话文件删除成功后才会移除关联记录；如果文件本来已经不存在，则只清理对应关联。
+
 文档默认位于：
 
 ```text
@@ -67,6 +75,7 @@ TAPD Open API 索引见 [`../../docs/tapd-api.md`](../../docs/tapd-api.md)。
 | `api.ts` | TAPD API、认证与数据获取 |
 | `model.ts` | TAPD 条目模型、树构建与格式化 |
 | `storage.ts` | 会话关联、文档路径和项目路径历史 |
+| `cleanup.ts` | 失效关联扫描、会话文件删除和关联清理 |
 | `prompts.ts` | analyze、design、collaboration、Bug 工作流提示词 |
 | `session.ts` | 创建 TAPD 关联会话 |
 | `subtask-parser.ts` | 解析 `design.md` 中的子需求 JSON |

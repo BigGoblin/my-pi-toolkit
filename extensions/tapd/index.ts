@@ -1,9 +1,18 @@
 /** TAPD extension entry point. */
 
-import type { ExtensionAPI, ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
+import type {
+	ExtensionAPI,
+	ExtensionCommandContext,
+	SessionStartEvent,
+} from "@earendil-works/pi-coding-agent";
 import type { AutocompleteItem } from "@earendil-works/pi-tui";
 import { fetchUserInfo, fetchWorkspaces, loadConfig } from "./api.js";
-import { ANALYZE_TRIGGER_PROMPT, COLLABORATION_TRIGGER_PROMPT, DESIGN_TRIGGER_PROMPT } from "./prompts.js";
+import { cleanupStaleSessionLinks } from "./cleanup.js";
+import {
+	ANALYZE_TRIGGER_PROMPT,
+	COLLABORATION_TRIGGER_PROMPT,
+	DESIGN_TRIGGER_PROMPT,
+} from "./prompts.js";
 import { createTapdSession } from "./session.js";
 import { createSubtasks } from "./subtasks.js";
 import { showTable } from "./ui.js";
@@ -11,6 +20,12 @@ import { locateTapdBug, sendTapdWorkflowPrompt } from "./workflows.js";
 
 export default function tapdExtension(pi: ExtensionAPI) {
 	const STATE_KEY = "tapd-view-state";
+
+	pi.on("session_start", (event: SessionStartEvent) => {
+		if (event.reason === "startup" || event.reason === "reload") {
+			cleanupStaleSessionLinks();
+		}
+	});
 
 	pi.registerCommand("tapd", {
 		description: "查看 TAPD 待办；生成需求理解、技术设计或协作评审文档",
@@ -92,6 +107,14 @@ export default function tapdExtension(pi: ExtensionAPI) {
 			if (sub === "sub-task") {
 				await createSubtasks(ctx, config);
 				return;
+			}
+
+			const cleanup = cleanupStaleSessionLinks();
+			if (cleanup.removedSessions > 0) {
+				ctx.ui.notify(
+					`已自动清理 ${cleanup.removedSessions} 条失效 TAPD 会话关联`,
+					"info",
+				);
 			}
 
 			ctx.ui.notify("正在连接 TAPD...", "info");
