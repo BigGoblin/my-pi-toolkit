@@ -113,8 +113,14 @@ export const DESIGN_TRIGGER_PROMPT = [
 	"3. 详细改动按模块或文件说明修改目的、关键类/函数和主要逻辑；必要时使用 Mermaid 图。",
 	"4. 建立“验收标准 → 设计改动 → 测试场景”的对应关系，确保没有遗漏。",
 	"5. 不要修改业务代码，不要直接实施方案。",
-	"6. 将完整方案写入 understanding.md 同目录下的 design.md。",
-	"7. 写完后简要总结设计要点并告知文档路径，等待我确认后再实施。",
+	"6. 根据可独立开发、提测和验收的业务闭环，将开发工作拆成 1～5 个开发子需求；不要按文件、组件、接口、联调或自测等纯技术层次机械拆分。",
+	"7. 在文档末尾输出固定格式的 TAPD 子需求拆分块，标记之间只能放合法 JSON（不要使用 Markdown 代码围栏）：",
+	"<!-- TAPD_SUBTASKS_START -->",
+	'{"developmentTasks":[{"id":"stable-kebab-case-id","title":"简洁的开发任务标题","scope":["开发范围"],"acceptanceCriteria":["验收标准"],"dependencies":[],"suggestedEffort":2}]}',
+	"<!-- TAPD_SUBTASKS_END -->",
+	"其中 id 是稳定、唯一的 kebab-case 标识；修改同一任务时必须保留 id，只有新增任务才生成新 id。suggestedEffort 为可选的正数建议工时，dependencies 使用其他任务的 title；至少一个开发任务，标题和 id 均不得重复。",
+	"8. 将完整方案写入 understanding.md 同目录下的 design.md。",
+	"9. 写完后简要总结设计要点和拆分结果并告知文档路径，等待我确认后再实施。",
 ].join("\n");
 
 export const COLLABORATION_TRIGGER_PROMPT = [
