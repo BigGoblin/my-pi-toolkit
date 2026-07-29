@@ -1,17 +1,20 @@
 import { access, readFile, readdir } from "node:fs/promises";
-import { dirname, relative, resolve } from "node:path";
+import { homedir } from "node:os";
+import { basename, dirname, extname, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 export interface DashboardData {
 	contexts: string[];
 	skills: string[];
 	extensions: string[];
+	themes: string[];
 }
 
 interface ToolkitManifest {
 	pi?: {
 		extensions?: string[];
 		skills?: string[];
+		themes?: string[];
 	};
 }
 
@@ -59,8 +62,10 @@ async function discoverProjectSkillPaths(cwd: string): Promise<string[]> {
 	const paths: string[] = [];
 	let current = resolve(cwd);
 	while (true) {
-		const skills = resolve(current, ".pi", "skills");
-		if (await exists(skills)) paths.push(skills);
+		for (const configDirectory of [".pi", ".agents"]) {
+			const skills = resolve(current, configDirectory, "skills");
+			if (await exists(skills)) paths.push(skills);
+		}
 		if (await exists(resolve(current, ".git"))) break;
 		const parent = dirname(current);
 		if (parent === current) break;
@@ -80,34 +85,88 @@ async function skillName(directory: string): Promise<string | undefined> {
 	const path = resolve(directory, "SKILL.md");
 	if (!(await exists(path))) return undefined;
 	try {
-		return frontmatterName(
-			await readFile(path, "utf8"),
-			directory.split(/[\\/]/).pop() ?? "skill",
-		);
+		return frontmatterName(await readFile(path, "utf8"), basename(directory));
 	} catch {
-		return directory.split(/[\\/]/).pop();
+		return basename(directory);
 	}
 }
 
-async function discoverSkills(paths: string[]): Promise<string[]> {
-	const names: string[] = [];
-	for (const entry of paths) {
-		const directory = resolve(TOOLKIT_ROOT, entry);
-		const direct = await skillName(directory);
-		if (direct) {
-			names.push(direct);
-			continue;
-		}
-		try {
-			for (const child of await readdir(directory, { withFileTypes: true })) {
-				if (!child.isDirectory()) continue;
-				const name = await skillName(resolve(directory, child.name));
+async function markdownSkillName(path: string): Promise<string | undefined> {
+	try {
+		return frontmatterName(
+			await readFile(path, "utf8"),
+			basename(path, extname(path)),
+		);
+	} catch {
+		return undefined;
+	}
+}
+
+async function collectSkills(
+	directory: string,
+	names: string[],
+	includeRootMarkdown = false,
+): Promise<void> {
+	const direct = await skillName(directory);
+	if (direct) names.push(direct);
+
+	try {
+		for (const child of await readdir(directory, { withFileTypes: true })) {
+			const path = resolve(directory, child.name);
+			if (child.isDirectory()) {
+				await collectSkills(path, names);
+			} else if (
+				includeRootMarkdown &&
+				child.isFile() &&
+				extname(child.name).toLowerCase() === ".md"
+			) {
+				const name = await markdownSkillName(path);
 				if (name) names.push(name);
 			}
-		} catch {
-			// Optional resource paths should not block startup.
 		}
+	} catch {
+		// Optional resource paths should not block startup.
 	}
+}
+
+async function discoverSkills(
+	paths: Array<{ path: string; includeRootMarkdown?: boolean }>,
+): Promise<string[]> {
+	const names: string[] = [];
+	for (const entry of paths) {
+		await collectSkills(entry.path, names, entry.includeRootMarkdown);
+	}
+	return Array.from(new Set(names)).sort((a, b) => a.localeCompare(b));
+}
+
+async function collectThemes(path: string, names: string[]): Promise<void> {
+	try {
+		for (const child of await readdir(path, { withFileTypes: true })) {
+			const childPath = resolve(path, child.name);
+			if (child.isDirectory()) await collectThemes(childPath, names);
+			else if (
+				child.isFile() &&
+				extname(child.name).toLowerCase() === ".json"
+			) {
+				await collectThemes(childPath, names);
+			}
+		}
+		return;
+	} catch {
+		// The path may be a theme file rather than a directory.
+	}
+	try {
+		const theme = JSON.parse(await readFile(path, "utf8")) as { name?: string };
+		if (theme.name) names.push(theme.name);
+	} catch {
+		// Invalid or unavailable theme files should not block startup.
+	}
+}
+
+async function discoverThemes(paths: string[]): Promise<string[]> {
+	const names: string[] = [];
+	for (const path of paths)
+		await collectThemes(resolve(TOOLKIT_ROOT, path), names);
 	return Array.from(new Set(names)).sort((a, b) => a.localeCompare(b));
 }
 
@@ -125,8 +184,18 @@ export async function discoverDashboardData(
 ): Promise<DashboardData> {
 	const manifest = await readManifest();
 	const skillPaths = [
-		...(manifest.pi?.skills ?? []),
-		...(await discoverProjectSkillPaths(cwd)),
+		...(manifest.pi?.skills ?? []).map((path) => ({
+			path: resolve(TOOLKIT_ROOT, path),
+		})),
+		{
+			path: resolve(homedir(), ".pi", "agent", "skills"),
+			includeRootMarkdown: true,
+		},
+		{ path: resolve(homedir(), ".agents", "skills") },
+		...(await discoverProjectSkillPaths(cwd)).map((path) => ({
+			path,
+			includeRootMarkdown: basename(dirname(path)) === ".pi",
+		})),
 	];
 	const extensions = (manifest.pi?.extensions ?? [])
 		.map(extensionName)
@@ -137,5 +206,6 @@ export async function discoverDashboardData(
 		contexts: await discoverContexts(cwd),
 		skills: await discoverSkills(skillPaths),
 		extensions: Array.from(new Set(extensions)),
+		themes: await discoverThemes(manifest.pi?.themes ?? []),
 	};
 }

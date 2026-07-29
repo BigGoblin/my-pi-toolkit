@@ -12,21 +12,37 @@ import { createFooterSnapshot, renderFooter } from "./footer.js";
 import { renderDashboard } from "./layout.js";
 
 export default function startupDashboard(pi: ExtensionAPI) {
-	let data: DashboardData = { contexts: [], skills: [], extensions: [] };
+	let data: DashboardData = {
+		contexts: [],
+		skills: [],
+		extensions: [],
+		themes: [],
+	};
 	let headerEnabled = true;
 	let footerEnabled = true;
 	let footerContext: ExtensionContext | undefined;
 	let requestFooterRender: (() => void) | undefined;
 
-	const installHeader = (ctx: ExtensionContext): void => {
+	const installHeader = (
+		ctx: ExtensionContext,
+		clearTerminal = false,
+	): void => {
 		if (!headerEnabled) {
 			ctx.ui.setHeader(undefined);
 			return;
 		}
-		ctx.ui.setHeader((_tui: TUI, theme: Theme) => ({
-			render: (width: number) => renderDashboard(width, data, theme),
-			invalidate() {},
-		}));
+		let shouldClearTerminal = clearTerminal;
+		ctx.ui.setHeader((tui: TUI, theme: Theme) => {
+			if (shouldClearTerminal) {
+				tui.terminal.clearScreen();
+				tui.terminal.write("\x1b[3J");
+				shouldClearTerminal = false;
+			}
+			return {
+				render: (width: number) => renderDashboard(width, data, theme),
+				invalidate() {},
+			};
+		});
 	};
 
 	const installFooter = (ctx: ExtensionContext): void => {
@@ -64,10 +80,10 @@ export default function startupDashboard(pi: ExtensionAPI) {
 
 	pi.on(
 		"session_start",
-		async (_event: SessionStartEvent, ctx: ExtensionContext) => {
+		async (event: SessionStartEvent, ctx: ExtensionContext) => {
 			if (ctx.mode !== "tui") return;
 			data = await discoverDashboardData(ctx.cwd);
-			installHeader(ctx);
+			installHeader(ctx, event.reason === "startup");
 			installFooter(ctx);
 		},
 	);

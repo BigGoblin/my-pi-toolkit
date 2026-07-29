@@ -4,10 +4,11 @@
 
 ## 功能
 
-- 宽屏显示品牌区、Tips、介绍卡片以及 Context / Skills / Extensions 三栏。
-- 中屏自动变为 Context 单栏加 Skills / Extensions 双栏。
-- 窄屏使用紧凑单栏，避免内容超出终端宽度。
-- Context、Skills 和 Extensions 从当前项目及 toolkit manifest 动态发现；Context 使用 `./`、`../` 相对路径区分同名文件。
+- `mpi` 首次启动时清理当前终端画面和回滚缓冲区，避免 Dashboard 上方残留 PowerShell 命令；`/reload` 和会话切换不会清屏。
+- 宽屏显示品牌区、Tips、介绍卡片以及 Context / Skills / Extensions / Themes 四栏；Skills 使用两列展示。
+- Context、Skills、Extensions 和 Themes 始终完整展示，不使用折叠或展开快捷键。
+- 中屏自动变为两行双栏，窄屏变为紧凑单栏，避免内容超出终端宽度。
+- 四类资源均动态发现；Skills 同时覆盖 toolkit、`~/.pi/agent/skills`、`~/.agents/skills` 及当前项目的 `.pi/.agents` 技能目录，Context 使用 `./`、`../` 相对路径区分同名文件。
 - Footer 显示项目名、当前 Git 分支、`provider/model`、思考强度，以及 Cursor 模型可用时的 Fast 状态。
 - Footer 汇总上传/下载 Token、缓存读写、会话花费，并显示已用/最大上下文窗口和使用率。
 
@@ -21,13 +22,13 @@
 }
 ```
 
-该设置只隐藏内置启动 Header 和资源清单，不会隐藏扩展提供的 M-PI Header。修改扩展代码后执行 `/reload`；修改 `quietStartup` 后建议重启 Pi。
+该设置只隐藏内置启动 Header 和资源清单，不会隐藏扩展提供的 M-PI Header。Toolkit 安装不会覆盖用户设置，因此需要在实际运行 `mpi` 的用户配置中设置一次；Windows 默认为 `C:\\Users\\<用户名>\\.pi\\agent\\settings.json`。修改扩展代码后执行 `/reload`；修改 `quietStartup` 后请重启 Pi。
 
 可选命令：
 
 ```text
-/dashboard-header  # 在自定义和内置 Header 之间切换
-/dashboard-footer  # 在自定义和内置 Footer 之间切换
+/dashboard-header # 在自定义和内置 Header 之间切换
+/dashboard-footer # 在自定义和内置 Footer 之间切换
 ```
 
 切换状态仅在当前 Pi 进程中保存；重启或 `/reload` 后恢复自定义界面。

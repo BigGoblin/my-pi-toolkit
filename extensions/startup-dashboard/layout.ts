@@ -1,61 +1,7 @@
 import { VERSION, type Theme } from "@earendil-works/pi-coding-agent";
-import { truncateToWidth } from "@earendil-works/pi-tui";
 import type { DashboardData } from "./discovery.js";
+import { equalize, panelBody } from "./panels.js";
 import { box, fit, GAP, inset, joinRows, type Color } from "./tui-utils.js";
-
-function itemRows(
-	items: string[],
-	width: number,
-	columns: number,
-	color: Color,
-): string[] {
-	if (items.length === 0) return [`${color("  · ")}(none)`];
-	if (columns === 1)
-		return items.map(
-			(item) => `${color("  · ")}${truncateToWidth(item, width - 4, "…")}`,
-		);
-
-	const columnWidth = Math.floor((width - 1) / columns);
-	const rows = Math.ceil(items.length / columns);
-	const result: string[] = [];
-	for (let row = 0; row < rows; row += 1) {
-		const cells: string[] = [];
-		for (let column = 0; column < columns; column += 1) {
-			const item = items[row + column * rows];
-			cells.push(
-				item
-					? `${color(" · ")}${truncateToWidth(item, columnWidth - 3, "…")}`
-					: "",
-			);
-		}
-		result.push(cells.map((cell) => fit(cell, columnWidth)).join(" "));
-	}
-	return result;
-}
-
-function panelBody(
-	title: string,
-	marker: string,
-	items: string[],
-	innerWidth: number,
-	color: Color,
-	borderMuted: Color,
-	columns = 1,
-): string[] {
-	return [
-		"",
-		`  ${color(marker)} ${color(title)}`,
-		`  ${borderMuted("─".repeat(Math.max(1, innerWidth - 4)))}`,
-		"",
-		...itemRows(items, innerWidth - 2, columns, color),
-		"",
-	];
-}
-
-function equalize(groups: string[][]): void {
-	const height = Math.max(...groups.map((group) => group.length));
-	for (const group of groups) while (group.length < height) group.push("");
-}
 
 function renderBrand(width: number, theme: Theme): string[] {
 	const accent = (text: string) => theme.fg("accent", text);
@@ -104,6 +50,32 @@ function renderIntro(width: number, theme: Theme): string[] {
 	);
 }
 
+function sectionBodies(
+	data: DashboardData,
+	theme: Theme,
+	widths: number[],
+	columns: number[],
+): string[][] {
+	const border = (text: string) => theme.fg("borderMuted", text);
+	const specs: Array<[string, string, string[], Color]> = [
+		["CONTEXT", "▮", data.contexts, (t) => theme.fg("accent", t)],
+		["SKILLS", "ϟ", data.skills, (t) => theme.fg("thinkingHigh", t)],
+		["EXTENSIONS", "◆", data.extensions, (t) => theme.fg("success", t)],
+		["THEMES", "◇", data.themes, (t) => theme.fg("warning", t)],
+	];
+	return specs.map(([title, marker, items, color], index) =>
+		panelBody(
+			title,
+			marker,
+			items,
+			(widths[index] ?? widths[0] ?? 20) - 2,
+			color,
+			border,
+			columns[index] ?? 1,
+		),
+	);
+}
+
 function renderWide(
 	width: number,
 	data: DashboardData,
@@ -111,44 +83,17 @@ function renderWide(
 ): string[] {
 	const margin = 2;
 	const available = width - margin * 2;
-	const first = Math.floor((available - GAP.length * 2) * 0.28);
-	const second = Math.floor((available - GAP.length * 2) * 0.33);
-	const widths = [first, second, available - GAP.length * 2 - first - second];
-	const colors = {
-		context: (text: string) => theme.fg("accent", text),
-		skills: (text: string) => theme.fg("thinkingHigh", text),
-		extensions: (text: string) => theme.fg("success", text),
-		border: (text: string) => theme.fg("borderMuted", text),
-	};
-	const bodies = [
-		panelBody(
-			"CONTEXT",
-			"▮",
-			data.contexts,
-			widths[0] - 2,
-			colors.context,
-			colors.border,
-		),
-		panelBody(
-			"SKILLS",
-			"ϟ",
-			data.skills,
-			widths[1] - 2,
-			colors.skills,
-			colors.border,
-		),
-		panelBody(
-			"EXTENSIONS",
-			"◆",
-			data.extensions,
-			widths[2] - 2,
-			colors.extensions,
-			colors.border,
-			2,
-		),
+	const usable = available - GAP.length * 3;
+	const widths = [
+		Math.floor(usable * 0.22),
+		Math.floor(usable * 0.34),
+		Math.floor(usable * 0.28),
 	];
+	widths.push(usable - widths.reduce((sum, value) => sum + value, 0));
+	const border = (text: string) => theme.fg("borderMuted", text);
+	const bodies = sectionBodies(data, theme, widths, [1, 2, 2, 1]);
 	equalize(bodies);
-	const panels = bodies.map((body, i) => box(body, widths[i], colors.border));
+	const panels = bodies.map((body, index) => box(body, widths[index]!, border));
 	return [
 		...inset(renderBrand(available, theme), margin),
 		"",
@@ -169,56 +114,34 @@ function renderMedium(
 	const half = Math.floor((available - GAP.length) / 2);
 	const widths = [half, available - GAP.length - half];
 	const border = (text: string) => theme.fg("borderMuted", text);
-	const context = panelBody(
-		"CONTEXT",
-		"▮",
-		data.contexts,
-		available - 2,
-		(t) => theme.fg("accent", t),
-		border,
-		2,
+	const bodies = sectionBodies(
+		data,
+		theme,
+		[...widths, ...widths],
+		[2, 2, 2, 2],
 	);
-	const skills = panelBody(
-		"SKILLS",
-		"ϟ",
-		data.skills,
-		widths[0] - 2,
-		(t) => theme.fg("thinkingHigh", t),
-		border,
-	);
-	const extensions = panelBody(
-		"EXTENSIONS",
-		"◆",
-		data.extensions,
-		widths[1] - 2,
-		(t) => theme.fg("success", t),
-		border,
-	);
-	equalize([skills, extensions]);
+	equalize(bodies.slice(0, 2));
+	equalize(bodies.slice(2, 4));
+	const rows = [0, 2].flatMap((start) => [
+		...joinRows(
+			[
+				box(bodies[start]!, widths[0], border),
+				box(bodies[start + 1]!, widths[1], border),
+			],
+			widths,
+		),
+		"",
+	]);
 	return inset(
 		[
 			`${theme.fg("accent", theme.bold("M-PI"))}  ${theme.fg("muted", "小明的专属 AI Agent")}  ${theme.fg("dim", "· BigGoblin/my-pi-toolkit")}`,
 			"",
 			...renderIntro(available, theme),
 			"",
-			...box(context, available, border),
-			"",
-			...joinRows(
-				[box(skills, widths[0], border), box(extensions, widths[1], border)],
-				widths,
-			),
-			"",
+			...rows,
 		],
 		margin,
 	);
-}
-
-function compactItems(items: string[]): string[] {
-	const limit = 4;
-	const shown = items.slice(0, limit);
-	return items.length > limit
-		? [...shown, `+${items.length - limit} more`]
-		: shown;
 }
 
 function renderNarrow(
@@ -228,21 +151,12 @@ function renderNarrow(
 ): string[] {
 	const available = Math.max(4, width);
 	const border = (text: string) => theme.fg("borderMuted", text);
-	const specs: Array<[string, string, string[], Color]> = [
-		["CONTEXT", "▮", data.contexts, (t) => theme.fg("accent", t)],
-		[
-			"SKILLS",
-			"ϟ",
-			compactItems(data.skills),
-			(t) => theme.fg("thinkingHigh", t),
-		],
-		[
-			"EXTENSIONS",
-			"◆",
-			compactItems(data.extensions),
-			(t) => theme.fg("success", t),
-		],
-	];
+	const bodies = sectionBodies(
+		data,
+		theme,
+		[available, available, available, available],
+		[2, 2, 2, 2],
+	);
 	const lines = [
 		fit(
 			`${theme.fg("accent", theme.bold("M-PI"))} ${theme.fg("muted", "· 小明的专属 AI Agent")}`,
@@ -250,16 +164,7 @@ function renderNarrow(
 		),
 		"",
 	];
-	for (const [title, marker, items, color] of specs) {
-		lines.push(
-			...box(
-				panelBody(title, marker, items, available - 2, color, border, 2),
-				available,
-				border,
-			),
-			"",
-		);
-	}
+	for (const body of bodies) lines.push(...box(body, available, border), "");
 	return lines;
 }
 
@@ -269,10 +174,11 @@ export function renderDashboard(
 	theme: Theme,
 ): string[] {
 	if (width <= 0) return [];
-	if (width < 20)
+	if (width < 20) {
 		return [
 			fit(`${theme.fg("accent", theme.bold("M-PI"))} · AI Toolkit`, width),
 		];
+	}
 	if (width >= 120) return renderWide(width, data, theme);
 	if (width >= 80) return renderMedium(width, data, theme);
 	return renderNarrow(width, data, theme);
