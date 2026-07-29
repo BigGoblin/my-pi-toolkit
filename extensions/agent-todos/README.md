@@ -34,9 +34,16 @@ agent_todo_write({
 
 ## UI
 
-- Widget：完整列表（`○` / `▸` / `✓` / `×`）；超过 16 条时底部显示 `… n more`
-- Footer：`📋 2/5` 或全部完成时 `✓ 5/5`
+- Widget 在 editor 上方，含：
+  - 标题行：`📋 Todos` + 进度与各状态计数（🔄 / ⬜ / ⛔）
+  - Unicode 进度条（`█` / `░`）
+  - 条目：序号 + emoji 标记 + 文案（完成/取消带删除线）
+- 状态 emoji：`⬜` pending · `🔄` in_progress · `✅` completed · `⛔` cancelled
+- 超过 16 条时底部显示 `… 还有 n 项未显示`
+- Footer：`📋 2/5` 或全部完成时 `✅ 5/5`
 - print / json 模式跳过 UI，工具仍可用
+
+**关于图片：** Pi TUI 支持 `Image`（Kitty / iTerm 协议），适合插图，不适合当每条 todo 的小图标；状态标记用 emoji 更稳、更省高度。
 
 无 `/todos` 命令；查看不依赖斜杠命令。
 
