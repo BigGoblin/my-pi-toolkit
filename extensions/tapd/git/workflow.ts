@@ -37,6 +37,7 @@ import {
 } from "./root-cause-draft.js";
 import { updateStoryForMergeRequest } from "./story-workflow.js";
 import { fetchCommitKeyword, updateTapdStatus } from "./tapd-api.js";
+import type { BranchProgressReporter } from "./types.js";
 
 export async function describeGitStatus(
 	ctx: ExtensionCommandContext,
@@ -59,19 +60,85 @@ export async function runCreateBranch(
 	ctx: ExtensionCommandContext,
 	config: TapdConfig,
 	baseRef = DEFAULT_GIT_WORKFLOW_POLICY.baseRef,
+	reportProgress?: BranchProgressReporter,
 ): Promise<string> {
+	reportProgress?.({
+		stage: "tapd-object",
+		state: "running",
+		message: "正在读取关联 TAPD 事项",
+	});
 	const object = currentTapdObject(ctx);
+	reportProgress?.({
+		stage: "tapd-object",
+		state: "done",
+		message: `已识别 ${object.kind}/${object.objectId}`,
+	});
+
+	reportProgress?.({
+		stage: "repository",
+		state: "running",
+		message: "正在定位 Git 仓库",
+	});
 	const root = await readRepositoryRoot(ctx.cwd);
+	reportProgress?.({
+		stage: "repository",
+		state: "done",
+		message: `仓库：${root}`,
+	});
+
+	reportProgress?.({
+		stage: "base-ref",
+		state: "running",
+		message: `正在检查基础分支 ${baseRef}`,
+	});
 	if (!(await refExists(root, baseRef)))
 		throw new Error(`基础分支不存在: ${baseRef}`);
+	reportProgress?.({
+		stage: "base-ref",
+		state: "done",
+		message: `基础分支可用：${baseRef}`,
+	});
+
+	reportProgress?.({
+		stage: "keyword",
+		state: "running",
+		message: "正在从 TAPD 获取 keyword",
+	});
 	const keyword = parseKeyword(
 		await fetchCommitKeyword(config, object),
 		object,
 	);
+	reportProgress?.({
+		stage: "keyword",
+		state: "done",
+		message: `已获取 keyword：${keyword.keyword}`,
+	});
+
 	const branch = `${branchPrefix(keyword.kind)}/${keyword.shortId}`;
+	reportProgress?.({
+		stage: "branch-check",
+		state: "running",
+		message: `正在检查目标分支 ${branch}`,
+	});
 	if (await refExists(root, `refs/heads/${branch}`))
 		throw new Error(`本地分支已存在: ${branch}`);
+	reportProgress?.({
+		stage: "branch-check",
+		state: "done",
+		message: `目标分支可创建：${branch}`,
+	});
+
+	reportProgress?.({
+		stage: "create-branch",
+		state: "running",
+		message: `正在创建分支 ${branch}`,
+	});
 	await createBranch(root, branch, baseRef);
+	reportProgress?.({
+		stage: "create-branch",
+		state: "done",
+		message: `已创建分支 ${branch}`,
+	});
 	return `已从 ${baseRef} 创建分支 ${branch}（未设置 upstream）`;
 }
 

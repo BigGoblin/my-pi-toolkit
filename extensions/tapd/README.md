@@ -13,7 +13,7 @@ TAPD 需求与缺陷工作流扩展。提供待办列表、会话关联、需求
 | `/tapd sub-task` | 根据 `design.md` 创建或同步设计、开发子需求 |
 | `/tapd bug` | 获取当前 Bug 完整信息并让 Agent 定位代码原因 |
 | `/tapd git-status` | 查看当前会话关联事项、Git 分支、upstream 与工作区状态 |
-| `/tapd branch [--base origin/dev]` | 获取 TAPD keyword，并从指定基础分支创建关联分支 |
+| `/tapd branch [--base origin/dev]` | 获取 TAPD keyword，并从指定基础分支创建关联分支；关联事项、仓库检查、TAPD 请求和分支创建阶段会实时显示进度 |
 | `/tapd commit [--no-push]` | 使用 TAPD keyword 生成提交信息，提交并默认推送；仓库检查、TAPD 请求、暂存、commit 和 push 阶段会实时显示在对话中 |
 | `/tapd mr [--target dev] [--no-delete-source-branch]` | 创建或更新 GitLab MR，并回写全部关联 TAPD 事项；需求/任务一次执行完成，Bug 首次执行会先让 Agent 生成根因草稿，再次执行才创建 MR 和更新 TAPD |
 
@@ -43,6 +43,7 @@ TAPD 需求与缺陷工作流扩展。提供待办列表、会话关联、需求
 
 - 开发任务拆分来源：`design.md`。
 - 设计子需求描述来源：`collaboration.md`。
+- 协作文档会包含 Design 方案 Mermaid 图，核对实际代码并列出关键函数或组件签名、出入参及相关接口信息；不再生成独立的“前后端协作点”和“评审与验收”章节。
 - 开发子需求描述包含自身开发范围、验收标准和依赖关系。
 - 文档更新后再次执行 `/tapd sub-task` 会同步已有子需求并创建新增项；设计中移除的旧项不会自动删除。
 
@@ -79,7 +80,7 @@ TAPD Open API 索引见 [`../../docs/tapd-api.md`](../../docs/tapd-api.md)。
 
 ## Git workflow
 
-- 默认从 `origin/dev` 创建 `bug/{short_id}` 或 `feature/{short_id}`，并使用 `--no-track`。
+- 默认从 `origin/dev` 创建 `bug/{short_id}` 或 `feature/{short_id}`，并使用 `--no-track`；执行期间会在编辑器上方显示原地更新的阶段进度，结束后清除进度并在对话中保留结果。
 - 工作区有未提交改动时会先弹出确认；确认后由 Git 尝试把当前改动带到从 `origin/dev` 创建的新分支。若与基础分支冲突，Git 会安全终止，不会自动 stash、丢弃改动或强制切换。
 - Bug 提交为 `fix: {KEYWORD}`；需求/任务提交为 `feat: {KEYWORD}`。KEYWORD 原样保留。
 - 没有 upstream 时首次推送使用 `git push -u origin HEAD`。

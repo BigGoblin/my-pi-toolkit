@@ -24,6 +24,22 @@ export interface GitRepositoryState {
 	head?: string;
 }
 
+export type BranchProgressStage =
+	| "tapd-object"
+	| "repository"
+	| "base-ref"
+	| "keyword"
+	| "branch-check"
+	| "create-branch";
+
+export interface BranchProgress {
+	stage: BranchProgressStage;
+	state: "running" | "done" | "failed";
+	message: string;
+}
+
+export type BranchProgressReporter = (progress: BranchProgress) => void;
+
 export interface LinkedCommit {
 	hash: string;
 	subject: string;

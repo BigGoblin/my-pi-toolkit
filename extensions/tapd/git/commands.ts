@@ -3,6 +3,7 @@ import type {
 	ExtensionCommandContext,
 } from "@earendil-works/pi-coding-agent";
 import type { TapdConfig } from "../types.js";
+import { BranchProgressView } from "./branch-progress.js";
 import {
 	describeGitStatus,
 	runCommitPush,
@@ -48,12 +49,20 @@ export async function runTapdGitCommand(
 	const loadingMessage = LOADING_MESSAGES[subcommand];
 	if (!loadingMessage) return false;
 	ctx.ui.notify(loadingMessage, "info");
+	let branchProgress: BranchProgressView | undefined;
 	try {
 		let result = "";
 		if (subcommand === "git-status") {
 			result = await describeGitStatus(ctx);
 		} else if (subcommand === "branch") {
-			result = await runCreateBranch(ctx, config, optionValue(args, "--base"));
+			branchProgress = new BranchProgressView(ctx);
+			branchProgress.start();
+			result = await runCreateBranch(
+				ctx,
+				config,
+				optionValue(args, "--base"),
+				(progress) => branchProgress?.update(progress),
+			);
 		} else if (subcommand === "commit") {
 			result = await runCommitPush(
 				ctx,
@@ -74,7 +83,10 @@ export async function runTapdGitCommand(
 		showCommandResult(pi, result);
 	} catch (error) {
 		const message = error instanceof Error ? error.message : String(error);
+		branchProgress?.fail(message);
 		ctx.ui.notify(message, "error");
+	} finally {
+		branchProgress?.clear();
 	}
 	return true;
 }
