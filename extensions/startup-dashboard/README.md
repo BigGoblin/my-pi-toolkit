@@ -7,7 +7,7 @@
 - 宽屏显示品牌区、Tips、介绍卡片以及 Context / Skills / Extensions 三栏。
 - 中屏自动变为 Context 单栏加 Skills / Extensions 双栏。
 - 窄屏使用紧凑单栏，避免内容超出终端宽度。
-- Context、Skills 和 Extensions 从当前项目及 toolkit manifest 动态发现。
+- Context、Skills 和 Extensions 从当前项目及 toolkit manifest 动态发现；Context 使用 `./`、`../` 相对路径区分同名文件。
 - Footer 显示项目名、当前 Git 分支、`provider/model`、思考强度，以及 Cursor 模型可用时的 Fast 状态。
 - Footer 汇总上传/下载 Token、缓存读写、会话花费，并显示已用/最大上下文窗口和使用率。
 

@@ -50,9 +50,8 @@ async function discoverContexts(cwd: string): Promise<string[]> {
 
 	return paths.map((path) => {
 		const label = relative(cwd, path);
-		return label && !label.startsWith("..")
-			? label
-			: (path.split(/[\\/]/).pop() ?? path);
+		if (!label) return path;
+		return label.startsWith("..") ? label : `./${label}`;
 	});
 }
 
