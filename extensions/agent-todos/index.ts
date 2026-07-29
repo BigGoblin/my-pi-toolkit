@@ -2,7 +2,6 @@
  * Agent Todos — Cursor TodoWrite 风格的任务清单
  *
  * 复杂任务先拆分；完整列表常驻 editor 上方 widget，不依赖 /todos。
- * 设计见 docs/agent-todos-design.md。
  */
 
 import { StringEnum } from "@earendil-works/pi-ai";

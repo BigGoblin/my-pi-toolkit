@@ -2,8 +2,6 @@
 
 对标 Cursor `TodoWrite` 的任务清单扩展。复杂任务先拆分，完整进度常驻在输入框上方，不依赖 `/todos`，不做侧边栏。
 
-设计文档：[`docs/agent-todos-design.md`](../../docs/agent-todos-design.md)。
-
 ## 行为
 
 1. Agent 在多步骤任务中应先调用 `agent_todo_write` 拆分任务。
