@@ -3,7 +3,7 @@
 对标 Cursor `TodoWrite` 的 Pi 扩展设计：**先拆任务、常驻完整进度、会话分支持久化**。  
 **不做侧边栏**（Pi 无正式占列侧栏 API；overlay 会盖对话，成本高收益低）。
 
-状态：设计稿。实现入口预定：`extensions/agent-todos/`。
+状态：MVP 已实现，入口：`extensions/agent-todos/`。
 
 ---
 
