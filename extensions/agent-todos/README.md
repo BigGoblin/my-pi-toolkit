@@ -40,6 +40,11 @@ todo_write({
 
 无 `/todos` 命令；查看不依赖斜杠命令。
 
+## Cursor provider 注意
+
+使用 vendored Open Cursor（`cursor-agent`）时，`todo_write` 必须作为 MCP 工具暴露给模型。  
+本 toolkit 已从 `CURSOR_NATIVE_TOOL_NAMES` 中移除 `todo_write`，否则 Cursor 会走服务端原生 todo，本地面板不会更新。
+
 ## 与其它扩展
 
 | 扩展 | 关系 |

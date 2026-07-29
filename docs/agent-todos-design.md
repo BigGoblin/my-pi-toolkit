@@ -331,6 +331,12 @@ MVP 可用常量，配置文件放到 v1.1。
 
 ---
 
-## 13. 下一步
+## 13. Cursor provider 兼容
+
+Open Cursor 桥接里若把 `todo_write` 标成 Cursor 原生工具名，则不会作为 MCP 工具下发，模型会走服务端原生 todo，**本地 widget 不刷新**。
+
+处理：`vendor/open-cursor/pi-agent/src/bridge/request/builder.ts` 的 `CURSOR_NATIVE_TOOL_NAMES` **不包含** `todo_write`，让本扩展的 `todo_write` 正常暴露。
+
+## 14. 下一步
 
 实现 MVP：按第 7 节建模块，注册扩展，用真实 Pi TUI 验证「先拆分 → 上方完整面板 → merge 刷新」。
