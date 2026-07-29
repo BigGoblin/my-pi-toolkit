@@ -15,12 +15,20 @@ async function runGit(
 	cwd: string,
 	args: string[],
 ): Promise<string> {
-	const result = await execFileAsync(executable, args, {
-		cwd,
-		encoding: "utf8",
-		maxBuffer: 10 * 1024 * 1024,
-	});
-	return result.stdout.trim();
+	// npm-based Git hooks can change the shared Windows console title via
+	// process.title. Preserve Pi's title across the entire Git subprocess tree.
+	const terminalTitle =
+		process.platform === "win32" ? process.title : undefined;
+	try {
+		const result = await execFileAsync(executable, args, {
+			cwd,
+			encoding: "utf8",
+			maxBuffer: 10 * 1024 * 1024,
+		});
+		return result.stdout.trim();
+	} finally {
+		if (terminalTitle !== undefined) process.title = terminalTitle;
+	}
 }
 
 export async function git(cwd: string, args: string[]): Promise<string> {
