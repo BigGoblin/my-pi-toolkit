@@ -6,17 +6,19 @@
 
 ## 行为
 
-1. Agent 在多步骤任务中应先调用 `todo_write` 拆分任务。
+1. Agent 在多步骤任务中应先调用 `agent_todo_write` 拆分任务。
 2. 成功后，editor **上方**出现完整 Todos 列表；footer 显示 `📋 completed/active`（分母不含 `cancelled`）。
 3. 后续用 `merge: true` 按 `id` 更新状态；面板与 footer 即时刷新。
-4. 状态保存在 `todo_write` 的 tool result details 中，跟随会话分支（resume / fork）。
+4. 状态保存在 `agent_todo_write` 的 tool result details 中，跟随会话分支（resume / fork）。
 
 ## Tool
 
-### `todo_write`
+### `agent_todo_write`
+
+工具名刻意避开 Cursor 原生 `todo_write`，避免在 Open Cursor 桥接里被当成原生工具过滤掉。
 
 ```ts
-todo_write({
+agent_todo_write({
   merge: boolean,
   todos: Array<{
     id: string;
@@ -40,16 +42,18 @@ todo_write({
 
 无 `/todos` 命令；查看不依赖斜杠命令。
 
-## Cursor provider 注意
+## Cursor provider
 
-使用 vendored Open Cursor（`cursor-agent`）时，`todo_write` 必须作为 MCP 工具暴露给模型。  
-本 toolkit 已从 `CURSOR_NATIVE_TOOL_NAMES` 中移除 `todo_write`，否则 Cursor 会走服务端原生 todo，本地面板不会更新。
+- Cursor 原生工具名 `todo_write` 仍保留在 `CURSOR_NATIVE_TOOL_NAMES`（服务端原生 todo）。
+- 本扩展使用 `agent_todo_write`，经 MCP 暴露，本地面板才会更新。
+- Prompt 会要求模型优先用 `agent_todo_write`，不要用原生 `todo_write` 维护这份清单。
 
 ## 与其它扩展
 
 | 扩展 | 关系 |
 | --- | --- |
-| 官方示例 `todo` | 工具名不同（`todo_write`），可并存；优先用本扩展 |
+| 官方示例 `todo` | 工具名不同，可并存；优先用本扩展 |
+| Cursor 原生 `todo_write` | 名称不同；面板只跟随 `agent_todo_write` |
 | plan-mode / pi-codex-goal / TAPD | 正交，可同时安装 |
 
 ## Modules
@@ -61,4 +65,4 @@ todo_write({
 | `store.ts` | 内存状态与分支重建 |
 | `ui.ts` | widget / footer |
 | `render.ts` | 工具行渲染 |
-| `prompt.ts` | system prompt 与 guidelines |
+| `prompt.ts` | 工具名常量、system prompt 与 guidelines |

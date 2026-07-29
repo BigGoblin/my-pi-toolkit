@@ -41,7 +41,7 @@
 Agent 第一次改代码 / 跑有副作用命令之前
         │
         ▼
-调用 todo_write（≥2 条；通常 1 条 in_progress，其余 pending）
+调用 agent_todo_write（≥2 条；通常 1 条 in_progress，其余 pending）
         │
         ▼
 输入框上方立刻出现完整 Todos 面板（无命令）
@@ -86,10 +86,12 @@ Agent 边做边 merge 更新 status
 
 ## 3. 工具契约
 
-### 3.1 `todo_write`
+### 3.1 `agent_todo_write`
+
+工具名避开 Cursor 原生 `todo_write`，以免在 Open Cursor 中被 `CURSOR_NATIVE_TOOL_NAMES` 过滤。
 
 ```ts
-todo_write({
+agent_todo_write({
   merge: boolean,
   todos: Array<{
     id: string;       // 稳定短 id，建议 kebab-case
@@ -142,7 +144,7 @@ Todos updated (merge=true): 5 total · 1 in_progress · 2 completed · 1 pending
 
 ### 3.4 不做 `todo_read`（MVP）
 
-完整列表已在 widget 与每次 `todo_write` 返回中；减少工具面。v2 若模型频繁「失忆」再加。
+完整列表已在 widget 与每次 `agent_todo_write` 返回中；减少工具面。v2 若模型频繁「失忆」再加。
 
 ---
 
@@ -181,7 +183,7 @@ Todos  2/5 · 1 in progress
 
 行为：
 
-- `todo_write` 成功 → 更新内存 store → `setWidget` 刷新（或组件持有 store 引用 + `tui.requestRender()`）。
+- `agent_todo_write` 成功 → 更新内存 store → `setWidget` 刷新（或组件持有 store 引用 + `tui.requestRender()`）。
 - 空列表 → `setWidget("agent-todos", undefined)`。
 - `hasUI === false`（print/json）→ 跳过一切 UI，仅保留工具语义。
 
@@ -197,7 +199,7 @@ ctx.ui.setStatus("agent-todos", undefined);
 
 ### 4.3 工具行渲染
 
-- `renderCall`：`todo_write merge` + 变更条数。
+- `renderCall`：`agent_todo_write merge` + 变更条数。
 - `renderResult`：默认一行摘要（如 `+2 · ~1 · ✓1`）；expanded 时列出完整列表。
 
 ---
@@ -208,7 +210,7 @@ ctx.ui.setStatus("agent-todos", undefined);
 
 要点：
 
-1. 多步骤、易漏步骤、跨文件改动的任务：在第一次写文件或执行有副作用命令前调用 `todo_write`。
+1. 多步骤、易漏步骤、跨文件改动的任务：在第一次写文件或执行有副作用命令前调用 `agent_todo_write`。
 2. 拆成可验证的小步；首次通常 ≥2 条。
 3. 同一时刻最多一个 `in_progress`；开始某步时把它标为 `in_progress`，完成立即 `completed`，放弃标 `cancelled`。
 4. 增量用 `merge: true`；整体重规划用 `merge: false`。
@@ -218,7 +220,7 @@ ctx.ui.setStatus("agent-todos", undefined);
 
 在 `tool_call` 上拦截内置 `write` / `edit`（及可选危险 `bash`）：
 
-- 若当前无 active todo（空列表或全完成），且本轮用户消息像「实现/修复/重构」类任务 → `{ block: true, reason: "先调用 todo_write 拆分任务" }`。
+- 若当前无 active todo（空列表或全完成），且本轮用户消息像「实现/修复/重构」类任务 → `{ block: true, reason: "先调用 agent_todo_write 拆分任务" }`。
 - 默认 **关闭**，配置项 `enforceSplit: boolean` 打开；避免误伤探索性对话。
 
 MVP **只做 prompt 引导**，不做拦截。
@@ -230,13 +232,13 @@ MVP **只做 prompt 引导**，不做拦截。
 ### 6.1 单一真相
 
 内存 `TodoStore.todos: TodoItem[]`。  
-每次成功的 `todo_write` 把**完整列表**写入 `toolResult.details.todos`。
+每次成功的 `agent_todo_write` 把**完整列表**写入 `toolResult.details.todos`。
 
 ### 6.2 重建
 
 在 `session_start` / `session_tree` 中扫描 `ctx.sessionManager.getBranch()`：
 
-- 找到 `toolName === "todo_write"` 的 `toolResult`；
+- 找到 `toolName === "agent_todo_write"`（兼容旧名 `todo_write`）的 `toolResult`；
 - 取时间序上最后一次带合法 `details.todos` 的结果重建；
 - 然后 `refreshUI(ctx)`。
 
@@ -291,18 +293,18 @@ MVP 可用常量，配置文件放到 v1.1。
 
 | 扩展 | 关系 |
 | --- | --- |
-| 官方示例 `todo.ts` | 能力弱于本方案；工具名用 `todo_write` 避免冲突 |
+| 官方示例 `todo.ts` | 能力弱于本方案；工具名用 `agent_todo_write` 避免与 Cursor 原生冲突 |
 | plan-mode | 正交；plan 管只读规划，本扩展管执行 checklist |
 | pi-codex-goal | 正交；goal 管单目标续跑 |
 | TAPD | 正交；TAPD 是产品待办，不是 Agent 步骤 |
 
-可同时安装；若检测到示例 `todo` 工具并存，README 注明优先用 `todo_write`。
+可同时安装；若检测到示例 `todo` 工具并存，README 注明优先用 `agent_todo_write`。
 
 ---
 
 ## 10. 验收标准
 
-1. 复杂任务下 Agent 会在写代码前调用 `todo_write` 拆出 ≥2 条。
+1. 复杂任务下 Agent 会在写代码前调用 `agent_todo_write` 拆出 ≥2 条。
 2. 调用成功后，**无需任何命令**，editor 上方出现完整列表。
 3. merge 更新后面板与 footer 立即反映新状态。
 4. 同时两个 `in_progress` 被拒绝，状态不变。
@@ -316,7 +318,7 @@ MVP 可用常量，配置文件放到 v1.1。
 
 | 阶段 | 内容 |
 | --- | --- |
-| **MVP** | `todo_write` + merge/校验 + widget 完整列表 + footer + prompt + 分支持久化 + README |
+| **MVP** | `agent_todo_write` + merge/校验 + widget 完整列表 + footer + prompt + 分支持久化 + README |
 | **v1.1** | 显隐快捷键、`enforceSplit`、全部完成后自动收起策略、配置文件 |
 | **v2** | `todo_read`、与 goal/TAPD 弱联动（可选） |
 
@@ -333,10 +335,14 @@ MVP 可用常量，配置文件放到 v1.1。
 
 ## 13. Cursor provider 兼容
 
-Open Cursor 桥接里若把 `todo_write` 标成 Cursor 原生工具名，则不会作为 MCP 工具下发，模型会走服务端原生 todo，**本地 widget 不刷新**。
+Open Cursor 会把名为 `todo_write` 的工具当成 Cursor 原生工具，**不作为 MCP 下发**。
 
-处理：`vendor/open-cursor/pi-agent/src/bridge/request/builder.ts` 的 `CURSOR_NATIVE_TOOL_NAMES` **不包含** `todo_write`，让本扩展的 `todo_write` 正常暴露。
+处理：
+
+1. 本扩展工具命名为 **`agent_todo_write`**，与原生名错开。
+2. `CURSOR_NATIVE_TOOL_NAMES` **保留** Cursor 原生 `todo_write`。
+3. Prompt 要求模型用 `agent_todo_write` 维护本地面板清单。
 
 ## 14. 下一步
 
-实现 MVP：按第 7 节建模块，注册扩展，用真实 Pi TUI 验证「先拆分 → 上方完整面板 → merge 刷新」。
+用真实 Pi TUI（cursor-agent）验证 `agent_todo_write` → 上方完整面板 → merge 刷新。

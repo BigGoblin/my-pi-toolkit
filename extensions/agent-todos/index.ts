@@ -18,6 +18,7 @@ import {
 import {
 	TODO_WRITE_PROMPT_GUIDELINES,
 	TODO_WRITE_PROMPT_SNIPPET,
+	TOOL_NAME,
 	todoSystemPromptAppend,
 } from "./prompt.js";
 import { renderTodoCall, renderTodoResult } from "./render.js";
@@ -66,10 +67,10 @@ export default function agentTodosExtension(pi: ExtensionAPI) {
 	}));
 
 	pi.registerTool({
-		name: "todo_write",
-		label: "Todo Write",
+		name: TOOL_NAME,
+		label: "Agent Todo Write",
 		description:
-			"Create or update the agent task checklist. Use merge=true for incremental updates by id; merge=false to replace (or clear with []). At most one in_progress item.",
+			"Create or update the local agent task checklist shown above the editor. Use merge=true for incremental updates by id; merge=false to replace (or clear with []). At most one in_progress item. Prefer this over Cursor native todo_write.",
 		promptSnippet: TODO_WRITE_PROMPT_SNIPPET,
 		promptGuidelines: TODO_WRITE_PROMPT_GUIDELINES,
 		parameters: TodoWriteParams,

@@ -3,6 +3,10 @@ import {
 	type TodoWriteDetails,
 	countTodos,
 } from "./model.js";
+import { TOOL_NAME } from "./prompt.js";
+
+/** 历史会话可能仍使用旧工具名 todo_write */
+const TOOL_RESULT_NAMES = new Set([TOOL_NAME, "todo_write"]);
 
 export class TodoStore {
 	private todos: TodoItem[] = [];
@@ -19,13 +23,16 @@ export class TodoStore {
 		this.todos = [];
 	}
 
-	/** 从会话分支重建：取最后一次成功的 todo_write details */
+	/** 从会话分支重建：取最后一次成功的 agent_todo_write / todo_write details */
 	reconstructFromBranch(entries: Iterable<unknown>): void {
 		this.todos = [];
 		for (const entry of entries) {
 			if (!isMessageEntry(entry)) continue;
 			const msg = entry.message;
-			if (msg.role !== "toolResult" || msg.toolName !== "todo_write") continue;
+			if (msg.role !== "toolResult") continue;
+			if (typeof msg.toolName !== "string" || !TOOL_RESULT_NAMES.has(msg.toolName)) {
+				continue;
+			}
 			const details = msg.details as TodoWriteDetails | undefined;
 			if (!details || details.error || !Array.isArray(details.todos)) continue;
 			this.todos = details.todos.map((todo) => ({ ...todo }));

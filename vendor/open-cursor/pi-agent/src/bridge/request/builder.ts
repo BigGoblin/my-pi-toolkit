@@ -32,9 +32,6 @@ import {
 import type { CursorStateStore } from "../../stream/state.js";
 import { toolResultToText } from "../shared/tool-result.js";
 
-// todo_write is intentionally NOT listed here: Pi extensions (e.g. agent-todos)
-// register todo_write and must be advertised as MCP tools so the panel/UI can update.
-// Cursor's server-side native todos have no local executor in this bridge.
 const CURSOR_NATIVE_TOOL_NAMES = new Set([
   "bash",
   "read",
@@ -43,6 +40,7 @@ const CURSOR_NATIVE_TOOL_NAMES = new Set([
   "ls",
   "grep",
   "lsp",
+  "todo_write",
 ]);
 
 type ContextWithTools = Context & { tools?: Tool[] };

@@ -9,7 +9,7 @@ export function renderTodoCall(
 	const count = Array.isArray(args.todos) ? args.todos.length : 0;
 	const mode = args.merge ? "merge" : "replace";
 	const text =
-		theme.fg("toolTitle", theme.bold("todo_write ")) +
+		theme.fg("toolTitle", theme.bold("agent_todo_write ")) +
 		theme.fg("muted", mode) +
 		theme.fg("dim", ` ${count} item(s)`);
 	return new Text(text, 0, 0);
