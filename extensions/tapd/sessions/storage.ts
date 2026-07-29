@@ -96,6 +96,10 @@ export function getUnderstandingDocPath(cwd: string, itemId: string): string {
 	return getTapdDocPath(cwd, itemId, "understanding.md");
 }
 
+export function getDesignDocPath(cwd: string, itemId: string): string {
+	return getTapdDocPath(cwd, itemId, "design.md");
+}
+
 export function getCollaborationDocPath(cwd: string, itemId: string): string {
 	return getTapdDocPath(cwd, itemId, "collaboration.md");
 }

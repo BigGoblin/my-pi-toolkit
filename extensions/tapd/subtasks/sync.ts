@@ -8,7 +8,7 @@ import { storyUrl } from "../todo/model.js";
 import {
 	findSessionLink,
 	getCollaborationDocPath,
-	getTapdDocPath,
+	getDesignDocPath,
 	saveLinks,
 } from "../sessions/storage.js";
 import { parseDevelopmentTasks } from "./parser.js";
@@ -35,10 +35,9 @@ export async function createSubtasks(
 		ctx.ui.notify("Bug 暂不支持创建子需求，请切换到需求会话", "warning");
 		return;
 	}
-	const designFile = getTapdDocPath(
+	const designFile = getDesignDocPath(
 		ctx.cwd,
 		`story-${current.record.storyId}`,
-		"design.md",
 	);
 	if (!existsSync(designFile)) {
 		ctx.ui.notify(

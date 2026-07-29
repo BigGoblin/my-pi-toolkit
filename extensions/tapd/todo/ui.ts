@@ -14,6 +14,7 @@ import {
 	truncateToWidth,
 } from "@earendil-works/pi-tui";
 import { fetchAll } from "../core/workspace-api.js";
+import { collectDesignedStoryKeys } from "./design-status.js";
 import {
 	cleanupStaleSessionLinks,
 	deleteLinkedSession,
@@ -63,6 +64,8 @@ interface FlatItem {
 class TreeList {
 	private roots: TapdItem[] = [];
 	expandedIds = new Set<string>();
+
+	constructor(private readonly designedStoryKeys = new Set<string>()) {}
 	private visible: FlatItem[] = [];
 	selectedIdx = 0;
 	private maxVisible = 20;
@@ -188,6 +191,14 @@ class TreeList {
 			const indent = "  ".repeat(fi.indent);
 			const marker = fi.expandable ? (fi.expanded ? "▾ " : "▸ ") : "  ";
 			const icon = getTypeIcon(item);
+			let designMarker = "";
+			if (item.kind === "story") {
+				designMarker = this.designedStoryKeys.has(
+					linkKey(item.workspaceId, item.id, item.kind),
+				)
+					? " 📐"
+					: "   ";
+			}
 			const statusW = item.kind === "bug" ? 8 : 10;
 			const priorityW = item.kind === "bug" ? 6 : 8;
 			const severityW = item.kind === "bug" ? 6 : 0;
@@ -196,9 +207,12 @@ class TreeList {
 			const separatorW = item.kind === "bug" ? 6 : 5;
 			const titleW = Math.max(
 				1,
-				maxW - visibleWidth(indent + marker + icon) - columnW - separatorW,
+				maxW -
+					visibleWidth(indent + marker + icon + designMarker) -
+					columnW -
+					separatorW,
 			);
-			let line = indent + marker + icon;
+			let line = indent + marker + icon + designMarker;
 			line +=
 				" " + padR(truncateToWidth(oneLine(item.name), titleW, "…"), titleW);
 			line +=
@@ -948,6 +962,7 @@ async function renderTable(
 		return c;
 	}
 	const total = countAll(forest);
+	const designedStoryKeys = collectDesignedStoryKeys(forest, _ctx.cwd);
 
 	return await _ctx.ui.custom<{
 		action: string;
@@ -968,7 +983,7 @@ async function renderTable(
 				} | null,
 			) => void,
 		) => {
-			const treeList = new TreeList();
+			const treeList = new TreeList(designedStoryKeys);
 			treeList.setRoots(forest);
 			treeList.onCancel = () => done(null);
 
@@ -1012,7 +1027,11 @@ async function renderTable(
 				const dateW = kind === "bug" ? 10 : 12;
 				const columnW = statusW + priorityW + severityW + dateW * 2;
 				const separatorW = kind === "bug" ? 5 : 4;
-				const titleW = Math.max(1, curW - 2 - 5 - columnW - separatorW);
+				const rowPrefixW = kind === "story" ? 8 : 5;
+				const titleW = Math.max(
+					1,
+					curW - 2 - rowPrefixW - columnW - separatorW,
+				);
 				container = new Container();
 				container.addChild(
 					new DynamicBorder((s: string) => theme.fg("accent", s)),
@@ -1060,7 +1079,7 @@ async function renderTable(
 
 				container.addChild(
 					new Text(
-						"     " +
+						" ".repeat(rowPrefixW) +
 							theme.fg("dim", padR("标题", titleW)) +
 							" " +
 							theme.fg("dim", padR("状态", statusW)) +
@@ -1091,11 +1110,13 @@ async function renderTable(
 						);
 				}
 
+				const designLegend = kind === "story" ? "📐 已生成设计文档  " : "";
 				const hint = focusSearch
 					? "输入过滤  ↑↓ 选中  Enter 关联会话  Esc 清除并返回  Ctrl+C 退出"
 					: searching
 						? "↑↓ 导航  Enter 关联会话  o 浏览器打开  / 搜索  Esc 清除搜索  Ctrl+C 退出"
-						: "↑↓ 导航  Space/→/← 展开收起  Enter 关联会话  o 浏览器打开  / 搜索  Tab 切换需求/Bug  i 切换迭代" +
+						: designLegend +
+							"↑↓ 导航  Space/→/← 展开收起  Enter 关联会话  o 浏览器打开  / 搜索  Tab 切换需求/Bug  i 切换迭代" +
 							(kind === "story" ? "  t 类型" : "") +
 							"  c 清理失效关联  Esc/Ctrl+C 退出";
 				container.addChild(new Text(theme.fg("dim", hint), 1, 0));
