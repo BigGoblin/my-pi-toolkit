@@ -8,6 +8,13 @@ const STATUS_KEY = "agent-todos";
 /** widget 区域避免占满整屏；超出时底部提示剩余条数 */
 const MAX_ITEM_LINES = 16;
 
+const STATUS_EMOJI: Record<TodoStatus, string> = {
+	pending: "⬜",
+	in_progress: "🔄",
+	completed: "✅",
+	cancelled: "⛔",
+};
+
 export function refreshTodoUI(ctx: ExtensionContext, store: TodoStore): void {
 	if (!ctx.hasUI) return;
 	const todos = store.getTodos();
@@ -49,26 +56,21 @@ class TodoPanel implements Component {
 		const th = this.theme;
 		const counts = countTodos(this.todos);
 		const lines: string[] = [];
-		const progress =
-			counts.active > 0
-				? `${counts.completed}/${counts.active}`
-				: `${counts.completed}/${counts.completed}`;
-		const inProg =
-			counts.inProgress > 0 ? ` · ${counts.inProgress} in progress` : "";
-		lines.push(
-			truncateToWidth(
-				th.fg("accent", "Todos") + th.fg("muted", `  ${progress}${inProg}`),
-				width,
-			),
-		);
+
+		lines.push(truncateToWidth(renderHeader(counts, th), width));
+		lines.push(truncateToWidth(renderProgressBar(counts, width, th), width));
 
 		const visible = this.todos.slice(0, MAX_ITEM_LINES);
-		for (const todo of visible) {
-			lines.push(truncateToWidth(formatTodoLine(todo, th), width));
+		for (let i = 0; i < visible.length; i++) {
+			lines.push(
+				truncateToWidth(formatTodoLine(visible[i], i + 1, th), width),
+			);
 		}
 		const hidden = this.todos.length - visible.length;
 		if (hidden > 0) {
-			lines.push(truncateToWidth(th.fg("dim", `… ${hidden} more`), width));
+			lines.push(
+				truncateToWidth(th.fg("dim", `… 还有 ${hidden} 项未显示`), width),
+			);
 		}
 
 		this.cachedWidth = width;
@@ -77,26 +79,61 @@ class TodoPanel implements Component {
 	}
 }
 
-function formatTodoLine(todo: TodoItem, th: Theme): string {
-	const glyph = statusGlyph(todo.status, th);
-	const content =
-		todo.status === "completed" || todo.status === "cancelled"
-			? th.fg("dim", todo.content)
-			: todo.status === "in_progress"
-				? th.bold(th.fg("text", todo.content))
-				: th.fg("text", todo.content);
-	return `${glyph} ${content}`;
+function renderHeader(
+	counts: ReturnType<typeof countTodos>,
+	th: Theme,
+): string {
+	const progress =
+		counts.active > 0
+			? `${counts.completed}/${counts.active}`
+			: `${counts.completed}/${counts.completed}`;
+	const parts = [
+		th.bold(th.fg("accent", "📋 Todos")),
+		th.fg("muted", progress),
+	];
+	if (counts.inProgress > 0) {
+		parts.push(th.fg("accent", `🔄 ${counts.inProgress}`));
+	}
+	if (counts.pending > 0) {
+		parts.push(th.fg("dim", `⬜ ${counts.pending}`));
+	}
+	if (counts.cancelled > 0) {
+		parts.push(th.fg("dim", `⛔ ${counts.cancelled}`));
+	}
+	return parts.join(th.fg("dim", "  ·  "));
 }
 
-function statusGlyph(status: TodoStatus, th: Theme): string {
-	switch (status) {
-		case "pending":
-			return th.fg("dim", "○");
-		case "in_progress":
-			return th.fg("accent", "▸");
+function renderProgressBar(
+	counts: ReturnType<typeof countTodos>,
+	width: number,
+	th: Theme,
+): string {
+	const total = Math.max(counts.active, 1);
+	const barWidth = Math.max(8, Math.min(24, width - 8));
+	const filled = Math.round((counts.completed / total) * barWidth);
+	const empty = Math.max(0, barWidth - filled);
+	const bar =
+		th.fg("success", "█".repeat(filled)) + th.fg("dim", "░".repeat(empty));
+	const pct = Math.round((counts.completed / total) * 100);
+	return `${bar} ${th.fg("muted", `${pct}%`)}`;
+}
+
+function formatTodoLine(todo: TodoItem, index: number, th: Theme): string {
+	const emoji = STATUS_EMOJI[todo.status];
+	const indexLabel = th.fg("dim", `${String(index).padStart(2, " ")}.`);
+	let content: string;
+	switch (todo.status) {
 		case "completed":
-			return th.fg("success", "✓");
+			content = th.fg("dim", th.strikethrough(todo.content));
+			break;
 		case "cancelled":
-			return th.fg("dim", "×");
+			content = th.fg("dim", th.strikethrough(todo.content));
+			break;
+		case "in_progress":
+			content = th.bold(th.fg("accent", todo.content));
+			break;
+		default:
+			content = th.fg("text", todo.content);
 	}
+	return `${indexLabel} ${emoji}  ${content}`;
 }

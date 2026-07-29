@@ -44,9 +44,9 @@ export function statusText(todos: TodoItem[]): string | undefined {
 	if (todos.length === 0) return undefined;
 	const counts = countTodos(todos);
 	if (counts.active === 0) {
-		return `✓ ${counts.completed}/${counts.completed}`;
+		return `✅ ${counts.completed}/${counts.completed}`;
 	}
-	const prefix = counts.completed === counts.active ? "✓" : "📋";
+	const prefix = counts.completed === counts.active ? "✅" : "📋";
 	return `${prefix} ${counts.completed}/${counts.active}`;
 }
 

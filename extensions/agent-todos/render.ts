@@ -55,16 +55,18 @@ export function renderTodoResult(
 	for (const todo of details.todos) {
 		const mark =
 			todo.status === "completed"
-				? theme.fg("success", "✓")
+				? "✅"
 				: todo.status === "in_progress"
-					? theme.fg("accent", "▸")
+					? "🔄"
 					: todo.status === "cancelled"
-						? theme.fg("dim", "×")
-						: theme.fg("dim", "○");
+						? "⛔"
+						: "⬜";
 		const body =
 			todo.status === "completed" || todo.status === "cancelled"
-				? theme.fg("dim", todo.content)
-				: theme.fg("muted", todo.content);
+				? theme.fg("dim", theme.strikethrough(todo.content))
+				: todo.status === "in_progress"
+					? theme.fg("accent", todo.content)
+					: theme.fg("muted", todo.content);
 		listText += `\n${mark} ${theme.fg("accent", todo.id)} ${body}`;
 	}
 	return new Text(listText, 0, 0);
