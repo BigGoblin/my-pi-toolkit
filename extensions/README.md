@@ -11,6 +11,7 @@
 | Model Manager | 为新对话应用可配置的默认模型和思考等级 | [`model-manager/README.md`](model-manager/README.md) |
 | Pi Lens | LSP、AST 搜索、诊断和代码分析扩展加载入口 | [`pi-lens/README.md`](pi-lens/README.md) |
 | M-PI Dashboard | M-PI 响应式启动面板、自定义 Header 与模型 Footer | [`startup-dashboard/README.md`](startup-dashboard/README.md) |
+| Titlebar Working | Agent 工作时在终端标题显示 braille 动画 | `titlebar-working/index.ts` |
 | Hello | 用于确认 toolkit 已加载的简单 smoke test | `hello.ts` |
 
 扩展加载列表定义在仓库根目录 `package.json` 的 `pi.extensions` 中。

@@ -38,6 +38,7 @@ pi install ./my-pi-toolkit
 | Model Manager | 为新对话应用可配置的默认模型和思考等级 | [`extensions/model-manager/README.md`](extensions/model-manager/README.md) |
 | Pi Lens | 随 toolkit 分发 LSP、诊断、AST 搜索和代码分析能力 | [`extensions/pi-lens/README.md`](extensions/pi-lens/README.md) |
 | M-PI Dashboard | M-PI 响应式启动面板、自定义 Header 与模型 Footer | [`extensions/startup-dashboard/README.md`](extensions/startup-dashboard/README.md) |
+| Titlebar Working | Agent 工作时在终端标题显示 braille 动画 | `extensions/titlebar-working/index.ts` |
 | Hello | 简单的加载 smoke test | `extensions/hello.ts` |
 
 ### Themes

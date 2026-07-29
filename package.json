@@ -32,7 +32,8 @@
       "./extensions/context7/index.ts",
       "./extensions/search-subagent/index.ts",
       "./extensions/pi-lens/index.js",
-      "./extensions/startup-dashboard/index.ts"
+      "./extensions/startup-dashboard/index.ts",
+      "./extensions/titlebar-working/index.ts"
     ],
     "skills": [
       "./skills/context7",
