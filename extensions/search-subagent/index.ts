@@ -13,6 +13,7 @@ import { Text } from "@earendil-works/pi-tui";
 // @ts-expect-error -- TypeBox's .d.mts exports require a newer resolver than the workspace LSP.
 import { Type } from "typebox";
 
+import { registerSearchCommand } from "./command.js";
 import { resolveSearchConfig } from "./config.js";
 
 const READ_ONLY_TOOLS = "read,grep,find,ls";
@@ -91,6 +92,7 @@ function finalAssistantText(messages: unknown[]): string {
 }
 
 export default function searchSubagentExtension(pi: ExtensionAPI) {
+	registerSearchCommand(pi);
 	pi.registerTool({
 		name: "search",
 		label: "Search Subagent",
