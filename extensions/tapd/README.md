@@ -16,7 +16,7 @@ TAPD 需求与缺陷工作流扩展。提供待办列表、会话关联、需求
 | `/tapd git-status` | 查看当前会话关联事项、Git 分支、upstream 与工作区状态 |
 | `/tapd branch [--base origin/dev]` | 获取 TAPD keyword，并从指定基础分支创建关联分支；关联事项、仓库检查、TAPD 请求和分支创建阶段会实时显示进度 |
 | `/tapd commit [--no-push]` | 使用 TAPD keyword 生成提交信息，提交并默认推送；仓库检查、TAPD 请求、暂存、commit 和 push 阶段会实时显示在对话中 |
-| `/tapd mr [--target dev] [--no-delete-source-branch]` | 创建或更新 GitLab MR，并回写全部关联 TAPD 事项；需求/任务一次执行完成，Bug 首次执行会先让 Agent 生成根因草稿，再次执行才创建 MR 和更新 TAPD |
+| `/tapd mr [--draft] [--target dev] [--no-delete-source-branch]` | 创建或更新 GitLab MR；`--draft` 保持 Draft 状态并流转当前用户负责的开发子需求，普通执行会将 MR 更新为 Ready 并按完整规则回写 TAPD |
 
 工作流命令支持附加自然语言和 `@文件`：
 
@@ -96,8 +96,9 @@ TAPD Open API 索引见 [`../../docs/tapd-api.md`](../../docs/tapd-api.md)。
 - 没有 upstream 时首次推送使用 `git push -u origin HEAD`。
 - 提交默认使用当前操作系统 PATH 中的 `git`。仅当运行于 WSL，且 Git hook 因 Windows CRLF shebang 报出 `sh\\r: No such file or directory` 时，才自动改用 Windows `git.exe` 重试；重试成功后将仓库记录在 `~/.pi/agent/tapd-git-runtime.json`，该仓库后续在 WSL 中提交时直接使用 Windows Git。原生 Windows、Linux 和 macOS 环境始终使用各自 PATH 中的 `git`。可用 `TAPD_WINDOWS_GIT_PATH` 指定 WSL 可执行的 `git.exe` 完整路径。
 - MR 会扫描 `merge-base..HEAD` 的全部提交，不只处理第一条 TAPD 关联。
+- `/tapd mr --draft` 会创建或更新 Draft MR。当前关联项是功能需求时，功能需求本身和测试需求保持原状态，但其下所有处理人为当前 Token 用户的直属开发子需求会更新为“开发完成”；直接关联开发子需求时也照常更新为“开发完成”。TAPD 任务和 Bug 不流转，Bug 也不会触发根因分析。后续执行不带 `--draft` 的 `/tapd mr` 会把同一开放 MR 更新为 Ready：当前用户负责的功能需求和开发子需求更新为“开发完成”，当前用户负责的测试需求更新为“已通过”；其他处理人的需求不流转。
 - Bug 默认标签为 `二组`、`迭代bug(每日发布)`，状态更新为 `已解决`，负责人为 `沈瑞昀`。
-- 需求/任务默认标签为 `二组`、`迭代任务(随迭代发布)`。关联项是开发子需求或 TAPD 任务时直接更新为 `开发完成`；关联项是顶层功能需求时，仅在处理人为当前 Token 用户时更新功能需求本身，并同时把其下所有处理人为当前用户的直属开发子需求更新为 `开发完成`。其他处理人的需求不会被修改，所有更新均不修改负责人。
+- 需求/任务默认标签为 `二组`、`迭代任务(随迭代发布)`。Ready MR 中，关联项是开发子需求或 TAPD 任务时更新为 `开发完成`；关联项是测试需求时，仅在处理人为当前 Token 用户时更新为 `已通过`；关联项是顶层功能需求时，仅更新当前用户负责的功能需求本身及其直属开发、测试需求，其中功能需求和开发子需求更新为 `开发完成`，测试需求更新为 `已通过`。其他处理人的需求不会被修改，所有更新均不修改负责人。
 - 纯需求/任务的 `/tapd mr` 保持一次执行完成，不触发 Agent 根因分析。
 - 含 Bug 的 `/tapd mr` 首次执行会先分析修复 diff 和 `git blame` 候选，允许 UI 选择或手动输入 commit，然后把 TAPD Bug、修复 patch 和已确认 commit 交给 Agent。Agent 只生成结构化根因草稿并保存在仓库 `.pi/tapd-root-cause/`，本次不创建 MR、不更新 TAPD。
 - Agent 分析完成后再次执行 `/tapd mr`，扩展只接受与当前 `HEAD` 匹配的草稿，打开编辑器供用户最终确认，再创建或更新 MR 并回写 TAPD。TAPD 流转和备注写入成功后自动删除草稿；用户取消或流程失败时保留草稿以便重试。选择“未能定位”时使用 TAPD 真实候选值 `其他(历史缺陷)`。

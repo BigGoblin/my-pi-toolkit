@@ -8,8 +8,8 @@ import {
 	describeGitStatus,
 	runCommitPush,
 	runCreateBranch,
-	runMergeRequest,
 } from "./workflow.js";
+import { runMergeRequest } from "./merge-request-workflow.js";
 
 function optionValue(args: string[], name: string): string | undefined {
 	const index = args.indexOf(name);
@@ -71,14 +71,12 @@ export async function runTapdGitCommand(
 				(content) => showProgress(pi, content),
 			);
 		} else if (subcommand === "mr") {
-			result = await runMergeRequest(
-				pi,
-				ctx,
-				config,
-				optionValue(args, "--target"),
-				!args.includes("--no-delete-source-branch"),
-				(content) => showProgress(pi, content),
-			);
+			result = await runMergeRequest(pi, ctx, config, {
+				targetBranch: optionValue(args, "--target"),
+				removeSourceBranch: !args.includes("--no-delete-source-branch"),
+				draft: args.includes("--draft"),
+				reportProgress: (content) => showProgress(pi, content),
+			});
 		}
 		showCommandResult(pi, result);
 	} catch (error) {

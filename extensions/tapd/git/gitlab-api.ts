@@ -43,6 +43,11 @@ function projectApiPath(project: GitLabProject): string {
 	return `/projects/${encodeURIComponent(project.projectPath)}`;
 }
 
+function mergeRequestTitle(title: string, draft: boolean): string {
+	const readyTitle = title.replace(/^(?:Draft:|WIP:)\s*/i, "");
+	return draft ? `Draft: ${readyTitle}` : readyTitle;
+}
+
 export async function createOrUpdateMergeRequest(
 	project: GitLabProject,
 	token: string,
@@ -52,6 +57,7 @@ export async function createOrUpdateMergeRequest(
 		title: string;
 		labels: string[];
 		removeSourceBranch: boolean;
+		draft: boolean;
 	},
 ): Promise<GitLabMergeRequest> {
 	const query = new URLSearchParams({
@@ -68,7 +74,7 @@ export async function createOrUpdateMergeRequest(
 	const body = {
 		source_branch: input.sourceBranch,
 		target_branch: input.targetBranch,
-		title: input.title,
+		title: mergeRequestTitle(input.title, input.draft),
 		labels: input.labels.join(","),
 		remove_source_branch: input.removeSourceBranch,
 	};
