@@ -7,6 +7,7 @@
 | TAPD | TAPD 待办、需求文档工作流、Bug 定位和子需求同步 | [`tapd/README.md`](tapd/README.md) |
 | Context7 | 第三方库最新文档查询工具 | [`context7/README.md`](context7/README.md) |
 | Search Subagent | 面向大规模文件检索的独立只读子 Agent | [`search-subagent/README.md`](search-subagent/README.md) |
+| Agent Todos | Cursor TodoWrite 风格任务清单，editor 上方完整进度 | [`agent-todos/README.md`](agent-todos/README.md) |
 | Cursor Models | Cursor 模型折叠、思考等级和 Fast 模式 | [`cursor-models/README.md`](cursor-models/README.md) |
 | Model Manager | 为新对话应用可配置的默认模型和思考等级 | [`model-manager/README.md`](model-manager/README.md) |
 | Pi Lens | LSP、AST 搜索、诊断和代码分析扩展加载入口 | [`pi-lens/README.md`](pi-lens/README.md) |
