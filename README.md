@@ -70,6 +70,7 @@ vendor/open-cursor/pi-agent/src/
 ### Documentation
 
 - [`docs/tapd-api.md`](docs/tapd-api.md)：TAPD Open API 官方资料与接口索引。
+- [`docs/agent-todos-design.md`](docs/agent-todos-design.md)：对标 Cursor TodoWrite 的 Agent Todos 扩展设计（无侧边栏）。
 - [`AGENTS.md`](AGENTS.md)：仓库内 Agent 开发规范。
 
 ## Development
