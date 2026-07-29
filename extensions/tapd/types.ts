@@ -5,10 +5,16 @@ export interface GitLabConfig {
 	baseUrl?: string;
 }
 
+export interface TapdReviewConfig {
+	/** Review 子 Agent 模型，例如 anthropic/claude-sonnet-4-5。 */
+	model?: string;
+}
+
 export interface TapdConfig {
 	token: string;
 	baseUrl?: string;
 	gitlab?: GitLabConfig;
+	review?: TapdReviewConfig;
 }
 
 export interface TapdResponse<T> {

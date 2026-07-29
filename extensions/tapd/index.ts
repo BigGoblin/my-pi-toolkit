@@ -22,9 +22,12 @@ import {
 	sendTapdWorkflowPrompt,
 } from "./documents/workflows.js";
 import { runTapdGitCommand } from "./git/commands.js";
+import { requestTapdReview } from "./review/command.js";
+import { registerTapdReviewTool } from "./review/tool.js";
 
 export default function tapdExtension(pi: ExtensionAPI) {
 	const STATE_KEY = "tapd-view-state";
+	registerTapdReviewTool(pi);
 
 	pi.on("session_start", (event: SessionStartEvent) => {
 		if (event.reason === "startup" || event.reason === "reload") {
@@ -33,7 +36,7 @@ export default function tapdExtension(pi: ExtensionAPI) {
 	});
 
 	pi.registerCommand("tapd", {
-		description: "查看 TAPD 待办；生成需求理解、技术设计或协作评审文档",
+		description: "查看 TAPD 待办；生成需求文档或审核需求实现代码",
 		getArgumentCompletions: (prefix: string): AutocompleteItem[] | null => {
 			const items: AutocompleteItem[] = [
 				{
@@ -55,6 +58,11 @@ export default function tapdExtension(pi: ExtensionAPI) {
 					value: "collaboration",
 					label: "collaboration",
 					description: "生成供产品、后端和前端 Leader 评审的协作文档",
+				},
+				{
+					value: "review",
+					label: "review",
+					description: "根据需求与设计方案审核当前代码修改",
 				},
 				{
 					value: "sub-task",
@@ -120,6 +128,10 @@ export default function tapdExtension(pi: ExtensionAPI) {
 					COLLABORATION_TRIGGER_PROMPT,
 					additionalInstructions,
 				);
+				return;
+			}
+			if (sub === "review") {
+				requestTapdReview(pi, ctx, restArgs);
 				return;
 			}
 			if (sub === "sub-task") {

@@ -10,6 +10,7 @@ TAPD 需求与缺陷工作流扩展。提供待办列表、会话关联、需求
 | `/tapd analyze [补充要求]` | 生成 `understanding.md` |
 | `/tapd design [补充要求]` | 生成 `design.md` 和结构化开发子需求拆分 |
 | `/tapd collaboration [补充要求]` | 生成供产品、后端和前端 Leader 评审的 `collaboration.md` |
+| `/tapd review [--base origin/dev] [补充要求]` | 启动只读子代理，根据需求和设计审核当前分支与工作区代码，并将分级报告返回主 Agent |
 | `/tapd sub-task` | 根据 `design.md` 创建或同步设计、开发子需求 |
 | `/tapd bug` | 获取当前 Bug 完整信息并让 Agent 定位代码原因 |
 | `/tapd git-status` | 查看当前会话关联事项、Git 分支、upstream 与工作区状态 |
@@ -47,6 +48,12 @@ TAPD 需求与缺陷工作流扩展。提供待办列表、会话关联、需求
 - 开发子需求描述包含自身开发范围、验收标准和依赖关系。
 - 文档更新后再次执行 `/tapd sub-task` 会同步已有子需求并创建新增项；设计中移除的旧项不会自动删除。
 
+## Code review
+
+`/tapd review` 审核当前仓库从指定基础分支的 merge-base 到工作区的全部修改，包括已提交、暂存、未暂存和未跟踪文件。命令要求当前需求已有非空的 `understanding.md` 和 `design.md`，并使用只开放 `read`、`grep`、`find`、`ls` 的隔离子代理检查代码风格、文件拆分、需求满足度、设计满足度和隐藏 Bug；存在组件改动时，还会检查组件 Props/参数、默认值、事件、状态归属、数据流、组合方式、子结构和拆分边界是否合理及兼容。
+
+命令会让主 Agent 调用原生 `tapd_review` 工具；执行进度、Review 子代理最近的工具调用和最终报告均显示在对话工具框中，可用 `Ctrl+O` 展开完整 Markdown 报告。审核期间按 `Esc` 或 `Ctrl+C` 会通过工具的 AbortSignal 终止子代理，并在 5 秒后强制清理仍未退出的进程。报告使用 `P0 Blocker`、`P1 High`、`P2 Medium`、`P3 Suggestion` 问题等级及 `LOW`、`MEDIUM`、`HIGH`、`BLOCKED` 总体风险等级。工具结果会直接进入主 Agent 上下文，主 Agent 只总结问题，不会自动修改代码。
+
 ## Session link cleanup
 
 TAPD 会话关联保存在 `~/.pi/agent/tapd-links.json`。扩展会在会话启动和打开 `/tapd` 主界面时自动清理会话文件已不存在的关联，以及超过 10 分钟仍未完成创建的临时关联。
@@ -69,6 +76,9 @@ TAPD 会话关联保存在 `~/.pi/agent/tapd-links.json`。扩展会在会话启
 {
   "token": "TAPD 个人令牌",
   "baseUrl": "可选的 TAPD API Base URL",
+  "review": {
+    "model": "可选；例如 lumilegend/gpt-5.6-sol:max；默认继承主 Agent 当前模型"
+  },
   "gitlab": {
     "token": "可选；也可使用 GITLAB_PERSONAL_ACCESS_TOKEN",
     "baseUrl": "可选；默认从 origin 推导 https://host/api/v4"
@@ -106,4 +116,5 @@ TAPD Open API 索引见 [`../../docs/tapd-api.md`](../../docs/tapd-api.md)。
 | `documents/` | analyze、design、collaboration 与 Bug 定位文档工作流 |
 | `subtasks/` | 子需求解析、确认计划与 TAPD 同步 |
 | `todo/` | 待办模型、列表和会话选择 UI |
+| `review/` | 需求实现审核上下文、只读子代理、进度和报告渲染 |
 | `git/` | Git 仓库、TAPD keyword、GitLab MR、状态回写和根因备注 |
