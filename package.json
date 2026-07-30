@@ -26,17 +26,9 @@
   },
   "pi": {
     "extensions": [
+      "./extensions/ming-core/index.ts",
       "./extensions/tapd/index.ts",
-      "./extensions/cursor-models/index.ts",
-      "./extensions/model-manager/index.ts",
-      "./extensions/context7/index.ts",
-      "./extensions/search-subagent/index.ts",
-      "./extensions/subagent-console/index.ts",
-      "./extensions/chat-mode/index.ts",
-      "./extensions/agent-todos/index.ts",
-      "./extensions/pi-lens/index.js",
-      "./extensions/startup-dashboard/index.ts",
-      "./extensions/titlebar-working/index.ts"
+      "./extensions/context7/index.ts"
     ],
     "skills": [
       "./skills/context7",

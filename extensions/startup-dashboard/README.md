@@ -2,6 +2,8 @@
 
 用原生终端字符构建 `M-PI` 启动面板，替换内置启动 Header，并提供匹配的模型 Footer。
 
+本模块由 [`ming-core`](../ming-core/README.md) 编排加载，不再单独出现在 `pi.extensions` 中。
+
 ## 功能
 
 - `mpi` 首次启动时清理当前终端画面和回滚缓冲区，避免 Dashboard 上方残留 PowerShell 命令；`/reload` 和会话切换不会清屏。
