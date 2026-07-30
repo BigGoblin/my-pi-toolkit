@@ -1,5 +1,9 @@
 import type { ExtensionContext, Theme } from "@earendil-works/pi-coding-agent";
-import { truncateToWidth, type Component, type TUI } from "@earendil-works/pi-tui";
+import {
+	truncateToWidth,
+	type Component,
+	type TUI,
+} from "@earendil-works/pi-tui";
 import { countTodos, type TodoItem, type TodoStatus } from "./model.js";
 import { statusText, type TodoStore } from "./store.js";
 
@@ -23,11 +27,18 @@ export function refreshTodoUI(ctx: ExtensionContext, store: TodoStore): void {
 		ctx.ui.setStatus(STATUS_KEY, undefined);
 		return;
 	}
+	ctx.ui.setStatus(STATUS_KEY, statusText(todos));
 	ctx.ui.setWidget(
 		WIDGET_KEY,
 		(_tui: TUI, theme: Theme) => new TodoPanel(todos, theme),
 		{ placement: "aboveEditor" },
 	);
+}
+
+export function hideTodoPanel(ctx: ExtensionContext, store: TodoStore): void {
+	if (!ctx.hasUI) return;
+	const todos = store.getTodos();
+	ctx.ui.setWidget(WIDGET_KEY, undefined);
 	ctx.ui.setStatus(STATUS_KEY, statusText(todos));
 }
 
@@ -62,9 +73,7 @@ class TodoPanel implements Component {
 
 		const visible = this.todos.slice(0, MAX_ITEM_LINES);
 		for (let i = 0; i < visible.length; i++) {
-			lines.push(
-				truncateToWidth(formatTodoLine(visible[i], i + 1, th), width),
-			);
+			lines.push(truncateToWidth(formatTodoLine(visible[i], i + 1, th), width));
 		}
 		const hidden = this.todos.length - visible.length;
 		if (hidden > 0) {

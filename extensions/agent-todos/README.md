@@ -1,13 +1,15 @@
 # Agent Todos
 
-对标 Cursor `TodoWrite` 的任务清单扩展。复杂任务先拆分，完整进度常驻在输入框上方，不依赖 `/todos`，不做侧边栏。
+对标 Cursor `TodoWrite` 的任务清单扩展。复杂任务先拆分，完整进度显示在输入框上方，不做侧边栏。
 
 ## 行为
 
 1. Agent 在多步骤任务中应先调用 `agent_todo_write` 拆分任务。
 2. 成功后，editor **上方**出现完整 Todos 列表；footer 显示 `📋 completed/active`（分母不含 `cancelled`）。
 3. 后续用 `merge: true` 按 `id` 更新状态；面板与 footer 即时刷新。
-4. 状态保存在 `agent_todo_write` 的 tool result details 中，跟随会话分支（resume / fork）。
+4. 完成任务后可运行 `/todos` 手动隐藏面板；再次运行可手动显示。
+5. 已隐藏时，后续新增 `pending` / `in_progress` todo 会自动重新打开面板。
+6. 状态保存在 `agent_todo_write` 的 tool result details 中，跟随会话分支（resume / fork）。
 
 ## Tool
 
@@ -40,12 +42,14 @@ agent_todo_write({
   - 条目：序号 + emoji 标记 + 文案（完成/取消带删除线）
 - 状态 emoji：`⬜` pending · `🔄` in_progress · `✅` completed · `⛔` cancelled
 - 超过 16 条时底部显示 `… 还有 n 项未显示`
-- Footer：`📋 2/5` 或全部完成时 `✅ 5/5`
+- `/todos`：手动隐藏或显示面板；隐藏不清除 todo 状态
+- 隐藏后新增未完成 todo 时，面板自动显示
+- Footer：`📋 2/5` 或全部完成时 `✅ 5/5`（面板隐藏后仍保留）
 - print / json 模式跳过 UI，工具仍可用
 
 **关于图片：** Pi TUI 支持 `Image`（Kitty / iTerm 协议），适合插图，不适合当每条 todo 的小图标；状态标记用 emoji 更稳、更省高度。
 
-无 `/todos` 命令；查看不依赖斜杠命令。
+日常查看不依赖命令；仅在需要手动隐藏或恢复面板时使用 `/todos`。
 
 ## Cursor provider
 
