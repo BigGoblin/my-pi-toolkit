@@ -26,6 +26,7 @@ export interface FooterSnapshot {
 	model?: string;
 	thinking?: string;
 	fast?: boolean;
+	modeStatus?: string;
 	usage: UsageTotals;
 	contextTokens?: number;
 	contextWindow?: number;
@@ -82,6 +83,7 @@ export function createFooterSnapshot(
 	ctx: ExtensionContext,
 	branch?: string | null,
 	title?: string,
+	modeStatus?: string,
 ): FooterSnapshot {
 	const context = ctx.getContextUsage();
 	const provider = validText(ctx.model?.provider);
@@ -93,6 +95,7 @@ export function createFooterSnapshot(
 		model: validText(ctx.model?.id),
 		thinking: validText(ctx.thinkingLevel),
 		fast: provider === "cursor-agent" ? isFast() : undefined,
+		modeStatus,
 		usage: collectUsage(ctx),
 		contextTokens: validNumber(context?.tokens),
 		contextWindow: validNumber(

@@ -1,14 +1,13 @@
 import type { Theme } from "@earendil-works/pi-coding-agent";
 import { truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
 import { type FooterSnapshot, validNumber } from "./footer-data.js";
+import {
+	type FooterSegment as Segment,
+	runtimeSegments,
+} from "./footer-runtime.js";
 
 export { createFooterSnapshot } from "./footer-data.js";
 export type { FooterSnapshot } from "./footer-data.js";
-
-interface Segment {
-	id: string;
-	content: string;
-}
 
 function formatTokens(count: number): string {
 	if (count < 1_000) return count.toString();
@@ -34,39 +33,6 @@ function align(left: string, right: string, width: number): string {
 	if (availableLeft <= 0) return truncateToWidth(right, width, "");
 	const clippedLeft = truncateToWidth(left, availableLeft, "…");
 	return `${clippedLeft}${" ".repeat(width - visibleWidth(clippedLeft) - rightWidth)}${right}`;
-}
-
-function thinkingText(level: string, theme: Theme, compact = false): string {
-	const text = compact ? level : `think:${level}`;
-	switch (level) {
-		case "off":
-			return theme.fg("thinkingOff", text);
-		case "minimal":
-			return theme.fg("thinkingMinimal", text);
-		case "low":
-			return theme.fg("thinkingLow", text);
-		case "medium":
-			return theme.fg("thinkingMedium", text);
-		case "high":
-			return theme.fg("thinkingHigh", text);
-		case "xhigh":
-			return theme.fg("thinkingXhigh", text);
-		case "max":
-			return theme.fg("thinkingMax", text);
-		default:
-			return theme.fg("muted", text);
-	}
-}
-
-function modelText(snapshot: FooterSnapshot, theme: Theme): string | undefined {
-	const provider = snapshot.provider
-		? theme.fg("dim", snapshot.provider)
-		: undefined;
-	const model = snapshot.model
-		? theme.bold(theme.fg("accent", snapshot.model))
-		: undefined;
-	if (provider && model) return `${provider}${theme.fg("dim", "/")}${model}`;
-	return provider ?? model;
 }
 
 function contextPercent(snapshot: FooterSnapshot): number | undefined {
@@ -131,6 +97,9 @@ function contextText(
 
 function identitySegments(snapshot: FooterSnapshot, theme: Theme): Segment[] {
 	return [
+		snapshot.modeStatus
+			? { id: "mode", content: snapshot.modeStatus }
+			: undefined,
 		snapshot.project
 			? {
 					id: "project",
@@ -145,32 +114,6 @@ function identitySegments(snapshot: FooterSnapshot, theme: Theme): Segment[] {
 			: undefined,
 		snapshot.title
 			? { id: "title", content: theme.fg("text", snapshot.title) }
-			: undefined,
-	].filter((segment): segment is Segment => segment !== undefined);
-}
-
-function runtimeSegments(
-	snapshot: FooterSnapshot,
-	theme: Theme,
-	compact = false,
-): Segment[] {
-	const model = modelText(snapshot, theme);
-	return [
-		model ? { id: "model", content: model } : undefined,
-		snapshot.thinking
-			? {
-					id: "thinking",
-					content: thinkingText(snapshot.thinking, theme, compact),
-				}
-			: undefined,
-		snapshot.fast !== undefined
-			? {
-					id: "fast",
-					content: theme.fg(
-						snapshot.fast ? "success" : "dim",
-						snapshot.fast ? (compact ? "⚡" : "⚡ fast") : "fast:off",
-					),
-				}
 			: undefined,
 	].filter((segment): segment is Segment => segment !== undefined);
 }

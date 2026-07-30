@@ -32,6 +32,7 @@
       "./extensions/context7/index.ts",
       "./extensions/search-subagent/index.ts",
       "./extensions/subagent-console/index.ts",
+      "./extensions/chat-mode/index.ts",
       "./extensions/agent-todos/index.ts",
       "./extensions/pi-lens/index.js",
       "./extensions/startup-dashboard/index.ts",

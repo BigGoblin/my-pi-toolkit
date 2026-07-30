@@ -9,7 +9,7 @@
 - Context、Skills、Extensions 和 Themes 始终完整展示，不使用折叠或展开快捷键。
 - 中屏自动变为两行双栏，窄屏变为紧凑单栏，避免内容超出终端宽度。
 - 四类资源均动态发现；Skills 同时覆盖 toolkit、`~/.pi/agent/skills`、`~/.agents/skills` 及当前项目的 `.pi/.agents` 技能目录，Context 使用 `./`、`../` 相对路径区分同名文件。
-- Footer 使用响应式双行布局显示项目名、当前 Git 分支、真实会话标题、`provider/model`、思考强度，以及 Cursor 模型的实时 Fast 状态；窄屏会按 segment 自动换行与紧凑化。
+- Footer 使用响应式双行布局；左侧首先显示 Build/Ask 模式，再显示项目名、当前 Git 分支和真实会话标题，右侧显示 `provider/model`、思考强度及 Cursor 模型的实时 Fast 状态；Build 使用 `#316DDD` 蓝色，Ask 使用主题成功色，窄屏会按 segment 自动换行与紧凑化。
 - Footer 汇总输入/输出 Token、缓存读写、会话花费，并显示上下文已用量、窗口、百分比和动态进度条；所有缺失字段都会连同图标与分隔符一起隐藏。
 
 ## 使用

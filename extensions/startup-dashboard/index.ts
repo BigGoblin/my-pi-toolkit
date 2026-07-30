@@ -55,7 +55,7 @@ export default function startupDashboard(pi: ExtensionAPI) {
 		ctx.ui.setFooter(
 			(tui: TUI, theme: Theme, footerData: ReadonlyFooterDataProvider) => {
 				requestFooterRender = () => tui.requestRender();
-				const unsubscribe = footerData.onBranchChange(() =>
+				const unsubscribeBranch = footerData.onBranchChange(() =>
 					tui.requestRender(),
 				);
 				return {
@@ -66,12 +66,13 @@ export default function startupDashboard(pi: ExtensionAPI) {
 								footerContext ?? ctx,
 								footerData.getGitBranch(),
 								pi.getSessionName(),
+								footerData.getExtensionStatuses().get("chat-mode"),
 							),
 							theme,
 						),
 					invalidate() {},
 					dispose: () => {
-						unsubscribe();
+						unsubscribeBranch();
 						requestFooterRender = undefined;
 					},
 				};
