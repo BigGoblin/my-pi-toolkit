@@ -65,6 +65,7 @@ export default function startupDashboard(pi: ExtensionAPI) {
 							createFooterSnapshot(
 								footerContext ?? ctx,
 								footerData.getGitBranch(),
+								pi.getSessionName(),
 							),
 							theme,
 						),
@@ -98,6 +99,12 @@ export default function startupDashboard(pi: ExtensionAPI) {
 		refreshFooter(ctx),
 	);
 	pi.on("thinking_level_select", (_event: unknown, ctx: ExtensionContext) =>
+		refreshFooter(ctx),
+	);
+	pi.on("session_info_changed", (_event: unknown, ctx: ExtensionContext) =>
+		refreshFooter(ctx),
+	);
+	pi.on("message_start", (_event: unknown, ctx: ExtensionContext) =>
 		refreshFooter(ctx),
 	);
 	pi.on("message_end", (_event: unknown, ctx: ExtensionContext) =>

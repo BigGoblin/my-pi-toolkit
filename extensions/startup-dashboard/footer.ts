@@ -1,109 +1,43 @@
-import { basename } from "node:path";
-import type { ExtensionContext, Theme } from "@earendil-works/pi-coding-agent";
+import type { Theme } from "@earendil-works/pi-coding-agent";
 import { truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
-import { isFast } from "../cursor-models/fast-state.js";
+import { type FooterSnapshot, validNumber } from "./footer-data.js";
 
-interface UsageLike {
-	input: number;
-	output: number;
-	cacheRead: number;
-	cacheWrite: number;
-	cost: { total: number };
-}
+export { createFooterSnapshot } from "./footer-data.js";
+export type { FooterSnapshot } from "./footer-data.js";
 
-interface UsageTotals {
-	input: number;
-	output: number;
-	cacheRead: number;
-	cacheWrite: number;
-	cost: number;
-}
-
-export interface FooterSnapshot {
-	project: string;
-	branch?: string;
-	provider: string;
-	model: string;
-	thinking: string;
-	fast?: boolean;
-	usage: UsageTotals;
-	contextTokens: number | null;
-	contextWindow: number;
-	contextPercent: number | null;
-}
-
-function addUsage(totals: UsageTotals, usage: UsageLike | undefined): void {
-	if (!usage) return;
-	totals.input += usage.input;
-	totals.output += usage.output;
-	totals.cacheRead += usage.cacheRead;
-	totals.cacheWrite += usage.cacheWrite;
-	totals.cost += usage.cost.total;
-}
-
-function collectUsage(ctx: ExtensionContext): UsageTotals {
-	const totals: UsageTotals = {
-		input: 0,
-		output: 0,
-		cacheRead: 0,
-		cacheWrite: 0,
-		cost: 0,
-	};
-	for (const entry of ctx.sessionManager.getEntries()) {
-		if (entry.type === "message") {
-			const message = entry.message;
-			if (message.role === "assistant" || message.role === "toolResult") {
-				addUsage(totals, message.usage);
-			}
-		} else if (entry.type === "branch_summary" || entry.type === "compaction") {
-			addUsage(totals, entry.usage);
-		}
-	}
-	return totals;
-}
-
-export function createFooterSnapshot(
-	ctx: ExtensionContext,
-	branch?: string | null,
-): FooterSnapshot {
-	const context = ctx.getContextUsage();
-	const provider = ctx.model?.provider ?? "no-provider";
-	return {
-		project: basename(ctx.cwd) || ctx.cwd,
-		branch: branch ?? undefined,
-		provider,
-		model: ctx.model?.id ?? "no-model",
-		thinking: ctx.thinkingLevel ?? "off",
-		fast: provider === "cursor-agent" ? isFast() : undefined,
-		usage: collectUsage(ctx),
-		contextTokens: context?.tokens ?? null,
-		contextWindow: context?.contextWindow ?? ctx.model?.contextWindow ?? 0,
-		contextPercent: context?.percent ?? null,
-	};
+interface Segment {
+	id: string;
+	content: string;
 }
 
 function formatTokens(count: number): string {
 	if (count < 1_000) return count.toString();
-	if (count < 10_000) return `${(count / 1_000).toFixed(1)}k`;
-	if (count < 1_000_000) return `${Math.round(count / 1_000)}k`;
-	if (count < 10_000_000) return `${(count / 1_000_000).toFixed(1)}M`;
-	return `${Math.round(count / 1_000_000)}M`;
+	const [divisor, suffix] =
+		count < 1_000_000 ? ([1_000, "k"] as const) : ([1_000_000, "M"] as const);
+	const scaled = count / divisor;
+	return `${scaled >= 10 ? Math.round(scaled) : Number(scaled.toFixed(1))}${suffix}`;
+}
+
+function joinSegments(segments: Segment[], theme: Theme): string {
+	return segments
+		.filter((segment) => visibleWidth(segment.content) > 0)
+		.map((segment) => segment.content)
+		.join(theme.fg("dim", " · "));
 }
 
 function align(left: string, right: string, width: number): string {
+	if (!left) return truncateToWidth(right, width, "");
+	if (!right) return truncateToWidth(left, width, "");
 	const rightWidth = visibleWidth(right);
 	if (rightWidth >= width) return truncateToWidth(right, width, "");
 	const availableLeft = width - rightWidth - 2;
+	if (availableLeft <= 0) return truncateToWidth(right, width, "");
 	const clippedLeft = truncateToWidth(left, availableLeft, "…");
-	return (
-		clippedLeft +
-		" ".repeat(width - visibleWidth(clippedLeft) - rightWidth) +
-		right
-	);
+	return `${clippedLeft}${" ".repeat(width - visibleWidth(clippedLeft) - rightWidth)}${right}`;
 }
 
-function thinkingText(level: string, theme: Theme): string {
-	const text = ` · Think:${level}`;
+function thinkingText(level: string, theme: Theme, compact = false): string {
+	const text = compact ? level : `think:${level}`;
 	switch (level) {
 		case "off":
 			return theme.fg("thinkingOff", text);
@@ -124,20 +58,187 @@ function thinkingText(level: string, theme: Theme): string {
 	}
 }
 
-function contextText(snapshot: FooterSnapshot, theme: Theme): string {
-	const current =
-		snapshot.contextTokens === null
-			? "?"
-			: formatTokens(snapshot.contextTokens);
-	const maximum = formatTokens(snapshot.contextWindow);
-	const percent =
-		snapshot.contextPercent === null
-			? "?"
-			: `${snapshot.contextPercent.toFixed(1)}%`;
-	const text = `Context ${current}/${maximum} (${percent})`;
-	if ((snapshot.contextPercent ?? 0) > 90) return theme.fg("error", text);
-	if ((snapshot.contextPercent ?? 0) > 70) return theme.fg("warning", text);
-	return theme.fg("muted", text);
+function modelText(snapshot: FooterSnapshot, theme: Theme): string | undefined {
+	const provider = snapshot.provider
+		? theme.fg("dim", snapshot.provider)
+		: undefined;
+	const model = snapshot.model
+		? theme.bold(theme.fg("accent", snapshot.model))
+		: undefined;
+	if (provider && model) return `${provider}${theme.fg("dim", "/")}${model}`;
+	return provider ?? model;
+}
+
+function contextPercent(snapshot: FooterSnapshot): number | undefined {
+	const explicit = validNumber(snapshot.contextPercent);
+	if (explicit !== undefined) return Math.min(explicit, 100);
+	const used = validNumber(snapshot.contextTokens);
+	const maximum = validNumber(snapshot.contextWindow);
+	if (used === undefined || maximum === undefined || maximum <= 0)
+		return undefined;
+	return Math.min((used / maximum) * 100, 100);
+}
+
+function contextColor(
+	percent: number | undefined,
+): "success" | "warning" | "error" | "muted" {
+	if (percent === undefined) return "muted";
+	if (percent >= 95) return "error";
+	if (percent >= 70) return "warning";
+	return "success";
+}
+
+function progressBar(percent: number, width: number): string {
+	if (width <= 0) return "";
+	const filled = (Math.min(Math.max(percent, 0), 100) / 100) * width;
+	const whole = Math.floor(filled);
+	const fractions = ["", "▏", "▎", "▍", "▌", "▋", "▊", "▉"];
+	const fraction =
+		whole < width ? fractions[Math.floor((filled - whole) * 8)] : "";
+	return `${"█".repeat(whole)}${fraction}${"░".repeat(Math.max(0, width - whole - (fraction ? 1 : 0)))}`;
+}
+
+function contextText(
+	snapshot: FooterSnapshot,
+	theme: Theme,
+	barWidth: number,
+	percentOnly = false,
+): string | undefined {
+	const used = validNumber(snapshot.contextTokens);
+	const maximum = validNumber(snapshot.contextWindow);
+	const percent = contextPercent(snapshot);
+	if (used === undefined && maximum === undefined && percent === undefined)
+		return undefined;
+
+	const details: string[] = [];
+	if (!percentOnly) {
+		if (used !== undefined && maximum !== undefined) {
+			details.push(`${formatTokens(used)}/${formatTokens(maximum)}`);
+		} else if (used !== undefined) {
+			details.push(formatTokens(used));
+		} else if (maximum !== undefined) {
+			details.push(`max ${formatTokens(maximum)}`);
+		}
+	}
+	if (percent !== undefined && barWidth > 0 && !percentOnly) {
+		details.push(progressBar(percent, barWidth));
+	}
+	if (percent !== undefined) details.push(`${percent.toFixed(1)}%`);
+	const text = `ctx ${details.join(" ")}`;
+	const styled = theme.fg(contextColor(percent), text);
+	return percent !== undefined && percent > 90 ? theme.bold(styled) : styled;
+}
+
+function identitySegments(snapshot: FooterSnapshot, theme: Theme): Segment[] {
+	return [
+		snapshot.project
+			? {
+					id: "project",
+					content: `${theme.fg("accent", "◆")} ${theme.bold(theme.fg("text", snapshot.project))}`,
+				}
+			: undefined,
+		snapshot.branch
+			? {
+					id: "branch",
+					content: `${theme.fg("muted", "")} ${theme.fg("muted", snapshot.branch)}`,
+				}
+			: undefined,
+		snapshot.title
+			? { id: "title", content: theme.fg("text", snapshot.title) }
+			: undefined,
+	].filter((segment): segment is Segment => segment !== undefined);
+}
+
+function runtimeSegments(
+	snapshot: FooterSnapshot,
+	theme: Theme,
+	compact = false,
+): Segment[] {
+	const model = modelText(snapshot, theme);
+	return [
+		model ? { id: "model", content: model } : undefined,
+		snapshot.thinking
+			? {
+					id: "thinking",
+					content: thinkingText(snapshot.thinking, theme, compact),
+				}
+			: undefined,
+		snapshot.fast !== undefined
+			? {
+					id: "fast",
+					content: theme.fg(
+						snapshot.fast ? "success" : "dim",
+						snapshot.fast ? (compact ? "⚡" : "⚡ fast") : "fast:off",
+					),
+				}
+			: undefined,
+	].filter((segment): segment is Segment => segment !== undefined);
+}
+
+function usageSegments(snapshot: FooterSnapshot, theme: Theme): Segment[] {
+	const usage = snapshot.usage;
+	const cacheParts = [
+		usage.cacheRead !== undefined
+			? `R${formatTokens(usage.cacheRead)}`
+			: undefined,
+		usage.cacheWrite !== undefined
+			? `W${formatTokens(usage.cacheWrite)}`
+			: undefined,
+	].filter((part): part is string => part !== undefined);
+	return [
+		usage.input !== undefined
+			? {
+					id: "input",
+					content: theme.fg("muted", `↑ ${formatTokens(usage.input)}`),
+				}
+			: undefined,
+		usage.output !== undefined
+			? {
+					id: "output",
+					content: theme.fg("muted", `↓ ${formatTokens(usage.output)}`),
+				}
+			: undefined,
+		cacheParts.length > 0
+			? {
+					id: "cache",
+					content: theme.fg("dim", `cache ${cacheParts.join("/")}`),
+				}
+			: undefined,
+	].filter((segment): segment is Segment => segment !== undefined);
+}
+
+function costSegment(
+	snapshot: FooterSnapshot,
+	theme: Theme,
+): Segment | undefined {
+	return snapshot.usage.cost !== undefined
+		? {
+				id: "cost",
+				content: theme.fg("warning", `$${snapshot.usage.cost.toFixed(2)}`),
+			}
+		: undefined;
+}
+
+function wrapSegments(
+	segments: Segment[],
+	width: number,
+	theme: Theme,
+): string[] {
+	const lines: string[] = [];
+	let current: Segment[] = [];
+	for (const segment of segments) {
+		const candidate = joinSegments([...current, segment], theme);
+		if (current.length > 0 && visibleWidth(candidate) > width) {
+			lines.push(truncateToWidth(joinSegments(current, theme), width, "…"));
+			current = [segment];
+		} else {
+			current.push(segment);
+		}
+	}
+	if (current.length > 0) {
+		lines.push(truncateToWidth(joinSegments(current, theme), width, "…"));
+	}
+	return lines;
 }
 
 export function renderFooter(
@@ -146,34 +247,54 @@ export function renderFooter(
 	theme: Theme,
 ): string[] {
 	if (width <= 0) return [];
-	const rule = theme.fg("borderMuted", "─".repeat(width));
-	const branch = snapshot.branch
-		? ` ${theme.fg("dim", "· Branch")} ${theme.fg("muted", snapshot.branch)}`
-		: "";
-	const project = `${theme.fg("accent", "◆")} ${theme.fg("dim", "Project")} ${theme.fg("text", snapshot.project)}${branch}`;
-	let fast = "";
-	if (snapshot.fast !== undefined) {
-		const fastText = `Fast:${snapshot.fast ? "ON" : "OFF"}`;
-		fast = ` · ${theme.fg(snapshot.fast ? "success" : "dim", fastText)}`;
-	}
-	const modelName = theme.bold(
-		theme.fg("accent", `${snapshot.provider}/${snapshot.model}`),
-	);
-	const model = `${modelName}${thinkingText(snapshot.thinking, theme)}${fast}`;
-	const usage = snapshot.usage;
-	const tokens = theme.fg(
-		"dim",
-		`↑${formatTokens(usage.input)} ↓${formatTokens(usage.output)} Cache R${formatTokens(usage.cacheRead)} W${formatTokens(usage.cacheWrite)} $${usage.cost.toFixed(3)}`,
-	);
-	const context = contextText(snapshot, theme);
+	const identity = identitySegments(snapshot, theme);
+	const runtime = runtimeSegments(snapshot, theme, width < 100);
+	const usage = usageSegments(snapshot, theme);
+	const cost = costSegment(snapshot, theme);
 
-	if (width >= 100)
-		return [rule, align(project, model, width), align(tokens, context, width)];
-	return [
-		rule,
-		truncateToWidth(project, width, ""),
-		truncateToWidth(model, width, ""),
-		truncateToWidth(tokens, width, ""),
-		truncateToWidth(context, width, ""),
+	if (width >= 72) {
+		const runtimeText = joinSegments(runtime, theme);
+		const runtimeWidth = visibleWidth(runtimeText);
+		const identityBudget = Math.max(
+			0,
+			width - runtimeWidth - (runtimeText ? 2 : 0),
+		);
+		const identityText = truncateToWidth(
+			joinSegments(identity, theme),
+			identityBudget,
+			"…",
+		);
+		const first = align(identityText, runtimeText, width);
+
+		const usageText = joinSegments(usage, theme);
+		const fixedRight = joinSegments(cost ? [cost] : [], theme);
+		const availableContext = Math.max(
+			0,
+			width - visibleWidth(usageText) - visibleWidth(fixedRight) - 8,
+		);
+		const context = contextText(
+			snapshot,
+			theme,
+			Math.min(12, Math.max(0, availableContext - 18)),
+		);
+		const resourceRight = joinSegments(
+			[cost, context ? { id: "context", content: context } : undefined].filter(
+				(segment): segment is Segment => segment !== undefined,
+			),
+			theme,
+		);
+		return [first, align(usageText, resourceRight, width)].filter(
+			(line) => visibleWidth(line) > 0,
+		);
+	}
+
+	const context = contextText(snapshot, theme, 0, width < 48);
+	const allSegments = [
+		...identity,
+		...runtime,
+		...(context ? [{ id: "context", content: context }] : []),
+		...(cost ? [cost] : []),
+		...usage,
 	];
+	return wrapSegments(allSegments, width, theme);
 }
