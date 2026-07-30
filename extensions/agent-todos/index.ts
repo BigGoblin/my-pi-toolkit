@@ -105,7 +105,7 @@ export default function agentTodosExtension(pi: ExtensionAPI) {
 		name: TOOL_NAME,
 		label: "Agent Todo Write",
 		description:
-			"Create or update the local agent task checklist shown above the editor. Use merge=true for incremental updates by id; merge=false to replace (or clear with []). At most one in_progress item. Prefer this over Cursor native todo_write.",
+			"Create or update the local agent task checklist shown above the editor. The in_progress item must match the work happening now; complete it only after its outcome is achieved and verified. Reopen it if later evidence shows more work is needed. Use merge=true for incremental updates by id; merge=false to replace (or clear with []). At most one in_progress item. Prefer this over Cursor native todo_write.",
 		promptSnippet: TODO_WRITE_PROMPT_SNIPPET,
 		promptGuidelines: TODO_WRITE_PROMPT_GUIDELINES,
 		parameters: TodoWriteParams,

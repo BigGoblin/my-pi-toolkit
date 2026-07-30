@@ -104,7 +104,8 @@ export function validateTodoWrite(
 		const content = typeof item.content === "string" ? item.content.trim() : "";
 		const status = typeof item.status === "string" ? item.status.trim() : "";
 		if (!id) return { ok: false, error: `todos[${i}].id is required` };
-		if (!content) return { ok: false, error: `todos[${i}].content is required` };
+		if (!content)
+			return { ok: false, error: `todos[${i}].content is required` };
 		if (!isTodoStatus(status)) {
 			return {
 				ok: false,
@@ -139,7 +140,11 @@ export function formatTodosForModel(
 	const lines = todos.map(
 		(todo) => `[${todo.status}] ${todo.id} — ${todo.content}`,
 	);
-	return `${header}\n\n${lines.join("\n")}`;
+	const focus = todos.find((todo) => todo.status === "in_progress");
+	const executionReminder = focus
+		? `Execution focus: only "${focus.content}" is in_progress. Before doing work that belongs to a pending/completed item, update agent_todo_write first. If new evidence invalidates a completed item, reopen it before remediation.`
+		: "Execution focus: no todo is in_progress. Mark the next todo in_progress before continuing implementation work.";
+	return `${header}\n\n${lines.join("\n")}\n\n${executionReminder}`;
 }
 
 export function summarizeChanges(
@@ -159,7 +164,8 @@ export function summarizeChanges(
 		}
 		if (prev.content !== todo.content || prev.status !== todo.status) {
 			updated++;
-			if (prev.status !== "completed" && todo.status === "completed") completed++;
+			if (prev.status !== "completed" && todo.status === "completed")
+				completed++;
 		}
 	}
 	return { added, updated, completed };

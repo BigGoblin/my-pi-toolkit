@@ -7,9 +7,11 @@
 1. Agent 在多步骤任务中应先调用 `agent_todo_write` 拆分任务。
 2. 成功后，editor **上方**出现完整 Todos 列表；footer 显示 `📋 completed/active`（分母不含 `cancelled`）。
 3. 后续用 `merge: true` 按 `id` 更新状态；面板与 footer 即时刷新。
-4. 完成任务后可运行 `/todos` 手动隐藏面板；再次运行可手动显示。
-5. 已隐藏时，后续新增 `pending` / `in_progress` todo 会自动重新打开面板。
-6. 状态保存在 `agent_todo_write` 的 tool result details 中，跟随会话分支（resume / fork）。
+4. `in_progress` 必须对应当前实际工作；只有目标结果已达成并验证后才能标记 `completed`。若后续证据表明该步骤仍需处理，必须先重新打开为 `in_progress`，并将原当前步骤退回 `pending`，再继续操作。
+5. 每次工具结果都会向模型重申当前执行焦点，降低清单提前进入下一阶段、实际仍在补做上一阶段的概率。
+6. 完成任务后可运行 `/todos` 手动隐藏面板；再次运行可手动显示。
+7. 已隐藏时，后续新增 `pending` / `in_progress` todo 会自动重新打开面板。
+8. 状态保存在 `agent_todo_write` 的 tool result details 中，跟随会话分支（resume / fork）。
 
 ## Tool
 
@@ -32,7 +34,8 @@ agent_todo_write({
 | --- | --- |
 | `merge: false` | 整表替换；`todos: []` 清空；恰好 1 条会被拒绝 |
 | `merge: true` | 按 `id` 合并；可只传变更项 |
-| `in_progress` | 合并后全表最多 1 条 |
+| `in_progress` | 合并后全表最多 1 条，且必须与当前正在执行的工作一致 |
+| `completed` | 仅表示目标结果已达成并验证；后续发现仍需补做时先重新打开，不允许清单停在下一阶段继续补做上一阶段 |
 
 ## UI
 
