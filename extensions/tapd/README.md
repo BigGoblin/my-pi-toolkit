@@ -52,7 +52,9 @@ TAPD 需求与缺陷工作流扩展。提供待办列表、会话关联、需求
 
 `/tapd review` 审核当前仓库从指定基础分支的 merge-base 到工作区的全部修改，包括已提交、暂存、未暂存和未跟踪文件。命令要求当前需求已有非空的 `understanding.md` 和 `design.md`，并使用只开放 `read`、`grep`、`find`、`ls` 的隔离子代理检查代码风格、文件拆分、需求满足度、设计满足度和隐藏 Bug；存在组件改动时，还会检查组件 Props/参数、默认值、事件、状态归属、数据流、组合方式、子结构和拆分边界是否合理及兼容。
 
-命令会让主 Agent 调用原生 `tapd_review` 工具；执行进度、Review 子代理最近的工具调用和最终报告均显示在对话工具框中，可用 `Ctrl+O` 展开完整 Markdown 报告。审核期间按 `Esc` 或 `Ctrl+C` 会通过工具的 AbortSignal 终止子代理，并在 5 秒后强制清理仍未退出的进程。报告使用 `P0 Blocker`、`P1 High`、`P2 Medium`、`P3 Suggestion` 问题等级及 `LOW`、`MEDIUM`、`HIGH`、`BLOCKED` 总体风险等级。工具结果会直接进入主 Agent 上下文，主 Agent 只总结问题，不会自动修改代码。
+命令会让主 Agent 调用原生 `tapd_review` 工具；执行进度、Review 子代理最近的工具调用和最终报告均显示在对话工具框中，可用 `Ctrl+O` 在运行期间展开全部已记录调用，并在完成后展开完整 Markdown 报告。审核期间按 `Esc` 或 `Ctrl+C` 会通过工具的 AbortSignal 终止子代理。报告使用 `P0 Blocker`、`P1 High`、`P2 Medium`、`P3 Suggestion` 问题等级及 `LOW`、`MEDIUM`、`HIGH`、`BLOCKED` 总体风险等级。工具结果会直接进入主 Agent 上下文，主 Agent 只总结问题，不会自动修改代码。
+
+Review 默认使用持久 RPC 子 Agent，不会自动打开分屏。按 `Alt+A` 可在当前 TUI 上方打开居中的大尺寸只读 Overlay，以主 Agent 相同的消息、Markdown、思考块和工具组件查看最近子 Agent 的过程；Overlay 不提供输入框，支持 `↑`、`↓`、`PageUp`、`PageDown`、`Home`、`End` 滚动，并使用 `Ctrl+O` 展开或折叠工具输出。按 `Esc` 返回主 Agent且不终止审核。使用 `/subagents` 可以选择、进入、取消或终止指定子 Agent；列表默认只显示当前主会话创建的子 Agent，按 `Tab` 可切换到所有会话记录。首轮审核完成后报告自动返回主 Agent。公共行为由 `~/.pi/agent/subagents.json` 配置；如需 Windows Terminal 自动分屏，可设置 `presentation: "split"` 或 `"tab"`。Review 的 Git 上下文会复制进子 Agent 任务目录，避免主工具返回后丢失审核证据。
 
 ## Session link cleanup
 
@@ -77,7 +79,8 @@ TAPD 会话关联保存在 `~/.pi/agent/tapd-links.json`。扩展会在会话启
   "token": "TAPD 个人令牌",
   "baseUrl": "可选的 TAPD API Base URL",
   "review": {
-    "model": "可选；例如 lumilegend/gpt-5.6-sol:max；默认继承主 Agent 当前模型"
+    "model": "可选；例如 lumilegend/gpt-5.6-sol:max；默认继承主 Agent 当前模型",
+    "presentation": "可选；manual、auto、inline、split 或 tab；默认 manual"
   },
   "gitlab": {
     "token": "可选；也可使用 GITLAB_PERSONAL_ACCESS_TOKEN",

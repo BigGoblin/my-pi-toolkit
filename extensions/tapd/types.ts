@@ -1,5 +1,7 @@
 /** TAPD 扩展共享类型。 */
 
+import type { SubagentPresentation } from "../shared/subagent/config.js";
+
 export interface GitLabConfig {
 	token?: string;
 	baseUrl?: string;
@@ -8,6 +10,8 @@ export interface GitLabConfig {
 export interface TapdReviewConfig {
 	/** Review 子 Agent 模型，例如 anthropic/claude-sonnet-4-5。 */
 	model?: string;
+	/** 子 Agent 展示方式；默认由 ~/.pi/agent/subagents.json 决定。 */
+	presentation?: SubagentPresentation;
 }
 
 export interface TapdConfig {

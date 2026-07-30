@@ -3,6 +3,8 @@ import { existsSync } from "node:fs";
 import { basename, dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { truncateHead } from "@earendil-works/pi-coding-agent";
+import type { SubagentPresentation } from "../../shared/subagent/config.js";
+import { runTerminalSubagent } from "../../shared/subagent/terminal-runner.js";
 import { REVIEW_SYSTEM_PROMPT } from "./prompt.js";
 import type { ReviewSubagentResult } from "./types.js";
 
@@ -84,13 +86,54 @@ function messageToolCalls(
 	});
 }
 
+function truncateReport(output: string): string {
+	const truncation = truncateHead(output, {
+		maxBytes: MAX_REPORT_BYTES,
+		maxLines: MAX_REPORT_LINES,
+	});
+	return truncation.truncated
+		? `${truncation.content}\n\n> 报告超过 50KB，已截断后续内容。`
+		: truncation.content;
+}
+
 export async function runReviewSubagent(options: {
 	cwd: string;
 	model: string;
 	task: string;
+	presentation?: SubagentPresentation;
+	parentSessionId?: string;
+	artifactFiles?: string[];
 	signal?: AbortSignal;
 	onToolCall?: (name: string, args: Record<string, unknown>) => void;
 }): Promise<ReviewSubagentResult> {
+	let reportedTerminalCalls = 0;
+	const terminal = await runTerminalSubagent({
+		cwd: options.cwd,
+		title: "TAPD Review Subagent",
+		model: options.model,
+		task: options.task,
+		systemPrompt: REVIEW_SYSTEM_PROMPT,
+		tools: READ_ONLY_TOOLS,
+		extensionPaths: existsSync(CURSOR_PROVIDER_EXTENSION)
+			? [CURSOR_PROVIDER_EXTENSION]
+			: [],
+		artifactFiles: options.artifactFiles,
+		presentation: options.presentation,
+		parentSessionId: options.parentSessionId,
+		signal: options.signal,
+		onUpdate: ({ toolCalls }) => {
+			for (const call of toolCalls.slice(reportedTerminalCalls))
+				options.onToolCall?.(call.name, call.arguments);
+			reportedTerminalCalls = toolCalls.length;
+		},
+	});
+	if (terminal)
+		return {
+			report: truncateReport(terminal.output),
+			model: terminal.model ?? options.model,
+			toolCalls: terminal.toolCalls,
+		};
+
 	const args = [
 		"--mode",
 		"json",
@@ -121,6 +164,8 @@ export async function runReviewSubagent(options: {
 	let aborted = false;
 
 	const exitCode = await new Promise<number>((resolve, reject) => {
+		// Arguments are passed as an array with shell disabled; no user text is executed by a shell.
+		// nosemgrep: javascript.lang.security.detect-child-process.detect-child-process
 		const child = spawn(invocation.command, invocation.args, {
 			cwd: options.cwd,
 			shell: false,
@@ -175,11 +220,5 @@ export async function runReviewSubagent(options: {
 		throw new Error(
 			`Review 子代理运行失败（exit ${exitCode}，model ${options.model}）：${stderr.trim() || "未返回报告"}`,
 		);
-	const truncation = truncateHead(output, {
-		maxBytes: MAX_REPORT_BYTES,
-		maxLines: MAX_REPORT_LINES,
-	});
-	let report = truncation.content;
-	if (truncation.truncated) report += "\n\n> 报告超过 50KB，已截断后续内容。";
-	return { report, model: options.model, toolCalls };
+	return { report: truncateReport(output), model: options.model, toolCalls };
 }

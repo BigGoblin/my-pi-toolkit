@@ -1,15 +1,18 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { CONFIG_DIR_NAME, getAgentDir } from "@earendil-works/pi-coding-agent";
+import type { SubagentPresentation } from "../shared/subagent/config.js";
 
 export interface SearchSubagentConfig {
 	model?: string;
+	presentation?: SubagentPresentation;
 }
 
 export interface ResolvedSearchConfig {
 	model: string;
 	source: "project" | "user" | "current";
 	configPath?: string;
+	presentation?: SubagentPresentation;
 }
 
 function readConfig(filePath: string): SearchSubagentConfig | undefined {
@@ -27,7 +30,8 @@ function readConfig(filePath: string): SearchSubagentConfig | undefined {
 		throw new Error(`Search 子 Agent 配置必须是 JSON 对象: ${filePath}`);
 	}
 
-	const model = (value as { model?: unknown }).model;
+	const input = value as { model?: unknown; presentation?: unknown };
+	const model = input.model;
 	if (
 		model !== undefined &&
 		(typeof model !== "string" || model.trim() === "")
@@ -37,7 +41,16 @@ function readConfig(filePath: string): SearchSubagentConfig | undefined {
 		);
 	}
 
-	return { model: typeof model === "string" ? model.trim() : undefined };
+	const presentation = input.presentation;
+	if (
+		presentation !== undefined &&
+		!["manual", "auto", "inline", "split", "tab"].includes(String(presentation))
+	)
+		throw new Error(`Search 子 Agent 配置的 presentation 无效: ${filePath}`);
+	return {
+		model: typeof model === "string" ? model.trim() : undefined,
+		presentation: presentation as SubagentPresentation | undefined,
+	};
 }
 
 export function userConfigPath(): string {
@@ -66,23 +79,24 @@ export function resolveSearchConfig(
 	currentModel: { provider: string; id: string } | undefined,
 ): ResolvedSearchConfig {
 	const projectPath = projectConfigPath(cwd);
-	if (projectTrusted) {
-		const projectConfig = readConfig(projectPath);
-		if (projectConfig?.model) {
-			return {
-				model: projectConfig.model,
-				source: "project",
-				configPath: projectPath,
-			};
-		}
-	}
-
+	const projectConfig = projectTrusted ? readConfig(projectPath) : undefined;
 	const userPath = userConfigPath();
 	const userConfig = readConfig(userPath);
-	if (userConfig?.model) {
-		return { model: userConfig.model, source: "user", configPath: userPath };
-	}
-
+	const presentation = projectConfig?.presentation ?? userConfig?.presentation;
+	if (projectConfig?.model)
+		return {
+			model: projectConfig.model,
+			source: "project",
+			configPath: projectPath,
+			presentation,
+		};
+	if (userConfig?.model)
+		return {
+			model: userConfig.model,
+			source: "user",
+			configPath: userPath,
+			presentation,
+		};
 	if (!currentModel) {
 		throw new Error(
 			`未配置 Search 子 Agent 模型，且主 Agent 当前没有可继承的模型。请在 ${userPath} 中配置 { "model": "provider/model-id" }。`,
@@ -92,5 +106,6 @@ export function resolveSearchConfig(
 	return {
 		model: `${currentModel.provider}/${currentModel.id}`,
 		source: "current",
+		presentation,
 	};
 }

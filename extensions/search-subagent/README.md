@@ -35,7 +35,8 @@ read, grep, find, ls
 
 ```json
 {
-  "model": "anthropic/claude-haiku-4-5"
+  "model": "anthropic/claude-haiku-4-5",
+  "presentation": "manual"
 }
 ```
 
@@ -47,7 +48,8 @@ read, grep, find, ls
 
 ```json
 {
-  "model": "openai/gpt-5-mini"
+  "model": "openai/gpt-5-mini",
+  "presentation": "inline"
 }
 ```
 
@@ -81,7 +83,30 @@ read, grep, find, ls
 }
 ```
 
-运行期间，主对话等待工具完成，并在工具区域流式显示最近的 `read`、`grep`、`find`、`ls` 调用。所有路径是否允许访问由当前 Git 项目的 `.gitignore` 决定：被忽略的文件或目录会在工具执行前直接阻止；未被忽略的路径可以正常检索。非 Git 项目没有 `.gitignore` 守卫。按 Escape 会取消主任务并终止子进程。完成后，主 Agent只接收压缩后的检索报告；展开工具结果可以查看更完整的信息。
+运行期间，主对话等待工具完成，并在工具区域流式显示最近的 `read`、`grep`、`find`、`ls` 调用；按 `Ctrl+O` 可在运行期间查看全部已记录调用。所有路径是否允许访问由当前 Git 项目的 `.gitignore` 决定：被忽略的文件或目录会在工具执行前直接阻止；未被忽略的路径可以正常检索。非 Git 项目没有 `.gitignore` 守卫。按 Escape 会取消主任务并终止子进程。完成后，主 Agent只接收压缩后的检索报告；展开工具结果可以查看更完整的信息。
+
+## 后台子 Agent 与只读 Overlay
+
+默认使用 `presentation: "manual"`：Search 子 Agent 在持久 RPC Session 中后台运行，不会自动抢占焦点或创建分屏。按 `Alt+A` 可在当前 TUI 上方打开居中的大尺寸只读 Overlay，以主 Agent 相同的消息、Markdown、思考块和工具组件查看最近子 Agent 的过程；Overlay 不提供输入框，支持 `↑`、`↓`、`PageUp`、`PageDown`、`Home`、`End` 滚动，并使用 `Ctrl+O` 展开或折叠工具输出。按 `Esc` 返回主 Agent，但不会终止子 Agent。也可用 `/subagents` 选择、进入、取消或终止指定子 Agent，并查看已退出任务的历史详情。列表默认只显示当前主会话创建的子 Agent，按 `Tab` 可切换到所有会话记录。首轮任务完成后报告仍会自动返回主 Agent。
+
+如需原来的 Windows Terminal 行为，可显式设置 `presentation: "split"` 或 `"tab"`；`"auto"` 会在原生 Windows Terminal 中自动分屏，在其他环境回退到内联模式。
+
+全局配置位于 `~/.pi/agent/subagents.json`：
+
+```json
+{
+  "presentation": "manual",
+  "fallback": "inline",
+  "keepOpen": true,
+  "retainCompletedMinutes": 60,
+  "windowsTerminal": {
+    "size": 0.45,
+    "shell": "pwsh.exe"
+  }
+}
+```
+
+`presentation` 支持 `manual`、`auto`、`inline`、`split` 和 `tab`。`manual` 是默认值并提供最接近 OpenCode 的手动进入/退出体验；`inline` 使用一次性 JSON 子进程；`split` 和 `tab` 自动打开 Windows Terminal；`auto` 根据环境决定。Search 的用户级或受信任项目配置可以覆盖全局值。所有模式都严格保留只读工具白名单、扩展隔离和 `.gitignore` 守卫。
 
 ## 输出限制
 

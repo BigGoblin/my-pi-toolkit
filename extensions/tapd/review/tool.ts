@@ -126,6 +126,9 @@ export function registerTapdReviewTool(pi: ExtensionAPI): void {
 					cwd: reviewContext.repositoryRoot,
 					model,
 					task: buildReviewTask(reviewContext, params.instructions),
+					presentation: config.review?.presentation,
+					parentSessionId: ctx.sessionManager.getSessionId(),
+					artifactFiles: [reviewContext.contextFile],
 					signal,
 					onToolCall: (name, args) => {
 						toolCalls.push({ name, arguments: args });
@@ -182,9 +185,12 @@ export function registerTapdReviewTool(pi: ExtensionAPI): void {
 				);
 			}
 			if (details.running) {
-				const calls = details.toolCalls
-					.slice(-6)
-					.map((call) => `  → ${previewToolCall(call.name, call.arguments)}`);
+				const visibleCalls = expanded
+					? details.toolCalls
+					: details.toolCalls.slice(-6);
+				const calls = visibleCalls.map(
+					(call) => `  → ${previewToolCall(call.name, call.arguments)}`,
+				);
 				return new Text(
 					`${theme.fg("warning", "⏳")} ${theme.fg("toolTitle", "reviewing")} ${theme.fg("muted", details.model)}\n${theme.fg("text", details.phase)}${calls.length ? `\n${theme.fg("dim", calls.join("\n"))}` : ""}`,
 					0,
