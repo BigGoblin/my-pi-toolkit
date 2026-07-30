@@ -27,22 +27,13 @@ pi install ./my-pi-toolkit
 
 ### Extensions
 
-扩展总览见 [`extensions/README.md`](extensions/README.md)。每个主要扩展在自己的目录中维护详细 README。
+扩展总览见 [`extensions/README.md`](extensions/README.md)。`pi.extensions` 注册 **3 个入口**：`ming-core`、`tapd`、`context7`。通用能力由 [`ming-core`](extensions/ming-core/README.md) 编排；各模块实现仍在原目录。
 
 | 扩展 | 简介 | 详细文档 |
 | --- | --- | --- |
+| ming-core | 通用能力编排（模型、会话壳、子 Agent、Dashboard、Pi Lens 等） | [`extensions/ming-core/README.md`](extensions/ming-core/README.md) |
 | TAPD | TAPD 待办、需求分析、技术设计、协作评审、Bug 定位和子需求同步 | [`extensions/tapd/README.md`](extensions/tapd/README.md) |
 | Context7 | 为 Agent 提供第三方库最新文档查询工具 | [`extensions/context7/README.md`](extensions/context7/README.md) |
-| Search Subagent | 为大规模跨文件检索提供独立、只读且可手动进入的 Search 子 Agent | [`extensions/search-subagent/README.md`](extensions/search-subagent/README.md) |
-| Subagent Console | 使用 `/subagents` 按当前会话/所有会话管理子 Agent；列表中 `Enter` 查看详情、`C` 取消、`X` 终止、`D` 清理，`Alt+A` 进入当前会话最近的子 Agent | `extensions/subagent-console/index.ts` |
-| Agent Todos | Cursor TodoWrite 风格任务清单，输入框上方完整进度 | [`extensions/agent-todos/README.md`](extensions/agent-todos/README.md) |
-| Chat Mode | 使用 `Alt+M` 切换 Build/Ask；Ask 仅允许写当前项目 `.pi/**` | [`extensions/chat-mode/README.md`](extensions/chat-mode/README.md) |
-| Cursor Models | 折叠 Cursor 模型家族并提供 Fast 模式 | [`extensions/cursor-models/README.md`](extensions/cursor-models/README.md) |
-| Model Manager | 为新对话应用可配置的默认模型和思考等级 | [`extensions/model-manager/README.md`](extensions/model-manager/README.md) |
-| Pi Lens | 随 toolkit 分发 LSP、诊断、AST 搜索和代码分析能力 | [`extensions/pi-lens/README.md`](extensions/pi-lens/README.md) |
-| M-PI Dashboard | M-PI 响应式启动面板、自定义 Header 与模型 Footer | [`extensions/startup-dashboard/README.md`](extensions/startup-dashboard/README.md) |
-| Titlebar Working | Agent 工作时在终端标题显示 braille 动画 | `extensions/titlebar-working/index.ts` |
-| Hello | 简单的加载 smoke test | `extensions/hello.ts` |
 
 ### Themes
 
@@ -62,7 +53,7 @@ pi install ./my-pi-toolkit
 
 ### Vendored provider
 
-[`vendor/open-cursor/`](vendor/open-cursor/) 是本地化的 Cursor ↔ Pi 桥，由 `package.json` 的 `pi.extensions` 直接加载。
+[`vendor/open-cursor/`](vendor/open-cursor/) 是本地化的 Cursor ↔ Pi 桥，由 `ming-core` 内的 `cursor-models` 模块加载。
 
 需要修改流式 usage、checkpoint 或协议行为时，编辑：
 
