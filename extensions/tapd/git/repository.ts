@@ -38,8 +38,9 @@ export async function git(cwd: string, args: string[]): Promise<string> {
 async function commitWithPreferredGit(
 	root: string,
 	subject: string,
+	skipHooks: boolean,
 ): Promise<void> {
-	const args = ["commit", "-m", subject];
+	const args = ["commit", ...(skipHooks ? ["--no-verify"] : []), "-m", subject];
 	if (prefersWindowsGit(root)) {
 		await runGit(windowsGitExecutable(), root, args);
 		return;
@@ -120,11 +121,12 @@ export async function commitAll(
 	cwd: string,
 	subject: string,
 	onPhase?: (phase: "stage" | "commit") => void,
+	skipHooks = false,
 ): Promise<string> {
 	onPhase?.("stage");
 	await git(cwd, ["add", "--all"]);
 	onPhase?.("commit");
-	await commitWithPreferredGit(cwd, subject);
+	await commitWithPreferredGit(cwd, subject, skipHooks);
 	return git(cwd, ["rev-parse", "--short", "HEAD"]);
 }
 

@@ -93,6 +93,7 @@ export async function createTapdSession(
 		const result = await ctx.newSession({
 			parentSession: undefined,
 			setup: async (sm: SessionManager) => {
+				sm.appendSessionInfo(title);
 				sm.appendMessage({
 					role: "user",
 					content: [{ type: "text", text: sessionPrompt }],

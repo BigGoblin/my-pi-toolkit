@@ -28,7 +28,7 @@ TAPD 需求与缺陷工作流扩展。提供待办列表、会话关联、需求
 
 - `Ctrl+Shift+T`：打开 TAPD 待办。
 
-`/tapd` 的待办列表和关联会话列表统一显示在当前 TUI 上方的居中 Overlay 中，使用完整四周边框，整体高度由内容决定，内部待办列表根据终端高度限制最大可见行数；关闭后恢复主 Agent 界面。需求待办中，标题前的 `📐` 表示当前项目或关联会话目录中已经存在对应的 `design.md`。标记会在每次打开待办时根据本地文件重新计算。
+`/tapd` 的待办列表和关联会话列表统一显示在当前 TUI 上方的居中 Overlay 中，使用完整四周边框，整体高度由内容决定，内部待办列表根据终端高度限制最大可见行数；关闭后恢复主 Agent 界面。需求待办中，标题前的 `📐` 表示当前项目或关联会话目录中已经存在对应的 `design.md`。标记会在每次打开待办时根据本地文件重新计算。新建关联会话时，“会话名称”默认使用 TAPD 标题，也可以在创建前编辑；创建后该名称会显示在 `/resume` 会话列表中。
 
 ## Story workflow
 
@@ -98,6 +98,7 @@ TAPD Open API 索引见 [`../../docs/tapd-api.md`](../../docs/tapd-api.md)。
 - Bug 提交为 `fix: {KEYWORD}`；需求/任务提交为 `feat: {KEYWORD}`。KEYWORD 原样保留。
 - 没有 upstream 时首次推送使用 `git push -u origin HEAD`。
 - 提交默认使用当前操作系统 PATH 中的 `git`。仅当运行于 WSL，且 Git hook 因 Windows CRLF shebang 报出 `sh\\r: No such file or directory` 时，才自动改用 Windows `git.exe` 重试；重试成功后将仓库记录在 `~/.pi/agent/tapd-git-runtime.json`，该仓库后续在 WSL 中提交时直接使用 Windows Git。原生 Windows、Linux 和 macOS 环境始终使用各自 PATH 中的 `git`。可用 `TAPD_WINDOWS_GIT_PATH` 指定 WSL 可执行的 `git.exe` 完整路径。
+- `git commit` 失败（例如 pre-commit hook 未通过）时，会显示原始错误并询问是否使用 `git commit --no-verify` 重新暂存后提交；确认后会跳过 pre-commit、commit-msg 等校验 hooks，取消则保留原失败结果。
 - MR 会扫描 `merge-base..HEAD` 的全部提交，不只处理第一条 TAPD 关联。
 - `/tapd mr --draft` 会创建或更新 Draft MR。当前关联项是功能需求时，功能需求本身和测试需求保持原状态，但其下所有处理人为当前 Token 用户的直属开发子需求会更新为“开发完成”；直接关联开发子需求时也照常更新为“开发完成”。TAPD 任务和 Bug 不流转，Bug 也不会触发根因分析。后续执行不带 `--draft` 的 `/tapd mr` 会把同一开放 MR 更新为 Ready：当前用户负责的功能需求和开发子需求更新为“开发完成”，当前用户负责的测试需求更新为“已通过”；其他处理人的需求不流转。
 - Bug 默认标签为 `二组`、`迭代bug(每日发布)`，状态更新为 `已解决`，负责人为 `沈瑞昀`。

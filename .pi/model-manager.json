@@ -1,0 +1,7 @@
+{
+  "newConversation": {
+    "enabled": true,
+    "model": "openai-codex/gpt-5.6-sol",
+    "thinkingLevel": "medium"
+  }
+}

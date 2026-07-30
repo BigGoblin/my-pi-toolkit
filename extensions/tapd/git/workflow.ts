@@ -120,6 +120,47 @@ export async function runCreateBranch(
 	return `已从 ${baseRef} 创建分支 ${branch}（未设置 upstream）`;
 }
 
+async function commitWithHookBypassOption(
+	ctx: ExtensionCommandContext,
+	root: string,
+	subject: string,
+	total: number,
+	reportProgress?: (content: string) => void,
+): Promise<string> {
+	let commitStarted = false;
+	try {
+		return await commitAll(root, subject, (phase) => {
+			if (phase === "commit") commitStarted = true;
+			reportProgress?.(
+				phase === "stage"
+					? `[4/${total}] 正在暂存工作区改动（git add --all）...`
+					: `[5/${total}] 正在创建 commit；Git hooks 可能需要一些时间...`,
+			);
+		});
+	} catch (error) {
+		if (!commitStarted) throw error;
+		const message = error instanceof Error ? error.message : String(error);
+		reportProgress?.(`[5/${total}] Commit 失败，等待确认是否跳过 Git hooks...`);
+		const skipHooks = await ctx.ui.confirm(
+			"Commit 失败",
+			`${message}\n\n是否使用 git commit --no-verify 跳过 pre-commit 等 Git hooks 后重试？这会绕过提交校验。`,
+		);
+		if (!skipHooks) throw error;
+		return commitAll(
+			root,
+			subject,
+			(phase) => {
+				reportProgress?.(
+					phase === "stage"
+						? `[4/${total}] 正在重新暂存 Git hook 可能产生的改动...`
+						: `[5/${total}] 正在使用 --no-verify 重新创建 commit...`,
+				);
+			},
+			true,
+		);
+	}
+}
+
 export async function runCommitPush(
 	ctx: ExtensionCommandContext,
 	config: TapdConfig,
@@ -143,13 +184,13 @@ export async function runCommitPush(
 		`${subject}\n\n${noPush ? "只提交，不推送" : "提交后推送当前分支"}`,
 	);
 	if (!confirmed) throw new Error("用户取消提交");
-	const hash = await commitAll(repository.root, subject, (phase) => {
-		reportProgress?.(
-			phase === "stage"
-				? `[4/${total}] 正在暂存工作区改动（git add --all）...`
-				: `[5/${total}] 正在创建 commit；Git hooks 可能需要一些时间...`,
-		);
-	});
+	const hash = await commitWithHookBypassOption(
+		ctx,
+		repository.root,
+		subject,
+		total,
+		reportProgress,
+	);
 	if (!noPush) {
 		reportProgress?.(
 			`[6/${total}] 正在推送 ${repository.branch} 到 origin；可能等待网络或 SSH 验证...`,
