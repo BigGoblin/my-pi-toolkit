@@ -70,6 +70,21 @@ function runIcon(state: RunSummary["state"]): string {
 	return "○";
 }
 
+function formatLocalTime(value: string | undefined): string {
+	if (!value) return "未就绪";
+	const date = new Date(value);
+	if (Number.isNaN(date.getTime())) return value;
+	return date.toLocaleString(undefined, {
+		year: "numeric",
+		month: "2-digit",
+		day: "2-digit",
+		hour: "2-digit",
+		minute: "2-digit",
+		second: "2-digit",
+		hour12: false,
+	});
+}
+
 async function listRuns(): Promise<RunSummary[]> {
 	const liveRuns = listLiveSubagents();
 	const liveIds = new Set(liveRuns.map((run) => run.id));
@@ -117,65 +132,69 @@ async function listRuns(): Promise<RunSummary[]> {
 	);
 }
 
+function availableActions(run: RunSummary): string[] {
+	if (run.live) return ["进入子 Agent", "请求取消", "终止子 Agent"];
+	if (run.state === "running") return ["查看详情", "请求取消", "清理任务记录"];
+	return ["查看详情", "清理任务记录"];
+}
+
 async function showSubagents(ctx: ExtensionContext): Promise<void> {
-	const runs = await listRuns();
-	if (runs.length === 0) {
-		ctx.ui.notify("没有交互式子 Agent 记录", "info");
-		return;
-	}
-	const selection = await selectSubagentAction(
-		ctx,
-		runs.map((run) => ({
-			id: run.dir,
-			label: `${runIcon(run.state)} ${run.title} · ${run.state} · ${run.startedAt ?? "未就绪"}`,
-			parentSessionId: run.parentSessionId,
-			actions: run.live
-				? ["进入子 Agent", "显示任务目录", "请求取消", "终止子 Agent"]
-				: ["查看详情", "显示任务目录", "请求取消", "清理任务记录"],
-		})),
-	);
-	if (!selection) return;
-	const run = runs.find((item) => item.dir === selection.id);
-	if (!run) return;
-	const { action } = selection;
-	if (action === "进入子 Agent" && run.live) {
-		await openSubagentOverlay(ctx, run.live);
-		return;
-	}
-	if (action === "查看详情") {
-		await openHistoricalSubagentOverlay(ctx, {
-			title: run.title,
-			model: run.model,
-			status: run.state,
-			lines: readHistoricalLines(run.dir),
-		});
-		return;
-	}
-	if (action === "显示任务目录") {
-		ctx.ui.notify(run.dir, "info");
-		return;
-	}
-	if (action === "请求取消") {
-		if (run.live) run.live.abort();
-		else await writeFile(join(run.dir, "cancel"), "cancel", "utf8");
-		ctx.ui.notify(`已请求取消 ${run.title}`, "warning");
-		return;
-	}
-	if (action === "终止子 Agent" && run.live) {
-		run.live.dispose();
-		ctx.ui.notify(`已终止 ${run.title}`, "warning");
-		return;
-	}
-	if (action === "清理任务记录") {
+	let pickerState: { id: string; scope: "current" | "all" } | undefined;
+	for (;;) {
+		const runs = await listRuns();
+		if (runs.length === 0) {
+			ctx.ui.notify("没有交互式子 Agent 记录", "info");
+			return;
+		}
+		const selection = await selectSubagentAction(
+			ctx,
+			runs.map((run) => ({
+				id: run.dir,
+				label: `${runIcon(run.state)} ${run.title} · ${run.state} · ${formatLocalTime(run.startedAt)}`,
+				parentSessionId: run.parentSessionId,
+				actions: availableActions(run),
+			})),
+			pickerState,
+		);
+		if (!selection) return;
+		pickerState = { id: selection.id, scope: selection.scope };
+		const run = runs.find((item) => item.dir === selection.id);
+		if (!run) continue;
+		const { action } = selection;
+		if (action === "进入子 Agent" && run.live) {
+			await openSubagentOverlay(ctx, run.live);
+			continue;
+		}
+		if (action === "查看详情") {
+			await openHistoricalSubagentOverlay(ctx, {
+				title: run.title,
+				model: run.model,
+				status: run.state,
+				lines: readHistoricalLines(run.dir),
+			});
+			continue;
+		}
+		if (action === "请求取消") {
+			if (run.live) run.live.abort();
+			else await writeFile(join(run.dir, "cancel"), "cancel", "utf8");
+			ctx.ui.notify(`已请求取消 ${run.title}`, "warning");
+			continue;
+		}
+		if (action === "终止子 Agent" && run.live) {
+			run.live.dispose();
+			ctx.ui.notify(`已终止 ${run.title}`, "warning");
+			continue;
+		}
+		if (action !== "清理任务记录") continue;
 		if (run.state === "running") {
 			const confirmed = await ctx.ui.confirm(
 				"取消运行中的子 Agent",
 				"运行中的任务必须先取消，退出后才能清理记录。继续吗？",
 			);
-			if (!confirmed) return;
+			if (!confirmed) continue;
 			await writeFile(join(run.dir, "cancel"), "cancel", "utf8");
 			ctx.ui.notify("已请求取消；子 Agent 退出后可再次清理", "warning");
-			return;
+			continue;
 		}
 		await rm(run.dir, { recursive: true, force: true });
 		ctx.ui.notify(`已清理 ${run.title}`, "info");

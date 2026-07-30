@@ -17,9 +17,10 @@ export interface SubagentPickerItem {
 export interface SubagentPickerResult {
 	id: string;
 	action: string;
+	scope: "current" | "all";
 }
 
-type PickerScope = "current" | "all";
+type PickerScope = SubagentPickerResult["scope"];
 type DisplayItem = { label: string };
 
 function scopedItems(
@@ -110,19 +111,26 @@ function renderPicker(options: {
 }
 
 class SubagentPicker implements Component {
-	private scope: PickerScope = "current";
-	private selectedIndex = 0;
-	private actionItem?: SubagentPickerItem;
+	private scope: PickerScope;
+	private selectedIndex: number;
 
 	constructor(
 		private readonly config: {
 			items: SubagentPickerItem[];
 			currentSessionId: string;
+			initialScope: PickerScope;
+			initialId?: string;
 			tui: TUI;
 			theme: Theme;
 			done: (result: SubagentPickerResult | undefined) => void;
 		},
-	) {}
+	) {
+		this.scope = config.initialScope;
+		const initialIndex = this.visibleItems().findIndex(
+			(item) => item.id === config.initialId,
+		);
+		this.selectedIndex = Math.max(0, initialIndex);
+	}
 
 	private visibleItems(): SubagentPickerItem[] {
 		return scopedItems(
@@ -133,21 +141,18 @@ class SubagentPicker implements Component {
 	}
 
 	handleInput(data: string): void {
-		if (matchesKey(data, "escape")) return this.handleEscape();
-		if (!this.actionItem && this.isTab(data)) return this.switchScope();
-		const itemCount = this.actionItem
-			? this.actionItem.actions.length
-			: this.visibleItems().length;
-		const nextIndex = movedIndex(data, this.selectedIndex, itemCount);
+		if (matchesKey(data, "escape")) return this.config.done(undefined);
+		if (this.isTab(data)) return this.switchScope();
+		const nextIndex = movedIndex(
+			data,
+			this.selectedIndex,
+			this.visibleItems().length,
+		);
 		if (nextIndex !== undefined) return this.selectIndex(nextIndex);
-		if (matchesKey(data, "return")) this.confirmSelection();
-	}
-
-	private handleEscape(): void {
-		if (!this.actionItem) return this.config.done(undefined);
-		this.actionItem = undefined;
-		this.selectedIndex = 0;
-		this.config.tui.requestRender();
+		if (matchesKey(data, "return")) return this.runDefaultAction();
+		if (matchesKey(data, "c")) return this.runNamedAction("请求取消");
+		if (matchesKey(data, "x")) return this.runNamedAction("终止子 Agent");
+		if (matchesKey(data, "d")) return this.runNamedAction("清理任务记录");
 	}
 
 	private isTab(data: string): boolean {
@@ -164,35 +169,41 @@ class SubagentPicker implements Component {
 		this.config.tui.requestRender();
 	}
 
-	private confirmSelection(): void {
-		if (this.actionItem) {
-			const action = this.actionItem.actions[this.selectedIndex];
-			if (action) this.config.done({ id: this.actionItem.id, action });
-			return;
-		}
-		const item = this.visibleItems()[this.selectedIndex];
-		if (!item) return;
-		this.actionItem = item;
-		this.selectIndex(0);
+	private selectedItem(): SubagentPickerItem | undefined {
+		return this.visibleItems()[this.selectedIndex];
+	}
+
+	private runDefaultAction(): void {
+		const item = this.selectedItem();
+		const action = item?.actions[0];
+		if (item && action)
+			this.config.done({ id: item.id, action, scope: this.scope });
+	}
+
+	private runNamedAction(action: string): void {
+		const item = this.selectedItem();
+		if (item?.actions.includes(action))
+			this.config.done({ id: item.id, action, scope: this.scope });
+	}
+
+	private helpText(): string {
+		const item = this.selectedItem();
+		if (!item) return "Tab 切换 · ↑↓ 选择 · Esc 返回";
+		const hints = ["Tab 切换", "↑↓ 选择", `Enter ${item.actions[0] ?? "详情"}`];
+		if (item.actions.includes("请求取消")) hints.push("C 取消");
+		if (item.actions.includes("终止子 Agent")) hints.push("X 终止");
+		if (item.actions.includes("清理任务记录")) hints.push("D 清理");
+		hints.push("Esc 返回");
+		return hints.join(" · ");
 	}
 
 	render(width: number): string[] {
-		const items = this.actionItem
-			? this.actionItem.actions.map((label) => ({ label }))
-			: this.visibleItems();
 		return renderPicker({
-			items,
+			items: this.visibleItems(),
 			selectedIndex: this.selectedIndex,
-			header: this.actionItem
-				? this.config.theme.fg(
-						"accent",
-						this.config.theme.bold(`${this.actionItem.label} · 操作`),
-					)
-				: tabHeader(this.scope, this.config.theme),
+			header: tabHeader(this.scope, this.config.theme),
 			emptyText: "当前会话暂无子 Agent；按 Tab 查看所有记录",
-			help: this.actionItem
-				? "↑↓ 选择 · Enter 执行 · Esc 返回列表"
-				: "Tab 切换 · ↑↓ 选择 · Enter 查看操作 · Esc 返回",
+			help: this.helpText(),
 			tui: this.config.tui,
 			theme: this.config.theme,
 			width,
@@ -205,6 +216,7 @@ class SubagentPicker implements Component {
 export async function selectSubagentAction(
 	ctx: ExtensionContext,
 	items: SubagentPickerItem[],
+	initial?: Pick<SubagentPickerResult, "id" | "scope">,
 ): Promise<SubagentPickerResult | undefined> {
 	return ctx.ui.custom<SubagentPickerResult | undefined>(
 		(
@@ -216,6 +228,8 @@ export async function selectSubagentAction(
 			new SubagentPicker({
 				items,
 				currentSessionId: ctx.sessionManager.getSessionId(),
+				initialScope: initial?.scope ?? "current",
+				initialId: initial?.id,
 				tui,
 				theme,
 				done,

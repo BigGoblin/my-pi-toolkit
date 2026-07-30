@@ -7,7 +7,7 @@
 | TAPD | TAPD 待办、需求文档工作流、Bug 定位和子需求同步 | [`tapd/README.md`](tapd/README.md) |
 | Context7 | 第三方库最新文档查询工具 | [`context7/README.md`](context7/README.md) |
 | Search Subagent | 面向大规模文件检索的独立只读子 Agent及过程 Overlay | [`search-subagent/README.md`](search-subagent/README.md) |
-| Subagent Console | 按当前会话/所有会话查看、进入、取消和清理子 Agent（`Alt+A` / `/subagents`） | `subagent-console/index.ts` |
+| Subagent Console | 用 `/subagents` 列表快捷键查看、取消、终止和清理子 Agent，或用 `Alt+A` 进入最近任务 | `subagent-console/index.ts` |
 | Agent Todos | Cursor TodoWrite 风格任务清单，editor 上方完整进度 | [`agent-todos/README.md`](agent-todos/README.md) |
 | Chat Mode | 使用 `Alt+M` 切换 Build/Ask；Ask 仅允许 `.pi/**` 项目写入 | [`chat-mode/README.md`](chat-mode/README.md) |
 | Cursor Models | Cursor 模型折叠、思考等级和 Fast 模式 | [`cursor-models/README.md`](cursor-models/README.md) |
