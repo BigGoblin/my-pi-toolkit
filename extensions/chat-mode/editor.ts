@@ -9,7 +9,7 @@ export class ChatModeEditor extends CustomEditor {
 	onToggle?: () => void;
 
 	handleInput(data: string): void {
-		if (matchesKey(data, Key.tab)) {
+		if (matchesKey(data, Key.alt("m"))) {
 			this.onToggle?.();
 			return;
 		}

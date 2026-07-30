@@ -34,7 +34,7 @@ export async function checkAskToolCall(
 ): Promise<string | undefined> {
 	if (SAFE_TOOLS.has(event.toolName)) return undefined;
 	if (!PATH_GATED_TOOLS.has(event.toolName)) {
-		return `Ask mode blocked "${event.toolName}" because it is not an approved read-only tool. Press Tab to switch to Build mode.`;
+		return `Ask mode blocked "${event.toolName}" because it is not an approved read-only tool. Press Alt+M to switch to Build mode.`;
 	}
 
 	const input = event.input as { path?: unknown };
@@ -42,5 +42,5 @@ export async function checkAskToolCall(
 		return `Ask mode blocked "${event.toolName}" because no target path was provided.`;
 	}
 	if (await isProjectPiPath(cwd, input.path)) return undefined;
-	return `Ask mode only allows ${event.toolName} inside the project-local .pi directory. Press Tab to switch to Build mode.`;
+	return `Ask mode only allows ${event.toolName} inside the project-local .pi directory. Press Alt+M to switch to Build mode.`;
 }
