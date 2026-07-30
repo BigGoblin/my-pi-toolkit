@@ -6,6 +6,7 @@
 
 import { Type, type Static } from "@earendil-works/pi-ai";
 import type {
+	ContextEvent,
 	ExtensionAPI,
 	ExtensionCommandContext,
 	ExtensionContext,
@@ -21,6 +22,7 @@ import {
 	TODO_WRITE_PROMPT_GUIDELINES,
 	TODO_WRITE_PROMPT_SNIPPET,
 	TOOL_NAME,
+	todoFocusReminder,
 	todoSystemPromptAppend,
 } from "./prompt.js";
 import { renderTodoCall, renderTodoResult } from "./render.js";
@@ -100,6 +102,23 @@ export default function agentTodosExtension(pi: ExtensionAPI) {
 	pi.on("before_agent_start", async (event: { systemPrompt: string }) => ({
 		systemPrompt: `${event.systemPrompt}\n\n${todoSystemPromptAppend()}`,
 	}));
+
+	pi.on("context", async (event: ContextEvent) => {
+		const reminder = todoFocusReminder(store.getTodos());
+		if (!reminder) return;
+		return {
+			messages: [
+				...event.messages,
+				{
+					role: "custom" as const,
+					customType: "agent-todos-focus",
+					content: reminder,
+					display: false,
+					timestamp: Date.now(),
+				},
+			],
+		};
+	});
 
 	pi.registerTool({
 		name: TOOL_NAME,

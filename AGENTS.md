@@ -11,6 +11,10 @@
 
 - After completing each functional change, review whether the related README files, usage instructions, configuration examples, command references, or architecture documentation need to be updated, and update them in the same change when necessary.
 
+## Plugin development references
+
+- When designing or implementing Pi plugin features, use the open-source [xAI Grok Build](https://github.com/xai-org/grok-build) coding-agent harness as a reference when relevant, especially for tool architecture, TUI behavior, todo/plan workflows, reminders, goal orchestration, background tasks, and verification loops. Adapt its design ideas to Pi's extension APIs and this repository's boundaries rather than copying assumptions specific to Grok Build.
+
 ## Cursor Cloud specific instructions
 
 - This repo is a Pi coding-agent plugin bundle, not a standalone server. The "application" is the Pi CLI (`@earendil-works/pi-coding-agent`, installed by `npm install` into `node_modules/.bin/pi`) loading this toolkit's extensions/skills/themes. There is no build step and no ports; Pi executes the `.ts` extensions directly.

@@ -1,3 +1,5 @@
+import type { TodoItem } from "./model.js";
+
 export const TOOL_NAME = "agent_todo_write";
 
 export const TODO_WRITE_PROMPT_SNIPPET =
@@ -14,7 +16,7 @@ export const TODO_WRITE_PROMPT_GUIDELINES = [
 	`Prefer ${TOOL_NAME} over any other todo tool so the local progress panel stays in sync.`,
 ];
 
-/** 每轮追加到 system prompt，强化「先拆分」行为 */
+/** 在用户请求开始时追加基础规则；执行中的具体焦点由 context reminder 每轮注入。 */
 export function todoSystemPromptAppend(): string {
 	return `
 ## Agent Todos
@@ -25,4 +27,31 @@ Before continuing work that belongs to a pending or completed item, update the c
 Update with merge=true as you progress. Skip ${TOOL_NAME} for simple questions or trivial single-step edits.
 Do not use Cursor's native todo_write for this checklist; use ${TOOL_NAME} so the panel above the editor updates.
 `.trim();
+}
+
+/** 仿 Grok Build：每次 LLM 调用前重申当前项和下一项，不依赖时间或工具次数阈值。 */
+export function todoFocusReminder(todos: TodoItem[]): string | undefined {
+	const current = todos.find((todo) => todo.status === "in_progress");
+	const next = todos.find((todo) => todo.status === "pending");
+	if (!current && !next) return undefined;
+
+	const focus = current
+		? `Current in_progress: ${current.id} — ${current.content}`
+		: "Current in_progress: none";
+	const nextStep = next
+		? `Next pending: ${next.id} — ${next.content}`
+		: undefined;
+	return [
+		"<system-reminder>",
+		"Agent Todo focus (a planning aid, not proof of execution):",
+		focus,
+		nextStep,
+		current
+			? `Continue working on this item. If the work you are about to do belongs to another item, call ${TOOL_NAME} first so the checklist reflects the new focus.`
+			: `Before continuing implementation work, call ${TOOL_NAME} to mark the appropriate pending item in_progress.`,
+		"Do not perform retrospective bookkeeping solely to manufacture status transitions.",
+		"</system-reminder>",
+	]
+		.filter((line): line is string => Boolean(line))
+		.join("\n");
 }
