@@ -3,6 +3,7 @@
 import type {
 	ExtensionAPI,
 	ExtensionCommandContext,
+	SessionEntry,
 	SessionStartEvent,
 } from "@earendil-works/pi-coding-agent";
 import type { AutocompleteItem } from "@earendil-works/pi-tui";
@@ -16,6 +17,7 @@ import {
 } from "./documents/prompts.js";
 import { createTapdSession } from "./sessions/create.js";
 import { createSubtasks } from "./subtasks/sync.js";
+import { withTapdListOverlays } from "./todo/overlay-context.js";
 import { showTable } from "./todo/ui.js";
 import {
 	locateTapdBug,
@@ -163,16 +165,27 @@ export default function tapdExtension(pi: ExtensionAPI) {
 
 			let curOnly = true;
 			const entries = ctx.sessionManager.getEntries();
-			const se = entries
-				.filter((e: any) => e.type === "custom" && e.customType === STATE_KEY)
-				.pop() as any;
-			if (se?.data) curOnly = se.data.currentOnly ?? true;
+			const stateEntry = entries
+				.filter(
+					(entry: SessionEntry) =>
+						entry.type === "custom" && entry.customType === STATE_KEY,
+				)
+				.at(-1);
+			if (stateEntry?.type === "custom") {
+				const data = stateEntry.data as { currentOnly?: unknown } | undefined;
+				if (typeof data?.currentOnly === "boolean") curOnly = data.currentOnly;
+			}
 
 			ctx.ui.notify(
 				`找到 ${workspaces.length} 个工作空间，正在获取待办...`,
 				"info",
 			);
-			const outcome = await showTable(ctx, config, workspaces, curOnly);
+			const outcome = await showTable(
+				withTapdListOverlays(ctx),
+				config,
+				workspaces,
+				curOnly,
+			);
 			if (outcome.kind === "session_action") {
 				const { action, itemKey, itemName } = outcome;
 				try {

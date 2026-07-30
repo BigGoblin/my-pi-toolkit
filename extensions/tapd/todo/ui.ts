@@ -79,6 +79,10 @@ class TreeList {
 		return null;
 	}
 
+	setMaxVisible(maxVisible: number) {
+		this.maxVisible = Math.max(3, maxVisible);
+	}
+
 	setRoots(r: TapdItem[]) {
 		this.roots = r;
 		this.selectedIdx = 0;
@@ -962,6 +966,7 @@ async function renderTable(
 		return c;
 	}
 	const total = countAll(forest);
+	const typeOptions = ["全部", ...collectTypes(forest)];
 	const designedStoryKeys = collectDesignedStoryKeys(forest, _ctx.cwd);
 
 	return await _ctx.ui.custom<{
@@ -984,7 +989,13 @@ async function renderTable(
 			) => void,
 		) => {
 			const treeList = new TreeList(designedStoryKeys);
-			treeList.setRoots(forest);
+			treeList.setMaxVisible(Math.max(8, Math.min(28, tui.terminal.rows - 12)));
+			let activeTypeFilter = typeFilter;
+			let choosingType = false;
+			let typeIndex = Math.max(0, typeOptions.indexOf(typeFilter ?? "全部"));
+			const filteredForest = () =>
+				activeTypeFilter ? flatFilter(forest, activeTypeFilter) : forest;
+			treeList.setRoots(filteredForest());
 			treeList.onCancel = () => done(null);
 
 			const searchInput = new Input();
@@ -997,11 +1008,12 @@ async function renderTable(
 			function applySearch() {
 				const q = searchInput.getValue().trim();
 				searching = q.length > 0;
+				const source = filteredForest();
 				if (!searching) {
-					treeList.setRoots(forest);
-					shownCount = total;
+					treeList.setRoots(source);
+					shownCount = countAll(source);
 				} else {
-					const matched = searchFlat(forest, q);
+					const matched = searchFlat(source, q);
 					treeList.setRoots(matched);
 					shownCount = matched.length;
 				}
@@ -1021,6 +1033,32 @@ async function renderTable(
 			};
 
 			function rebuildAll() {
+				if (choosingType) {
+					container = new Container();
+					container.addChild(
+						new DynamicBorder((value: string) => theme.fg("accent", value)),
+					);
+					container.addChild(
+						new Text(theme.fg("accent", theme.bold("按类型筛选")), 1, 0),
+					);
+					for (let index = 0; index < typeOptions.length; index += 1) {
+						const label = `${index === typeIndex ? "❯" : " "} ${typeOptions[index]}`;
+						container.addChild(
+							new Text(
+								index === typeIndex ? theme.fg("accent", label) : label,
+								1,
+								0,
+							),
+						);
+					}
+					container.addChild(
+						new Text(theme.fg("dim", "↑↓ 选择 · Enter 应用 · Esc 返回"), 1, 0),
+					);
+					container.addChild(
+						new DynamicBorder((value: string) => theme.fg("accent", value)),
+					);
+					return;
+				}
 				const statusW = kind === "bug" ? 8 : 10;
 				const priorityW = kind === "bug" ? 6 : 8;
 				const severityW = kind === "bug" ? 6 : 0;
@@ -1055,7 +1093,9 @@ async function renderTable(
 								"dim",
 								`  │  ${viewLabel}  ${shownCount}${searching ? "/" + total : ""} 项`,
 							) +
-							(typeFilter ? theme.fg("warning", `  [${typeFilter}]`) : "") +
+							(activeTypeFilter
+								? theme.fg("warning", `  [${activeTypeFilter}]`)
+								: "") +
 							(searching ? theme.fg("warning", "  [搜索]") : ""),
 						1,
 						0,
@@ -1138,6 +1178,22 @@ async function renderTable(
 					container.invalidate();
 				},
 				handleInput(data: string) {
+					if (choosingType) {
+						if (data === "\x1b" || data === "\x03") choosingType = false;
+						else if (data === "\x1b[A" || data === "k")
+							typeIndex = Math.max(0, typeIndex - 1);
+						else if (data === "\x1b[B" || data === "j")
+							typeIndex = Math.min(typeOptions.length - 1, typeIndex + 1);
+						else if (data === "\r" || data === "\n") {
+							const selectedType = typeOptions[typeIndex];
+							activeTypeFilter = selectedType === "全部" ? null : selectedType;
+							choosingType = false;
+							clearSearch();
+						}
+						rebuildAll();
+						tui.requestRender();
+						return;
+					}
 					if (focusSearch) {
 						if (data === "\x03") {
 							done(null);
@@ -1200,7 +1256,13 @@ async function renderTable(
 						return;
 					}
 					if (data === "t" && kind === "story") {
-						done({ action: "type_filter" });
+						choosingType = true;
+						typeIndex = Math.max(
+							0,
+							typeOptions.indexOf(activeTypeFilter ?? "全部"),
+						);
+						rebuildAll();
+						tui.requestRender();
 						return;
 					}
 					if (data === "c") {
