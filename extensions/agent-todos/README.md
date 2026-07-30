@@ -41,10 +41,10 @@ agent_todo_write({
 ## UI
 
 - Widget 在 editor 上方，含：
-  - 标题行：`📋 Todos` + 进度与各状态计数（🔄 / ⬜ / ⛔）
+  - 标题行：`📋 Todos` + 进度与各状态计数（🔄 / ⏳ / ⛔）
   - Unicode 进度条（`█` / `░`）
   - 条目：序号 + emoji 标记 + 文案（完成/取消带删除线）
-- 状态 emoji：`⬜` pending · `🔄` in_progress · `✅` completed · `⛔` cancelled
+- 状态 emoji：`⏳` pending · `🔄` in_progress · `✅` completed · `⛔` cancelled
 - 超过 16 条时底部显示 `… 还有 n 项未显示`
 - `/todos`：手动隐藏或显示面板；隐藏不清除 todo 状态
 - 隐藏后新增未完成 todo 时，面板自动显示

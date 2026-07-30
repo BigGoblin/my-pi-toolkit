@@ -13,7 +13,7 @@ const STATUS_KEY = "agent-todos";
 const MAX_ITEM_LINES = 16;
 
 const STATUS_EMOJI: Record<TodoStatus, string> = {
-	pending: "⬜",
+	pending: "⏳",
 	in_progress: "🔄",
 	completed: "✅",
 	cancelled: "⛔",
@@ -104,7 +104,7 @@ function renderHeader(
 		parts.push(th.fg("accent", `🔄 ${counts.inProgress}`));
 	}
 	if (counts.pending > 0) {
-		parts.push(th.fg("dim", `⬜ ${counts.pending}`));
+		parts.push(th.fg("dim", `⏳ ${counts.pending}`));
 	}
 	if (counts.cancelled > 0) {
 		parts.push(th.fg("dim", `⛔ ${counts.cancelled}`));
