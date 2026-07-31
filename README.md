@@ -8,7 +8,13 @@ My personal Pi coding-agent toolkit：集中分发自定义扩展、Skills 和�
 git clone git@github.com:BigGoblin/my-pi-toolkit.git
 cd my-pi-toolkit
 npm install
-pi install ./my-pi-toolkit
+pi install .
+```
+
+或从 git 直接安装（可钉分支 / commit）：
+
+```bash
+pi install git:github.com/BigGoblin/my-pi-toolkit@cursor/chat-mode-plan-8ac0
 ```
 
 `settings.json` 的 `packages` 只需配置本仓库路径，例如：
@@ -21,7 +27,29 @@ pi install ./my-pi-toolkit
 
 不要再单独安装 `npm:@open-cursor/pi-agent`，Open Cursor 已 vendored 到本仓库。
 
-本包也已内置 `pi-lens`。安装本包后，在任意项目启动 Pi 都会自动加载，无需在每个项目重复安装。
+本包也已内置 `pi-lens`（可选：在 Termux 等无原生 binary 的环境会自动跳过，不影响其它扩展）。安装本包后，在任意项目启动 Pi 都会自动加载，无需在每个项目重复安装。
+
+### Termux / 安装失败（`@ast-grep/cli`）
+
+若看到 `Failed to locate @ast-grep/cli native binary`，是 `pi-lens` 的依赖在 Android 上没有对应原生包，旧版会让整次 `npm install` 失败。仓库已用 `.npmrc`（`ignore-scripts=true`）规避。
+
+若本地 clone 已卡在失败状态（`pi install` 显示 Installed 但仍缺 `marked`），强制重装依赖：
+
+```bash
+cd ~/.pi/agent/git/github.com/BigGoblin/my-pi-toolkit
+rm -rf node_modules
+npm install --omit=dev
+ls node_modules/marked node_modules/@open-cursor/client
+pi
+```
+
+或卸干净再装：
+
+```bash
+pi remove git:github.com/BigGoblin/my-pi-toolkit
+rm -rf ~/.pi/agent/git/github.com/BigGoblin/my-pi-toolkit
+pi install git:github.com/BigGoblin/my-pi-toolkit@cursor/chat-mode-plan-8ac0
+```
 
 ## Components
 

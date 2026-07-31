@@ -16,10 +16,10 @@ import startupDashboard from "../startup-dashboard/index.js";
 import subagentConsole from "../subagent-console/index.js";
 import titlebarWorking from "../titlebar-working/index.js";
 
-export default function mingCore(pi: ExtensionAPI): void {
+export default async function mingCore(pi: ExtensionAPI): Promise<void> {
 	cursorModels(pi);
 	modelManager(pi);
-	piLens(pi);
+	await piLens(pi);
 	chatMode(pi);
 	agentTodos(pi);
 	multiTask(pi);

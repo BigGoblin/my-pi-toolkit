@@ -2,7 +2,7 @@
 
 项目内的 `pi-lens` 加载入口。
 
-实际实现由 npm 依赖 `pi-lens` 提供，本目录通过 `index.js` 转发已构建的扩展入口，使其随 `my-pi-toolkit` 一起加载和分发。
+实际实现由 npm 依赖 `pi-lens` 提供，本目录软加载已构建的扩展入口。若安装失败（例如 Termux 上 `@ast-grep/cli` 无原生 binary），会跳过 Pi Lens，其它 toolkit 扩展仍可加载。
 
 Pi Lens 提供：
 
