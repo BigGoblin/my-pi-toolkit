@@ -1,16 +1,18 @@
 # Chat Mode
 
-为 Pi 提供 `Build` 与 `Ask` 两种会话模式。新会话默认使用 Build；恢复已有会话或执行 `/reload` 时，会恢复该会话最近保存的模式。
+为 Pi 提供 `Build`、`Plan`、`Ask` 三种会话模式。新会话默认使用 Build；恢复已有会话或执行 `/reload` 时，会恢复该会话最近保存的模式。
+
+设计参考 [Grok Build plan mode](https://github.com/xai-org/grok-build)：Plan 是实现前的结构化规划阶段——只读探索，唯一可写产物是计划文件。
 
 ## 切换
 
-按一次 `Alt+M` 在两种模式间切换：
+按 `Alt+M` 在三种模式间循环：
 
 ```text
-BUILD → ASK → BUILD
+BUILD → PLAN → ASK → BUILD
 ```
 
-这是唯一的模式切换入口。`Tab` 保持 Pi 原有的自动补全行为。Agent 正在运行时不能切换，需等待当前运行结束。
+也可使用 `/plan` 直接进入 Plan。Agent 正在运行时不能切换，需等待当前运行结束。`Tab` 保持 Pi 原有的自动补全行为。
 
 ## Build
 
@@ -19,6 +21,22 @@ Build 与 Pi 当前默认行为一致，不限制工具和项目文件写入。F
 ```text
 ● BUILD
 ```
+
+## Plan
+
+Plan 用于有歧义或改动面较大的任务：先摸清现状、写方案，再切到 Build 落地。
+
+- 仅启用明确登记的只读工具，以及受路径保护的 `write` / `edit`。
+- `write` / `edit` **只能**修改项目本地的 `.pi/plan.md`（计划产物）。
+- 禁止 `bash`、AST 替换及未登记工具。
+- 系统提示要求按 Context / Approach / Critical files / Verification 结构写入计划。
+- Footer 左侧使用当前主题的 `warning` 颜色显示：
+
+```text
+◇ PLAN
+```
+
+计划写好后，用户审阅 `.pi/plan.md`，再按 `Alt+M` 切到 Build 实现。
 
 ## Ask
 
@@ -37,4 +55,4 @@ Ask 用于问答、解释、诊断和只读调研：
 
 ## 安全边界
 
-Ask 限制的是模型通过 Pi 工具进行的项目文件修改，不是操作系统沙箱。它不会阻止用户在其他终端修改文件，也无法限制恶意扩展直接调用 Node.js 文件 API。全局 `~/.pi/agent/**` 不在 Ask 的允许写入范围内。
+Ask / Plan 限制的是模型通过 Pi 工具进行的项目文件修改，不是操作系统沙箱。它不会阻止用户在其他终端修改文件，也无法限制恶意扩展直接调用 Node.js 文件 API。全局 `~/.pi/agent/**` 不在允许写入范围内。

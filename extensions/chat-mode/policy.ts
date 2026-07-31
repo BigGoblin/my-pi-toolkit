@@ -1,5 +1,5 @@
 import type { ToolCallEvent } from "@earendil-works/pi-coding-agent";
-import { isProjectPiPath } from "./paths.js";
+import { isPlanFilePath, isProjectPiPath, PLAN_FILE_RELATIVE } from "./paths.js";
 
 const PATH_GATED_TOOLS = new Set(["write", "edit"]);
 const SAFE_TOOLS = new Set([
@@ -22,7 +22,7 @@ const SAFE_TOOLS = new Set([
 	"pi_lens_activate_tools",
 ]);
 
-export function askModeToolNames(activeTools: string[]): string[] {
+export function restrictedModeToolNames(activeTools: string[]): string[] {
 	return activeTools.filter(
 		(name) => SAFE_TOOLS.has(name) || PATH_GATED_TOOLS.has(name),
 	);
@@ -34,7 +34,7 @@ export async function checkAskToolCall(
 ): Promise<string | undefined> {
 	if (SAFE_TOOLS.has(event.toolName)) return undefined;
 	if (!PATH_GATED_TOOLS.has(event.toolName)) {
-		return `Ask mode blocked "${event.toolName}" because it is not an approved read-only tool. Press Alt+M to switch to Build mode.`;
+		return `Ask mode blocked "${event.toolName}" because it is not an approved read-only tool. Press Alt+M to switch mode.`;
 	}
 
 	const input = event.input as { path?: unknown };
@@ -42,5 +42,22 @@ export async function checkAskToolCall(
 		return `Ask mode blocked "${event.toolName}" because no target path was provided.`;
 	}
 	if (await isProjectPiPath(cwd, input.path)) return undefined;
-	return `Ask mode only allows ${event.toolName} inside the project-local .pi directory. Press Alt+M to switch to Build mode.`;
+	return `Ask mode only allows ${event.toolName} inside the project-local .pi directory. Press Alt+M to switch mode.`;
+}
+
+export async function checkPlanToolCall(
+	event: ToolCallEvent,
+	cwd: string,
+): Promise<string | undefined> {
+	if (SAFE_TOOLS.has(event.toolName)) return undefined;
+	if (!PATH_GATED_TOOLS.has(event.toolName)) {
+		return `Plan mode blocked "${event.toolName}" because it is not an approved exploration tool. Press Alt+M to switch to Build when ready to implement.`;
+	}
+
+	const input = event.input as { path?: unknown };
+	if (typeof input.path !== "string") {
+		return `Plan mode blocked "${event.toolName}" because no target path was provided.`;
+	}
+	if (await isPlanFilePath(cwd, input.path)) return undefined;
+	return `Plan mode only allows ${event.toolName} on ${PLAN_FILE_RELATIVE}. Press Alt+M to switch to Build when ready to implement.`;
 }
