@@ -7,9 +7,9 @@ import {
 	type Theme,
 } from "@earendil-works/pi-coding-agent";
 import {
+	Markdown,
 	matchesKey,
 	truncateToWidth,
-	wrapTextWithAnsi,
 	type Component,
 	type KeybindingsManager,
 	type TUI,
@@ -23,11 +23,14 @@ export interface HistoricalSubagentView {
 	title: string;
 	model: string;
 	status: string;
-	lines: string[];
+	markdown: string;
 }
 
-type SubagentView = HistoricalSubagentView &
-	Partial<Pick<LiveSubagentRun, "entries" | "subscribe">>;
+type SubagentView = Omit<HistoricalSubagentView, "markdown"> & {
+	markdown?: string;
+	entries?: SubagentTranscriptEntry[];
+	subscribe?: LiveSubagentRun["subscribe"];
+};
 
 const SUBAGENT_OVERLAY_OPTIONS = {
 	overlay: true,
@@ -166,12 +169,14 @@ class SubagentOverlay implements Component {
 				this.toolOutputExpanded,
 			),
 		);
-		const renderedFallback = this.run.lines.flatMap((line) =>
-			wrapTextWithAnsi(this.theme.fg("toolOutput", line), innerWidth),
-		);
+		const renderedMarkdown = this.run.markdown
+			? new Markdown(this.run.markdown, 0, 0, getMarkdownTheme()).render(
+					innerWidth,
+				)
+			: [];
 		const content = renderedEntries?.length
 			? renderedEntries
-			: renderedFallback;
+			: renderedMarkdown;
 		this.contentHeight = content.length;
 		const maximum = Math.max(0, content.length - this.viewportHeight);
 		if (this.autoFollow) this.scrollOffset = maximum;
@@ -207,7 +212,7 @@ class SubagentOverlay implements Component {
 		return [
 			`${border("╭")}${header}${border("╮")}`,
 			...visible.map(
-				(line) =>
+				(line: string) =>
 					`${border("│")}${truncateToWidth(line, innerWidth, "", true)}${border("│")}`,
 			),
 			`${border("│")}${help}${border("│")}`,

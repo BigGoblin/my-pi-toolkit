@@ -38,10 +38,13 @@ function readJson(path: string): Record<string, unknown> | undefined {
 	}
 }
 
-function readHistoricalLines(dir: string): string[] {
+function readHistoricalMarkdown(dir: string): string {
+	const result = readJson(join(dir, "result.json"));
+	if (typeof result?.output === "string") return result.output;
+
 	const transcriptPath = join(dir, "transcript.jsonl");
-	if (existsSync(transcriptPath))
-		return readFileSync(transcriptPath, "utf8")
+	if (existsSync(transcriptPath)) {
+		const lines = readFileSync(transcriptPath, "utf8")
 			.split("\n")
 			.filter(Boolean)
 			.flatMap((record) => {
@@ -52,9 +55,9 @@ function readHistoricalLines(dir: string): string[] {
 					return [];
 				}
 			});
-	const result = readJson(join(dir, "result.json"));
-	if (typeof result?.output === "string") return [result.output];
-	return ["该子 Agent 已退出，且没有可用的过程或结果记录。"];
+		if (lines.length > 0) return lines.join("\n\n");
+	}
+	return "该子 Agent 已退出，且没有可用的过程或结果记录。";
 }
 
 function runState(completed: boolean, exited: boolean): RunSummary["state"] {
@@ -170,7 +173,7 @@ async function showSubagents(ctx: ExtensionContext): Promise<void> {
 				title: run.title,
 				model: run.model,
 				status: run.state,
-				lines: readHistoricalLines(run.dir),
+				markdown: readHistoricalMarkdown(run.dir),
 			});
 			continue;
 		}
