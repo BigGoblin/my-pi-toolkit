@@ -108,6 +108,7 @@ export async function runRpcSubagent(
 	// nosemgrep: javascript.lang.security.detect-child-process.detect-child-process
 	const child = spawn(invocation.command, invocation.args, {
 		cwd: options.cwd,
+		env: { ...process.env, ...options.env },
 		shell: false,
 		stdio: ["pipe", "pipe", "pipe"],
 	});

@@ -16,6 +16,7 @@
 
 | 模块 | 说明 | 文档 |
 | --- | --- | --- |
+| Multi Task | 对独立、非重叠文件任务运行后台并行 worker，并提供状态、收集和取消操作 | [`multi-task/README.md`](multi-task/README.md) |
 | Repo Search Subagent | 面向当前本地仓库大规模文件检索的独立只读子 Agent及过程 Overlay | [`repo-search-subagent/README.md`](repo-search-subagent/README.md) |
 | Subagent Console | 用 `/subagents` 列表快捷键查看、取消、终止和清理子 Agent，或用 `Alt+A` 进入最近任务 | `subagent-console/index.ts` |
 | Agent Todos | Cursor TodoWrite 风格任务清单，editor 上方完整进度 | [`agent-todos/README.md`](agent-todos/README.md) |
@@ -27,4 +28,4 @@
 | Titlebar Working | Agent 工作时在终端标题显示 braille 动画 | `titlebar-working/index.ts` |
 | Hello | 用于确认 toolkit 已加载的简单 smoke test（未注册） | `hello.ts` |
 
-子 Agent 仍通过瘦路径单独加载 `cursor-models`（及 Repo Search 的 `gitignore-guard`），不要改为加载 `ming-core`。
+子 Agent 仍通过瘦路径单独加载 `cursor-models`（以及 Repo Search 的 `gitignore-guard` 或 Multi Task 的 `path-guard`），不要改为加载 `ming-core`。

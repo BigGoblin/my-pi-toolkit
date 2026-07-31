@@ -18,7 +18,6 @@ import type {
 	TerminalSubagentOptions,
 	TerminalSubagentResult,
 } from "./terminal-runner.js";
-
 export class RpcSubagentSession {
 	private readonly lines: string[] = [];
 	private readonly entries: SubagentTranscriptEntry[] = [];
@@ -43,7 +42,6 @@ export class RpcSubagentSession {
 		},
 	);
 	private readonly run: LiveSubagentRun;
-
 	constructor(
 		private readonly child: ChildProcessWithoutNullStreams,
 		private readonly id: string,
@@ -69,7 +67,6 @@ export class RpcSubagentSession {
 			},
 		};
 	}
-
 	start(task: string): Promise<TerminalSubagentResult> {
 		registerLiveSubagent(this.run);
 		this.writeReady();
@@ -240,11 +237,17 @@ export class RpcSubagentSession {
 
 	private handleSettled(): void {
 		this.streaming = false;
-		this.setStatus("completed");
 		this.append("Agent settled");
-		if (this.settled || !this.lastOutput) return;
+		if (this.settled) return;
 		this.settled = true;
 		this.options.signal?.removeEventListener("abort", this.stop);
+		if (!this.lastOutput) {
+			this.setStatus("failed");
+			this.rejectResult(new Error("子 Agent 已结束但未返回文本结果"));
+			if (this.options.keepOpen === false) this.dispose();
+			return;
+		}
+		this.setStatus("completed");
 		this.writeResult();
 		this.resolveResult({
 			output: this.lastOutput,
