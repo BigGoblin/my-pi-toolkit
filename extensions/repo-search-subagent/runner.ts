@@ -4,11 +4,11 @@ import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 import { truncateHead } from "@earendil-works/pi-coding-agent";
 import { runTerminalSubagent } from "../shared/subagent/terminal-runner.js";
-import { SEARCH_PROMPT } from "./prompt.js";
+import { REPO_SEARCH_PROMPT } from "./prompt.js";
 import type {
-	SearchDetails,
-	SearchRunConfig,
-	SearchRunResult,
+	RepoSearchDetails,
+	RepoSearchRunConfig,
+	RepoSearchRunResult,
 } from "./types.js";
 
 const READ_ONLY_TOOLS = "read,grep,find,ls";
@@ -64,7 +64,7 @@ function truncateResult(output: string): {
 	});
 	return {
 		content: truncation.truncated
-			? `${truncation.content}\n\n[Search 子 Agent 输出已截断；完整输出保存在工具 details 中。]`
+			? `${truncation.content}\n\n[Repo Search 子 Agent 输出已截断；完整输出保存在工具 details 中。]`
 			: truncation.content,
 		truncated: truncation.truncated,
 	};
@@ -72,14 +72,14 @@ function truncateResult(output: string): {
 
 function makeDetails(
 	task: string,
-	config: SearchRunConfig,
+	config: RepoSearchRunConfig,
 	output: string,
-	toolCalls: SearchDetails["toolCalls"],
+	toolCalls: RepoSearchDetails["toolCalls"],
 	exitCode: number,
 	stderr: string,
 	truncated = false,
 	runDir?: string,
-): SearchDetails {
+): RepoSearchDetails {
 	return {
 		task,
 		model: config.model,
@@ -93,20 +93,20 @@ function makeDetails(
 	};
 }
 
-export async function runSearchSubagent(options: {
+export async function runRepoSearchSubagent(options: {
 	cwd: string;
 	task: string;
-	config: SearchRunConfig;
+	config: RepoSearchRunConfig;
 	parentSessionId?: string;
 	signal?: AbortSignal;
-	onUpdate?: (details: SearchDetails) => void;
-}): Promise<SearchRunResult> {
+	onUpdate?: (details: RepoSearchDetails) => void;
+}): Promise<RepoSearchRunResult> {
 	const terminal = await runTerminalSubagent({
 		cwd: options.cwd,
-		title: "Search Subagent",
+		title: "Repo Search Subagent",
 		model: options.config.model,
-		task: `Search task: ${options.task}`,
-		systemPrompt: SEARCH_PROMPT,
+		task: `Repository search task: ${options.task}`,
+		systemPrompt: REPO_SEARCH_PROMPT,
 		tools: READ_ONLY_TOOLS,
 		extensionPaths: [CURSOR_PROVIDER_EXTENSION, GITIGNORE_GUARD_EXTENSION],
 		disableContextFiles: true,
@@ -153,12 +153,12 @@ export async function runSearchSubagent(options: {
 		"--model",
 		options.config.model,
 		"--system-prompt",
-		SEARCH_PROMPT,
-		`Search task: ${options.task}`,
+		REPO_SEARCH_PROMPT,
+		`Repository search task: ${options.task}`,
 	];
 	const invocation = getPiInvocation(args);
 	const messages: unknown[] = [];
-	const toolCalls: SearchDetails["toolCalls"] = [];
+	const toolCalls: RepoSearchDetails["toolCalls"] = [];
 	let stderr = "";
 	let buffer = "";
 	let aborted = false;
@@ -234,11 +234,11 @@ export async function runSearchSubagent(options: {
 		if (options.signal?.aborted) stop();
 		else options.signal?.addEventListener("abort", stop, { once: true });
 	});
-	if (aborted) throw new Error("Search 子 Agent 已取消");
+	if (aborted) throw new Error("Repo Search 子 Agent 已取消");
 	const output = finalAssistantText(messages);
 	if (exitCode !== 0 || !output)
 		throw new Error(
-			`Search 子 Agent 运行失败（exit ${exitCode}，model ${options.config.model}）: ${stderr.trim() || "未返回结果"}`,
+			`Repo Search 子 Agent 运行失败（exit ${exitCode}，model ${options.config.model}）: ${stderr.trim() || "未返回结果"}`,
 		);
 	const visible = truncateResult(output);
 	return {

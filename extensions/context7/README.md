@@ -16,6 +16,8 @@ resolve-library-id("next.js")
 
 如果已经知道库 ID，可以直接调用 `query-docs`。版本可写入 ID，例如 `/vercel/next.js/v15.1.8`。
 
+第三方库、SDK、外部 API、官方文档、配置步骤和版本能力调研应优先使用 Context7，而不是 `repo_search`。只有用户还要求检查当前仓库如何使用或集成该库时，才同时调用 `repo_search`。
+
 ## Command
 
 ```text

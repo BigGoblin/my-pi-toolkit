@@ -7,7 +7,7 @@ const SAFE_TOOLS = new Set([
 	"grep",
 	"find",
 	"ls",
-	"search",
+	"repo_search",
 	"tapd_review",
 	"resolve-library-id",
 	"query-docs",

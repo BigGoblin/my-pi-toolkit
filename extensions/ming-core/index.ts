@@ -10,7 +10,7 @@ import chatMode from "../chat-mode/index.js";
 import cursorModels from "../cursor-models/index.js";
 import modelManager from "../model-manager/index.js";
 import piLens from "../pi-lens/index.js";
-import searchSubagent from "../search-subagent/index.js";
+import repoSearchSubagent from "../repo-search-subagent/index.js";
 import startupDashboard from "../startup-dashboard/index.js";
 import subagentConsole from "../subagent-console/index.js";
 import titlebarWorking from "../titlebar-working/index.js";
@@ -21,7 +21,7 @@ export default function mingCore(pi: ExtensionAPI): void {
 	piLens(pi);
 	chatMode(pi);
 	agentTodos(pi);
-	searchSubagent(pi);
+	repoSearchSubagent(pi);
 	subagentConsole(pi);
 	titlebarWorking(pi);
 	startupDashboard(pi);

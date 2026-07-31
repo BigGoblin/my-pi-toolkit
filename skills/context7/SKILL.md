@@ -14,6 +14,8 @@ description: 查询第三方库、框架、SDK 的最新官方文档。当用户
 - 涉及特定版本（如 Next.js 15、Prisma 6）的实现细节
 - 用户提到 `use context7` 或要求查官方文档
 
+第三方库、SDK、外部 API 和官方文档调研优先使用 Context7，不要调用 `repo_search`；只有用户还要求检查当前仓库如何使用或集成该库时，才同时使用 `repo_search`。
+
 ## 工具
 
 ### 1. `resolve-library-id`
@@ -47,7 +49,7 @@ API Key（可选，无 key 有速率限制）：
 
 - 文件：`~/.pi/agent/context7.json` → `{ "apiKey": "ctx7sk_..." }`
 - 环境变量：`CONTEXT7_API_KEY`
-- 申请：https://context7.com/dashboard
+- 申请：<https://context7.com/dashboard>
 
 ## 注意
 

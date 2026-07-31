@@ -11,7 +11,7 @@
 3. `pi-lens` — LSP / AST / 诊断（npm `pi-lens` 转发）
 4. `chat-mode` — Build / Ask 模式（`Alt+M`）
 5. `agent-todos` — 任务清单工具与 UI
-6. `search-subagent` — 只读 Search 子 Agent
+6. `repo-search-subagent` — 只读 Repo Search 子 Agent
 7. `subagent-console` — `/subagents` 与 `Alt+A`
 8. `titlebar-working` — 工作中标题栏动画
 9. `startup-dashboard` — 启动面板与 Footer
@@ -23,9 +23,9 @@
 子 Agent 禁止加载本入口。继续使用：
 
 - `extensions/cursor-models/index.ts` — 仅注册 `cursor-agent` provider
-- `extensions/search-subagent/gitignore-guard.ts` — Search 子进程 `.gitignore` 门禁
+- `extensions/repo-search-subagent/gitignore-guard.ts` — Repo Search 子进程 `.gitignore` 门禁
 
-`extensions/shared/subagent/` 仍为 search / console / tapd 共享库。
+`extensions/shared/subagent/` 仍为 repo search / console / tapd 共享库。
 
 ## 独立扩展
 

@@ -8,10 +8,10 @@ import type {
 import { Text } from "@earendil-works/pi-tui";
 // @ts-expect-error -- TypeBox's .d.mts exports require a newer resolver than the workspace LSP.
 import { Type } from "typebox";
-import { registerSearchCommand } from "./command.js";
-import { resolveSearchConfig } from "./config.js";
-import { runSearchSubagent } from "./runner.js";
-import type { SearchDetails } from "./types.js";
+import { registerRepoSearchCommand } from "./command.js";
+import { resolveRepoSearchConfig } from "./config.js";
+import { runRepoSearchSubagent } from "./runner.js";
+import type { RepoSearchDetails } from "./types.js";
 
 function previewToolCall(name: string, args: Record<string, unknown>): string {
 	if (name === "read") return `read ${String(args.path ?? "...")}`;
@@ -23,26 +23,28 @@ function previewToolCall(name: string, args: Record<string, unknown>): string {
 	return name;
 }
 
-function runningText(details: SearchDetails): string {
+function runningText(details: RepoSearchDetails): string {
 	const recent = details.toolCalls
 		.slice(-6)
 		.map((call) => `→ ${previewToolCall(call.name, call.arguments)}`);
-	return ["Search 子 Agent 正在检索…", ...recent].join("\n");
+	return ["Repo Search 子 Agent 正在检索…", ...recent].join("\n");
 }
 
-export default function searchSubagentExtension(pi: ExtensionAPI) {
-	registerSearchCommand(pi);
+export default function repoSearchSubagentExtension(pi: ExtensionAPI) {
+	registerRepoSearchCommand(pi);
 	pi.registerTool({
-		name: "search",
-		label: "Search Subagent",
+		name: "repo_search",
+		label: "Repo Search Subagent",
 		description:
-			"Delegate broad, read-only repository reconnaissance to an isolated search subagent. Use for searches spanning many files or directories, architecture discovery, locating dispersed implementations, and tracing relationships. The child has only read, grep, find, and ls.",
+			"Explore files and code inside the current local repository only through an isolated read-only subagent. Use for broad multi-file architecture discovery, locating dispersed implementations, and tracing call relationships. This tool cannot access the internet or research external libraries and APIs. The child has only read, grep, find, and ls.",
 		promptSnippet:
-			"Delegate broad multi-file repository searches to the read-only search subagent",
+			"Explore files and code across the current local repository with a read-only subagent",
 		promptGuidelines: [
-			"Use search automatically when investigation is likely to span at least 5 files, multiple directories, dispersed implementations, or a repository-wide call-flow/architecture search.",
-			"Do not use search for a known single file or a small targeted lookup that read, grep, find, or ls can answer directly.",
-			"The user may explicitly request the search subagent; honor that request for read-only repository investigation.",
+			"Use repo_search only for broad exploration of files and code inside the current local repository.",
+			"Use repo_search automatically only when local repository exploration is likely to span at least 5 files, multiple directories, dispersed implementations, or repository-wide call flows and architecture.",
+			"Never use repo_search for third-party library discovery, external API research, official documentation, GitHub project research, or general internet research. Use Context7 or an available web-search tool instead.",
+			"Do not use repo_search for a known single file or a small targeted local lookup that read, grep, find, or ls can answer directly.",
+			"The user may explicitly request the repo search subagent; honor that request only for read-only exploration of the current repository.",
 		],
 		parameters: Type.Object({
 			task: Type.String({
@@ -58,17 +60,17 @@ export default function searchSubagentExtension(pi: ExtensionAPI) {
 			onUpdate:
 				| ((partial: {
 						content: Array<{ type: "text"; text: string }>;
-						details: SearchDetails;
+						details: RepoSearchDetails;
 				  }) => void)
 				| undefined,
 			ctx: ExtensionContext,
 		) {
-			const config = resolveSearchConfig(
+			const config = resolveRepoSearchConfig(
 				ctx.cwd,
 				ctx.isProjectTrusted(),
 				ctx.model,
 			);
-			const result = await runSearchSubagent({
+			const result = await runRepoSearchSubagent({
 				cwd: ctx.cwd,
 				task: params.task,
 				config,
@@ -90,18 +92,18 @@ export default function searchSubagentExtension(pi: ExtensionAPI) {
 			const task = args.task || "...";
 			const preview = task.length > 100 ? `${task.slice(0, 100)}...` : task;
 			return new Text(
-				`${theme.fg("toolTitle", theme.bold("search "))}${theme.fg("muted", "read-only subagent")}\n  ${theme.fg("dim", preview)}`,
+				`${theme.fg("toolTitle", theme.bold("repo_search "))}${theme.fg("muted", "read-only subagent")}\n  ${theme.fg("dim", preview)}`,
 				0,
 				0,
 			);
 		},
 
 		renderResult(
-			result: AgentToolResult<SearchDetails>,
+			result: AgentToolResult<RepoSearchDetails>,
 			{ expanded }: ToolRenderResultOptions,
 			theme: Theme,
 		) {
-			const details = result.details as SearchDetails | undefined;
+			const details = result.details as RepoSearchDetails | undefined;
 			if (!details) {
 				const first = result.content[0];
 				return new Text(
@@ -128,7 +130,7 @@ export default function searchSubagentExtension(pi: ExtensionAPI) {
 					.map((call) => `→ ${previewToolCall(call.name, call.arguments)}`)
 					.join("\n");
 				return new Text(
-					`${theme.fg("success", "✓")} ${theme.fg("toolTitle", theme.bold("search"))} ${theme.fg("muted", `${details.model} (${details.modelSource})`)}\n${calls ? `${theme.fg("dim", calls)}\n\n` : ""}${details.output}`,
+					`${theme.fg("success", "✓")} ${theme.fg("toolTitle", theme.bold("repo_search"))} ${theme.fg("muted", `${details.model} (${details.modelSource})`)}\n${calls ? `${theme.fg("dim", calls)}\n\n` : ""}${details.output}`,
 					0,
 					0,
 				);
@@ -139,7 +141,7 @@ export default function searchSubagentExtension(pi: ExtensionAPI) {
 					? `\n${theme.fg("muted", "(Ctrl+O to expand)")}`
 					: "";
 			return new Text(
-				`${theme.fg("success", "✓")} ${theme.fg("toolTitle", theme.bold("search"))} ${theme.fg("muted", details.model)}\n${summary}${suffix}`,
+				`${theme.fg("success", "✓")} ${theme.fg("toolTitle", theme.bold("repo_search"))} ${theme.fg("muted", details.model)}\n${summary}${suffix}`,
 				0,
 				0,
 			);

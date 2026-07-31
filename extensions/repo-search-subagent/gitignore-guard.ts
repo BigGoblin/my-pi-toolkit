@@ -71,7 +71,7 @@ export default function gitignoreGuard(pi: ExtensionAPI) {
 
 		return {
 			block: true,
-			reason: `Search 子 Agent 不允许访问被项目 .gitignore 排除的路径: ${requestedPath}`,
+			reason: `Repo Search 子 Agent 不允许访问被项目 .gitignore 排除的路径: ${requestedPath}`,
 		};
 	});
 }

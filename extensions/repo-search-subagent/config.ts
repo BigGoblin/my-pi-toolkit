@@ -3,19 +3,19 @@ import * as path from "node:path";
 import { CONFIG_DIR_NAME, getAgentDir } from "@earendil-works/pi-coding-agent";
 import type { SubagentPresentation } from "../shared/subagent/config.js";
 
-export interface SearchSubagentConfig {
+export interface RepoSearchSubagentConfig {
 	model?: string;
 	presentation?: SubagentPresentation;
 }
 
-export interface ResolvedSearchConfig {
+export interface ResolvedRepoSearchConfig {
 	model: string;
 	source: "project" | "user" | "current";
 	configPath?: string;
 	presentation?: SubagentPresentation;
 }
 
-function readConfig(filePath: string): SearchSubagentConfig | undefined {
+function readConfig(filePath: string): RepoSearchSubagentConfig | undefined {
 	if (!fs.existsSync(filePath)) return undefined;
 
 	let value: unknown;
@@ -23,11 +23,13 @@ function readConfig(filePath: string): SearchSubagentConfig | undefined {
 		value = JSON.parse(fs.readFileSync(filePath, "utf8"));
 	} catch (error) {
 		const message = error instanceof Error ? error.message : String(error);
-		throw new Error(`无法解析 Search 子 Agent 配置 ${filePath}: ${message}`);
+		throw new Error(
+			`无法解析 Repo Search 子 Agent 配置 ${filePath}: ${message}`,
+		);
 	}
 
 	if (!value || typeof value !== "object" || Array.isArray(value)) {
-		throw new Error(`Search 子 Agent 配置必须是 JSON 对象: ${filePath}`);
+		throw new Error(`Repo Search 子 Agent 配置必须是 JSON 对象: ${filePath}`);
 	}
 
 	const input = value as { model?: unknown; presentation?: unknown };
@@ -37,7 +39,7 @@ function readConfig(filePath: string): SearchSubagentConfig | undefined {
 		(typeof model !== "string" || model.trim() === "")
 	) {
 		throw new Error(
-			`Search 子 Agent 配置的 model 必须是非空字符串: ${filePath}`,
+			`Repo Search 子 Agent 配置的 model 必须是非空字符串: ${filePath}`,
 		);
 	}
 
@@ -46,7 +48,9 @@ function readConfig(filePath: string): SearchSubagentConfig | undefined {
 		presentation !== undefined &&
 		!["manual", "auto", "inline", "split", "tab"].includes(String(presentation))
 	)
-		throw new Error(`Search 子 Agent 配置的 presentation 无效: ${filePath}`);
+		throw new Error(
+			`Repo Search 子 Agent 配置的 presentation 无效: ${filePath}`,
+		);
 	return {
 		model: typeof model === "string" ? model.trim() : undefined,
 		presentation: presentation as SubagentPresentation | undefined,
@@ -54,7 +58,7 @@ function readConfig(filePath: string): SearchSubagentConfig | undefined {
 }
 
 export function userConfigPath(): string {
-	return path.join(getAgentDir(), "search-subagent.json");
+	return path.join(getAgentDir(), "repo-search-subagent.json");
 }
 
 export function projectConfigPath(cwd: string): string {
@@ -63,21 +67,21 @@ export function projectConfigPath(cwd: string): string {
 		const candidate = path.join(
 			current,
 			CONFIG_DIR_NAME,
-			"search-subagent.json",
+			"repo-search-subagent.json",
 		);
 		if (fs.existsSync(candidate)) return candidate;
 		const parent = path.dirname(current);
 		if (parent === current)
-			return path.join(cwd, CONFIG_DIR_NAME, "search-subagent.json");
+			return path.join(cwd, CONFIG_DIR_NAME, "repo-search-subagent.json");
 		current = parent;
 	}
 }
 
-export function resolveSearchConfig(
+export function resolveRepoSearchConfig(
 	cwd: string,
 	projectTrusted: boolean,
 	currentModel: { provider: string; id: string } | undefined,
-): ResolvedSearchConfig {
+): ResolvedRepoSearchConfig {
 	const projectPath = projectConfigPath(cwd);
 	const projectConfig = projectTrusted ? readConfig(projectPath) : undefined;
 	const userPath = userConfigPath();
@@ -99,7 +103,7 @@ export function resolveSearchConfig(
 		};
 	if (!currentModel) {
 		throw new Error(
-			`未配置 Search 子 Agent 模型，且主 Agent 当前没有可继承的模型。请在 ${userPath} 中配置 { "model": "provider/model-id" }。`,
+			`未配置 Repo Search 子 Agent 模型，且主 Agent 当前没有可继承的模型。请在 ${userPath} 中配置 { "model": "provider/model-id" }。`,
 		);
 	}
 

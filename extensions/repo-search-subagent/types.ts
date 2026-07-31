@@ -1,6 +1,6 @@
 import type { SubagentPresentation } from "../shared/subagent/config.js";
 
-export interface SearchDetails {
+export interface RepoSearchDetails {
 	task: string;
 	model: string;
 	modelSource: "project" | "user" | "current";
@@ -12,13 +12,13 @@ export interface SearchDetails {
 	runDir?: string;
 }
 
-export interface SearchRunConfig {
+export interface RepoSearchRunConfig {
 	model: string;
 	source: "project" | "user" | "current";
 	presentation?: SubagentPresentation;
 }
 
-export interface SearchRunResult {
+export interface RepoSearchRunResult {
 	content: string;
-	details: SearchDetails;
+	details: RepoSearchDetails;
 }
