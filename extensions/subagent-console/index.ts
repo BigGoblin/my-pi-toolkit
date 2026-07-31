@@ -61,8 +61,8 @@ function readHistoricalMarkdown(dir: string): string {
 }
 
 function runState(completed: boolean, exited: boolean): RunSummary["state"] {
-	if (exited) return "exited";
 	if (completed) return "completed";
+	if (exited) return "exited";
 	return "running";
 }
 
