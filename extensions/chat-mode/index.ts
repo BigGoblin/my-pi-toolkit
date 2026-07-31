@@ -91,12 +91,12 @@ export default function chatModeExtension(pi: ExtensionAPI): void {
 
 	function modeNotifyMessage(mode: ChatMode): string {
 		if (mode === "ask") {
-			return "Ask mode enabled. Project writes are limited to .pi/.";
+			return "已启用 Ask：项目写入仅限 .pi/。";
 		}
 		if (mode === "plan") {
-			return `Plan mode enabled. Only ${PLAN_FILE_RELATIVE} may be written.`;
+			return `已启用 Plan：仅可写入 ${PLAN_FILE_RELATIVE}。`;
 		}
-		return "Build mode enabled. Full tool access restored.";
+		return "已启用 Build：已恢复完整工具权限。";
 	}
 
 	function switchMode(
@@ -128,7 +128,7 @@ export default function chatModeExtension(pi: ExtensionAPI): void {
 	function toggleMode(ctx: ExtensionContext): void {
 		if (!ctx.isIdle()) {
 			ctx.ui.notify(
-				"Wait for the current agent run before switching mode.",
+				"请等待当前 Agent 运行结束后再切换模式。",
 				"warning",
 			);
 			return;
@@ -168,7 +168,7 @@ export default function chatModeExtension(pi: ExtensionAPI): void {
 				return;
 			}
 			if (getChatMode() === "plan") {
-				ctx.ui.notify("Already in plan mode.", "info");
+				ctx.ui.notify("已在 Plan 模式。", "info");
 				return;
 			}
 			await enterPlanFromUser(ctx);

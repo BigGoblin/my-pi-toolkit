@@ -86,8 +86,8 @@ export function registerPlanTools(
 
 			if (ctx.hasUI) {
 				const ok = await ctx.ui.confirm(
-					"Enter plan mode?",
-					`The agent wants to plan before coding.\nOnly ${PLAN_FILE_RELATIVE} will be writable until you approve the plan.`,
+					"进入 Plan 模式？",
+					`模型希望先规划再写代码。\n批准计划前，仅允许写入 ${PLAN_FILE_RELATIVE}。`,
 				);
 				if (!ok) {
 					return textResult("User declined to enter plan mode.", {
@@ -145,31 +145,24 @@ export function registerPlanTools(
 			const planContent = await readPlanFile(ctx.cwd);
 			const preview = planContent
 				? truncatePreview(planContent)
-				: `(No plan written yet — ${PLAN_FILE_RELATIVE} is missing or empty.)`;
+				: `（尚未写入计划 — ${PLAN_FILE_RELATIVE} 不存在或为空。）`;
 
 			let outcome: "approved" | "cancelled" | "abandoned" = "approved";
 			let feedback: string | undefined;
 
 			if (ctx.hasUI) {
 				const choice = await ctx.ui.select(
-					`Plan ready (${PLAN_FILE_RELATIVE}):\n\n${preview}\n\nWhat next?`,
-					[
-						"Approve and implement",
-						"Request changes",
-						"Abandon plan",
-					],
+					`计划已就绪（${PLAN_FILE_RELATIVE}）：\n\n${preview}\n\n接下来？`,
+					["批准并实现", "要求修改", "放弃计划"],
 				);
 
-				if (choice?.startsWith("Approve")) {
+				if (choice === "批准并实现") {
 					outcome = "approved";
-				} else if (choice?.startsWith("Request")) {
+				} else if (choice === "要求修改") {
 					outcome = "cancelled";
-					const note = await ctx.ui.editor(
-						"What should change in the plan?",
-						"",
-					);
+					const note = await ctx.ui.editor("希望计划如何修改？", "");
 					feedback = note?.trim() || undefined;
-				} else if (choice?.startsWith("Abandon")) {
+				} else if (choice === "放弃计划") {
 					outcome = "abandoned";
 				} else {
 					outcome = "cancelled";
