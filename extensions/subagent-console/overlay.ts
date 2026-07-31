@@ -18,6 +18,7 @@ import type {
 	LiveSubagentRun,
 	SubagentTranscriptEntry,
 } from "../shared/subagent/registry.js";
+import { acquireMouseTracking, mouseWheelDirection } from "./mouse.js";
 
 export interface HistoricalSubagentView {
 	title: string;
@@ -106,6 +107,7 @@ function renderEntry(
 
 class SubagentOverlay implements Component {
 	private readonly unsubscribe: () => void;
+	private readonly releaseMouseTracking: () => void;
 	private scrollOffset = 0;
 	private contentHeight = 0;
 	private viewportHeight = 1;
@@ -121,9 +123,17 @@ class SubagentOverlay implements Component {
 		private readonly close: () => void,
 	) {
 		this.unsubscribe = this.run.subscribe?.(this.requestRender) ?? (() => {});
+		this.releaseMouseTracking = acquireMouseTracking(this.tui);
 	}
 
 	handleInput(data: string): void {
+		const wheelDirection = mouseWheelDirection(data);
+		if (wheelDirection) {
+			const maximum = Math.max(0, this.contentHeight - this.viewportHeight);
+			const nextOffset = this.scrollOffset + wheelDirection * 3;
+			this.scrollTo(nextOffset, wheelDirection > 0 && nextOffset >= maximum);
+			return;
+		}
 		if (matchesKey(data, "ctrl+o")) {
 			this.toolOutputExpanded = !this.toolOutputExpanded;
 			this.requestRender();
@@ -203,7 +213,7 @@ class SubagentOverlay implements Component {
 		const help = truncateToWidth(
 			this.theme.fg(
 				"dim",
-				`↑↓/PgUp/PgDn 滚动 · Ctrl+O 展开工具 · End 跟随 · Esc 返回 · ${position}`,
+				`滚轮/↑↓/PgUp/PgDn 滚动 · Ctrl+O 展开工具 · End 跟随 · Esc 返回 · ${position}`,
 			),
 			innerWidth,
 			"…",
@@ -224,6 +234,7 @@ class SubagentOverlay implements Component {
 
 	dispose(): void {
 		this.unsubscribe();
+		this.releaseMouseTracking();
 	}
 }
 
