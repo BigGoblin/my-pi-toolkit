@@ -6,9 +6,31 @@ import type {
 } from "@earendil-works/pi-coding-agent";
 import type { KeybindingsManager, TUI } from "@earendil-works/pi-tui";
 import { ChatModeEditor } from "./editor.js";
-import { askModeToolNames, checkAskToolCall } from "./policy.js";
-import { ASK_MODE_PROMPT } from "./prompt.js";
-import { getChatMode, setChatMode, type ChatMode } from "./state.js";
+import { PLAN_FILE_RELATIVE } from "./paths.js";
+import { readPlanFile, seedPlanFile } from "./plan-file.js";
+import {
+	getPlanLifecycleSnapshot,
+	onEnterPlan,
+	onLeavePlan,
+	resetPlanLifecycle,
+	restorePlanLifecycle,
+	takePlanReminder,
+	type PlanLifecycleSnapshot,
+} from "./plan-lifecycle.js";
+import { registerPlanTools } from "./plan-tools.js";
+import {
+	checkAskToolCall,
+	checkPlanToolCall,
+	restrictedModeToolNames,
+} from "./policy.js";
+import { ASK_MODE_PROMPT, planReminderText } from "./prompt.js";
+import {
+	getChatMode,
+	isRestrictedMode,
+	nextChatMode,
+	setChatMode,
+	type ChatMode,
+} from "./state.js";
 
 const STATE_ENTRY = "chat-mode-state";
 const BUILD_COLOR = "\x1b[38;2;49;109;221m";
@@ -16,70 +38,147 @@ const RESET_FOREGROUND = "\x1b[39m";
 
 interface PersistedModeState {
 	mode: ChatMode;
+	/** Snapshot of active tools before entering ask or plan. */
+	toolsBeforeRestricted?: string[];
+	/** Legacy field from ask-only persistence. */
 	toolsBeforeAsk?: string[];
+	planLifecycle?: PlanLifecycleSnapshot;
 }
 
 export default function chatModeExtension(pi: ExtensionAPI): void {
-	let toolsBeforeAsk: string[] | undefined;
+	let toolsBeforeRestricted: string[] | undefined;
 
 	function updateStatus(ctx: ExtensionContext): void {
+		const mode = getChatMode();
 		const label =
-			getChatMode() === "ask"
+			mode === "ask"
 				? ctx.ui.theme.fg("success", "◆ ASK")
-				: `${BUILD_COLOR}● BUILD${RESET_FOREGROUND}`;
+				: mode === "plan"
+					? ctx.ui.theme.fg("warning", "◇ PLAN")
+					: `${BUILD_COLOR}● BUILD${RESET_FOREGROUND}`;
 		ctx.ui.setStatus("chat-mode", label);
 	}
 
 	function persistMode(): void {
 		const state: PersistedModeState = {
 			mode: getChatMode(),
-			toolsBeforeAsk,
+			toolsBeforeRestricted,
+			planLifecycle: getPlanLifecycleSnapshot(),
 		};
 		pi.appendEntry(STATE_ENTRY, state);
 	}
 
 	function restoreBuildTools(): void {
-		if (!toolsBeforeAsk) return;
+		if (!toolsBeforeRestricted) return;
 		const allTools = pi.getAllTools() as Array<{ name: string }>;
 		const available = new Set(allTools.map((tool) => tool.name));
-		pi.setActiveTools(toolsBeforeAsk.filter((name) => available.has(name)));
+		pi.setActiveTools(
+			toolsBeforeRestricted.filter((name) => available.has(name)),
+		);
 	}
 
-	function switchMode(mode: ChatMode, ctx: ExtensionContext): void {
-		if (mode === getChatMode()) return;
-		if (mode === "ask") {
-			const activeTools = pi.getActiveTools();
-			toolsBeforeAsk = activeTools;
-			pi.setActiveTools(askModeToolNames(activeTools));
-		} else {
+	function applyModeTools(mode: ChatMode): void {
+		if (mode === "build") {
 			restoreBuildTools();
-			toolsBeforeAsk = undefined;
+			toolsBeforeRestricted = undefined;
+			return;
 		}
+		if (!toolsBeforeRestricted) {
+			toolsBeforeRestricted = pi.getActiveTools();
+		}
+		pi.setActiveTools(restrictedModeToolNames(toolsBeforeRestricted));
+	}
+
+	function modeNotifyMessage(mode: ChatMode): string {
+		if (mode === "ask") {
+			return "已启用 Ask：项目写入仅限 .pi/。";
+		}
+		if (mode === "plan") {
+			return `已启用 Plan：仅可写入 ${PLAN_FILE_RELATIVE}。`;
+		}
+		return "已启用 Build：已恢复完整工具权限。";
+	}
+
+	function switchMode(
+		mode: ChatMode,
+		ctx: ExtensionContext,
+		options?: { viaToolApproval?: boolean },
+	): void {
+		const previous = getChatMode();
+		if (mode === previous) return;
+
+		if (mode === "plan") {
+			onEnterPlan();
+		} else if (previous === "plan") {
+			onLeavePlan(options?.viaToolApproval === true);
+		}
+
+		applyModeTools(mode);
 		setChatMode(mode);
 		updateStatus(ctx);
 		persistMode();
-		ctx.ui.notify(
-			mode === "ask"
-				? "Ask mode enabled. Project writes are limited to .pi/."
-				: "Build mode enabled. Full tool access restored.",
-			"info",
-		);
+		ctx.ui.notify(modeNotifyMessage(mode), "info");
+	}
+
+	async function enterPlanFromUser(ctx: ExtensionContext): Promise<void> {
+		switchMode("plan", ctx);
+		await seedPlanFile(ctx.cwd);
 	}
 
 	function toggleMode(ctx: ExtensionContext): void {
 		if (!ctx.isIdle()) {
 			ctx.ui.notify(
-				"Wait for the current agent run before switching mode.",
+				"请等待当前 Agent 运行结束后再切换模式。",
 				"warning",
 			);
 			return;
 		}
-		switchMode(getChatMode() === "build" ? "ask" : "build", ctx);
+		const next = nextChatMode();
+		if (next === "plan") {
+			void enterPlanFromUser(ctx);
+			return;
+		}
+		switchMode(next, ctx);
 	}
+
+	function restorePersistedMode(saved: PersistedModeState | undefined): void {
+		restorePlanLifecycle(saved?.planLifecycle);
+		if (!saved || !isRestrictedMode(saved.mode)) return;
+		toolsBeforeRestricted =
+			saved.toolsBeforeRestricted ??
+			saved.toolsBeforeAsk ??
+			pi.getActiveTools();
+		setChatMode(saved.mode);
+		pi.setActiveTools(restrictedModeToolNames(pi.getActiveTools()));
+	}
+
+	registerPlanTools(pi, {
+		getMode: getChatMode,
+		switchMode,
+	});
+
+	pi.registerCommand("plan", {
+		description: "Enter plan mode (explore + write .pi/plan.md only)",
+		handler: async (_args, ctx) => {
+			if (!ctx.isIdle()) {
+				ctx.ui.notify(
+					"请等待当前 Agent 运行结束后再切换模式。",
+					"warning",
+				);
+				return;
+			}
+			if (getChatMode() === "plan") {
+				ctx.ui.notify("已在 Plan 模式。", "info");
+				return;
+			}
+			await enterPlanFromUser(ctx);
+		},
+	});
 
 	pi.on("session_start", (_event: unknown, ctx: ExtensionContext) => {
 		setChatMode("build");
-		toolsBeforeAsk = undefined;
+		toolsBeforeRestricted = undefined;
+		resetPlanLifecycle();
 		const entries = ctx.sessionManager.getEntries() as Array<{
 			type: string;
 			customType?: string;
@@ -91,11 +190,7 @@ export default function chatModeExtension(pi: ExtensionAPI): void {
 			)
 			.pop();
 
-		if (saved?.data?.mode === "ask") {
-			toolsBeforeAsk = saved.data.toolsBeforeAsk ?? pi.getActiveTools();
-			setChatMode("ask");
-			pi.setActiveTools(askModeToolNames(pi.getActiveTools()));
-		}
+		restorePersistedMode(saved?.data);
 		updateStatus(ctx);
 
 		if (ctx.mode === "tui") {
@@ -109,14 +204,44 @@ export default function chatModeExtension(pi: ExtensionAPI): void {
 		}
 	});
 
-	pi.on("before_agent_start", (event: { systemPrompt: string }) => {
-		if (getChatMode() !== "ask") return;
-		return { systemPrompt: `${event.systemPrompt}\n\n${ASK_MODE_PROMPT}` };
+	pi.on("before_agent_start", async (event: { systemPrompt: string }, ctx) => {
+		const mode = getChatMode();
+		const reminderKind = takePlanReminder(mode === "plan");
+		const planHasContent =
+			reminderKind === "full" || reminderKind === "reentry"
+				? (await readPlanFile(ctx.cwd)) !== undefined
+				: false;
+		const reminder = reminderKind
+			? planReminderText(reminderKind, planHasContent)
+			: undefined;
+		if (reminderKind) persistMode();
+
+		const reminderMessage = reminder
+			? {
+					customType: "plan-mode-reminder",
+					content: reminder,
+					display: false,
+				}
+			: undefined;
+
+		if (mode === "ask") {
+			return {
+				systemPrompt: `${event.systemPrompt}\n\n${ASK_MODE_PROMPT}`,
+				...(reminderMessage ? { message: reminderMessage } : {}),
+			};
+		}
+		if (reminderMessage) return { message: reminderMessage };
 	});
 
 	pi.on("tool_call", async (event: ToolCallEvent, ctx: ExtensionContext) => {
-		if (getChatMode() !== "ask") return;
-		const reason = await checkAskToolCall(event, ctx.cwd);
-		return reason ? { block: true, reason } : undefined;
+		const mode = getChatMode();
+		if (mode === "ask") {
+			const reason = await checkAskToolCall(event, ctx.cwd);
+			return reason ? { block: true, reason } : undefined;
+		}
+		if (mode === "plan") {
+			const reason = await checkPlanToolCall(event, ctx.cwd);
+			return reason ? { block: true, reason } : undefined;
+		}
 	});
 }
