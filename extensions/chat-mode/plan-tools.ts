@@ -137,7 +137,7 @@ export function registerPlanTools(
 		async execute(_toolCallId, _params, _signal, _onUpdate, ctx) {
 			if (actions.getMode() !== "plan") {
 				return textResult(
-					`Not in plan mode. Call ${ENTER_PLAN_TOOL} first, or ask the user to press Alt+M / run /plan.`,
+					`Not in plan mode. Call ${ENTER_PLAN_TOOL} first, or ask the user to press Shift+Tab / run /plan.`,
 					{ outcome: "not_in_plan" },
 				);
 			}

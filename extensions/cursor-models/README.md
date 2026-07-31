@@ -6,9 +6,10 @@
 
 - 将 Cursor 扁平模型 ID 折叠成模型家族。
 - `/model` 中只展示家族模型，例如 `cursor-grok-4.5`。
-- 使用 `Shift+Tab` 切换思考等级。
 - Fast 状态独立保存，并在 Cursor 模型请求时生效。
 - 会话启动时迁移旧的扁平模型选择。
+
+思考等级请使用 `/thinking`（由 model-manager 提供）；`Shift+Tab` 用于切换 Build/Plan/Ask 会话模式。
 
 ## Command and shortcut
 

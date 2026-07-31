@@ -1,5 +1,5 @@
 import { CustomEditor } from "@earendil-works/pi-coding-agent";
-import { Key, matchesKey } from "@earendil-works/pi-tui";
+import { matchesKey } from "@earendil-works/pi-tui";
 
 export class ChatModeEditor extends CustomEditor {
 	constructor(...args: ConstructorParameters<typeof CustomEditor>) {
@@ -9,7 +9,8 @@ export class ChatModeEditor extends CustomEditor {
 	onToggle?: () => void;
 
 	handleInput(data: string): void {
-		if (matchesKey(data, Key.alt("m"))) {
+		// Intercept before CustomEditor so Pi's app.thinking.cycle (Shift+Tab) does not fire.
+		if (matchesKey(data, "shift+tab")) {
 			this.onToggle?.();
 			return;
 		}
