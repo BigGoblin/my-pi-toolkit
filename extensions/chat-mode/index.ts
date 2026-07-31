@@ -7,6 +7,8 @@ import type {
 import type { KeybindingsManager, TUI } from "@earendil-works/pi-tui";
 import { ChatModeEditor } from "./editor.js";
 import { PLAN_FILE_RELATIVE } from "./paths.js";
+import { seedPlanFile } from "./plan-file.js";
+import { registerPlanTools } from "./plan-tools.js";
 import {
 	checkAskToolCall,
 	checkPlanToolCall,
@@ -95,6 +97,11 @@ export default function chatModeExtension(pi: ExtensionAPI): void {
 		ctx.ui.notify(modeNotifyMessage(mode), "info");
 	}
 
+	async function enterPlanFromUser(ctx: ExtensionContext): Promise<void> {
+		switchMode("plan", ctx);
+		await seedPlanFile(ctx.cwd);
+	}
+
 	function toggleMode(ctx: ExtensionContext): void {
 		if (!ctx.isIdle()) {
 			ctx.ui.notify(
@@ -103,7 +110,12 @@ export default function chatModeExtension(pi: ExtensionAPI): void {
 			);
 			return;
 		}
-		switchMode(nextChatMode(), ctx);
+		const next = nextChatMode();
+		if (next === "plan") {
+			void enterPlanFromUser(ctx);
+			return;
+		}
+		switchMode(next, ctx);
 	}
 
 	function restorePersistedMode(saved: PersistedModeState | undefined): void {
@@ -115,6 +127,11 @@ export default function chatModeExtension(pi: ExtensionAPI): void {
 		setChatMode(saved.mode);
 		pi.setActiveTools(restrictedModeToolNames(pi.getActiveTools()));
 	}
+
+	registerPlanTools(pi, {
+		getMode: getChatMode,
+		switchMode,
+	});
 
 	pi.registerCommand("plan", {
 		description: "Enter plan mode (explore + write .pi/plan.md only)",
@@ -130,7 +147,7 @@ export default function chatModeExtension(pi: ExtensionAPI): void {
 				ctx.ui.notify("Already in plan mode.", "info");
 				return;
 			}
-			switchMode("plan", ctx);
+			await enterPlanFromUser(ctx);
 		},
 	});
 

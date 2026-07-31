@@ -1,5 +1,6 @@
 import type { ToolCallEvent } from "@earendil-works/pi-coding-agent";
 import { isPlanFilePath, isProjectPiPath, PLAN_FILE_RELATIVE } from "./paths.js";
+import { ENTER_PLAN_TOOL, EXIT_PLAN_TOOL } from "./plan-file.js";
 
 const PATH_GATED_TOOLS = new Set(["write", "edit"]);
 const SAFE_TOOLS = new Set([
@@ -20,12 +21,18 @@ const SAFE_TOOLS = new Set([
 	"read_symbol",
 	"read_enclosing",
 	"pi_lens_activate_tools",
+	ENTER_PLAN_TOOL,
+	EXIT_PLAN_TOOL,
 ]);
 
 export function restrictedModeToolNames(activeTools: string[]): string[] {
-	return activeTools.filter(
+	const names = activeTools.filter(
 		(name) => SAFE_TOOLS.has(name) || PATH_GATED_TOOLS.has(name),
 	);
+	for (const name of [ENTER_PLAN_TOOL, EXIT_PLAN_TOOL]) {
+		if (!names.includes(name)) names.push(name);
+	}
+	return names;
 }
 
 export async function checkAskToolCall(
@@ -51,7 +58,7 @@ export async function checkPlanToolCall(
 ): Promise<string | undefined> {
 	if (SAFE_TOOLS.has(event.toolName)) return undefined;
 	if (!PATH_GATED_TOOLS.has(event.toolName)) {
-		return `Plan mode blocked "${event.toolName}" because it is not an approved exploration tool. Press Alt+M to switch to Build when ready to implement.`;
+		return `Plan mode blocked "${event.toolName}" because it is not an approved exploration tool. Call exit_plan_mode when the plan is ready.`;
 	}
 
 	const input = event.input as { path?: unknown };
@@ -59,5 +66,5 @@ export async function checkPlanToolCall(
 		return `Plan mode blocked "${event.toolName}" because no target path was provided.`;
 	}
 	if (await isPlanFilePath(cwd, input.path)) return undefined;
-	return `Plan mode only allows ${event.toolName} on ${PLAN_FILE_RELATIVE}. Press Alt+M to switch to Build when ready to implement.`;
+	return `Plan mode only allows ${event.toolName} on ${PLAN_FILE_RELATIVE}. Call exit_plan_mode when the plan is ready.`;
 }
