@@ -10,6 +10,7 @@ import {
 	readPlanFile,
 	seedPlanFile,
 } from "./plan-file.js";
+import { PLAN_FILE_STRUCTURE } from "./prompt.js";
 import type { ChatMode } from "./state.js";
 
 const EmptyParams = Type.Object({});
@@ -18,8 +19,15 @@ const PREVIEW_MAX = 2400;
 
 export interface PlanModeActions {
 	getMode: () => ChatMode;
-	/** Switch mode without idle guard (safe during tool execution). */
-	switchMode: (mode: ChatMode, ctx: ExtensionContext) => void;
+	/**
+	 * Switch mode without idle guard (safe during tool execution).
+	 * @param viaToolApproval - when leaving plan via exit_plan_mode outcomes
+	 */
+	switchMode: (
+		mode: ChatMode,
+		ctx: ExtensionContext,
+		options?: { viaToolApproval?: boolean },
+	) => void;
 }
 
 function textResult(text: string, details?: Record<string, unknown>) {
@@ -29,15 +37,25 @@ function textResult(text: string, details?: Record<string, unknown>) {
 	};
 }
 
-function seedLabel(status: "created" | "empty" | "nonempty"): string {
-	if (status === "created") return "Created an empty plan file.";
-	if (status === "empty") return "The plan file exists and is empty.";
-	return "The plan file exists and already has content — read it before editing.";
+function seedStatusLine(
+	status: "created" | "empty" | "nonempty",
+): string {
+	if (status === "nonempty") {
+		return `Write your plan to ${PLAN_FILE_RELATIVE}. The file exists but is not empty.`;
+	}
+	return `Write your plan to ${PLAN_FILE_RELATIVE}. The file exists and is empty.`;
 }
 
 function truncatePreview(content: string): string {
 	if (content.length <= PREVIEW_MAX) return content;
 	return `${content.slice(0, PREVIEW_MAX)}\n\n… (truncated; full plan in ${PLAN_FILE_RELATIVE})`;
+}
+
+function revisePlanMessage(feedback: string | undefined): string {
+	if (feedback) {
+		return `The user wants to revise the plan. The user said:\n${feedback}`;
+	}
+	return "The user wants to revise the plan. Ask the user what changes they would like to make.";
 }
 
 export function registerPlanTools(
@@ -61,7 +79,7 @@ export function registerPlanTools(
 		async execute(_toolCallId, _params, _signal, _onUpdate, ctx) {
 			if (actions.getMode() === "plan") {
 				return textResult(
-					`Already in plan mode. Explore the codebase, write the plan to ${PLAN_FILE_RELATIVE}, then call exit_plan_mode when ready.`,
+					`Already in plan mode. Explore the codebase, write the plan to ${PLAN_FILE_RELATIVE}, then call ${EXIT_PLAN_TOOL} when ready.`,
 					{ outcome: "already_active" },
 				);
 			}
@@ -72,29 +90,31 @@ export function registerPlanTools(
 					`The agent wants to plan before coding.\nOnly ${PLAN_FILE_RELATIVE} will be writable until you approve the plan.`,
 				);
 				if (!ok) {
-					return textResult(
-						"User declined to enter plan mode. Continue in the current mode, or ask clarifying questions.",
-						{ outcome: "declined" },
-					);
+					return textResult("User declined to enter plan mode.", {
+						outcome: "declined",
+					});
 				}
 			}
 
 			actions.switchMode("plan", ctx);
 			const seed = await seedPlanFile(ctx.cwd);
 
+			// Workflow steps adapted from Grok EnterPlanModeOutput::to_prompt_format
 			return textResult(
 				[
-					"You have entered plan mode. Focus on exploring the codebase and creating an implementation plan.",
+					"You have entered plan mode. You should now focus on exploring the codebase and creating an implementation plan.",
 					"",
-					`## Plan File: ${PLAN_FILE_RELATIVE}`,
-					seedLabel(seed),
+					seedStatusLine(seed),
 					"",
-					"Workflow:",
-					"1. Explore with read-only tools (read, grep, find, ls, repo_search, …).",
-					"2. Ask clarifying questions if requirements are ambiguous.",
-					"3. Design the approach; do not implement project code.",
-					`4. Write the plan to ${PLAN_FILE_RELATIVE} (Context / Approach / Critical files / Verification).`,
-					"5. When ready, call exit_plan_mode to present the plan for approval.",
+					"In plan mode, you should:",
+					"1. Thoroughly explore the codebase to understand existing patterns",
+					"2. Identify similar features, codebase architecture, and understand trade-offs",
+					"3. Ask clarifying questions if you need to clarify the approach",
+					"4. Design a concrete implementation strategy",
+					"5. Write your plan to the plan file above",
+					`6. When ready, use ${EXIT_PLAN_TOOL} to present your plan to the user.`,
+					"",
+					PLAN_FILE_STRUCTURE,
 				].join("\n"),
 				{ outcome: "entered", planFile: PLAN_FILE_RELATIVE, seed },
 			);
@@ -117,7 +137,7 @@ export function registerPlanTools(
 		async execute(_toolCallId, _params, _signal, _onUpdate, ctx) {
 			if (actions.getMode() !== "plan") {
 				return textResult(
-					"Not in plan mode. Call enter_plan_mode first, or ask the user to press Alt+M / run /plan.",
+					`Not in plan mode. Call ${ENTER_PLAN_TOOL} first, or ask the user to press Alt+M / run /plan.`,
 					{ outcome: "not_in_plan" },
 				);
 			}
@@ -157,33 +177,43 @@ export function registerPlanTools(
 			}
 
 			if (outcome === "approved") {
-				actions.switchMode("build", ctx);
+				actions.switchMode("build", ctx, { viaToolApproval: true });
+				if (planContent) {
+					return textResult(
+						[
+							"Your plan has been approved. You can now start coding.",
+							"",
+							`Your plan has been saved at: ${PLAN_FILE_RELATIVE}`,
+							"",
+							"The user approved the plan. Implement the plan in plan.md.",
+							"",
+							`## Plan:\n${planContent}`,
+						].join("\n"),
+						{ outcome, planFile: PLAN_FILE_RELATIVE },
+					);
+				}
 				return textResult(
-					[
-						"The user approved the plan. You can now make edits and implement it.",
-						"",
-						`Implement the plan in ${PLAN_FILE_RELATIVE}.`,
-						planContent
-							? `\n## Plan:\n\n${planContent}`
-							: "\n(No plan content was found — clarify with the user if needed, then proceed.)",
-					].join("\n"),
+					"Plan mode exit approved. No plan content was found — you can proceed.",
 					{ outcome, planFile: PLAN_FILE_RELATIVE },
 				);
 			}
 
 			if (outcome === "abandoned") {
-				actions.switchMode("build", ctx);
+				actions.switchMode("build", ctx, { viaToolApproval: true });
 				return textResult(
-					"The user abandoned the plan and left plan mode. Do not implement the plan unless they ask again.",
+					`The user chose to abandon the plan entirely and left plan mode. Do not call ${EXIT_PLAN_TOOL} again unless the user asks to plan again.`,
 					{ outcome },
 				);
 			}
 
-			const feedbackBlock = feedback
-				? `\n\nUser feedback:\n${feedback}`
-				: "\n\nNo additional feedback was provided — revise the plan and call exit_plan_mode again when ready.";
+			if (planContent) {
+				return textResult(revisePlanMessage(feedback), {
+					outcome: "cancelled",
+					feedback,
+				});
+			}
 			return textResult(
-				`The user requested changes. Stay in plan mode, update ${PLAN_FILE_RELATIVE}, then call exit_plan_mode again.${feedbackBlock}`,
+				"The user does not want to exit plan mode. Continue planning and ask the user what they would like to do.",
 				{ outcome: "cancelled", feedback },
 			);
 		},

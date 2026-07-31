@@ -58,13 +58,13 @@ export async function checkPlanToolCall(
 ): Promise<string | undefined> {
 	if (SAFE_TOOLS.has(event.toolName)) return undefined;
 	if (!PATH_GATED_TOOLS.has(event.toolName)) {
-		return `Plan mode blocked "${event.toolName}" because it is not an approved exploration tool. Call exit_plan_mode when the plan is ready.`;
+		return `Rejected: "${event.toolName}" is not allowed in plan mode.`;
 	}
 
 	const input = event.input as { path?: unknown };
 	if (typeof input.path !== "string") {
-		return `Plan mode blocked "${event.toolName}" because no target path was provided.`;
+		return `Rejected: "${event.toolName}" requires a target path.`;
 	}
 	if (await isPlanFilePath(cwd, input.path)) return undefined;
-	return `Plan mode only allows ${event.toolName} on ${PLAN_FILE_RELATIVE}. Call exit_plan_mode when the plan is ready.`;
+	return `Rejected: file edits are not allowed in plan mode - the only editable file is the plan file (${PLAN_FILE_RELATIVE}).`;
 }

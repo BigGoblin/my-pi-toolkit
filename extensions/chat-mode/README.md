@@ -2,7 +2,7 @@
 
 为 Pi 提供 `Build`、`Plan`、`Ask` 三种会话模式。新会话默认使用 Build；恢复已有会话或执行 `/reload` 时，会恢复该会话最近保存的模式。
 
-设计参考 [Grok Build plan mode](https://github.com/xai-org/grok-build)：Plan 是实现前的结构化规划阶段——只读探索，唯一可写产物是计划文件；模型可通过 `enter_plan_mode` / `exit_plan_mode` 发起进入与交卷审批。
+设计参考并对照阅读了 [Grok Build](https://github.com/xai-org/grok-build) 开源实现（尤其 `xai-grok-shell/.../plan_mode.rs`、`enter_plan_mode` / `exit_plan_mode` 工具输出格式）：Plan 是实现前的结构化规划阶段——只读探索，唯一可写产物是计划文件；模型可通过 `enter_plan_mode` / `exit_plan_mode` 发起进入与交卷审批。每轮注入 full/sparse/reentry/exit reminder（对齐 Grok 的 `PlanModeTracker`），而非只靠静态 system prompt。
 
 ## 切换
 
