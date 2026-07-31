@@ -36,13 +36,30 @@ const runs =
 		? (existingRuns as Map<string, LiveSubagentRun>)
 		: new Map<string, LiveSubagentRun>();
 globalRegistry[REGISTRY_KEY] = runs;
+const listeners = new Set<() => void>();
+
+export function notifySubagentRegistryChanged(): void {
+	listeners.forEach((listener) => listener());
+}
+
+export function subscribeSubagentRegistry(listener: () => void): () => void {
+	listeners.add(listener);
+	return () => listeners.delete(listener);
+}
+
+export function activeSubagentCount(): number {
+	return Array.from(runs.values()).filter(
+		(run) => run.status === "starting" || run.status === "running",
+	).length;
+}
 
 export function registerLiveSubagent(run: LiveSubagentRun): void {
 	runs.set(run.id, run);
+	notifySubagentRegistryChanged();
 }
 
 export function removeLiveSubagent(id: string): void {
-	runs.delete(id);
+	if (runs.delete(id)) notifySubagentRegistryChanged();
 }
 
 export function listLiveSubagents(): LiveSubagentRun[] {
@@ -53,5 +70,7 @@ export function listLiveSubagents(): LiveSubagentRun[] {
 
 export function abortAllLiveSubagents(): void {
 	runs.forEach((run) => run.dispose());
+	if (runs.size === 0) return;
 	runs.clear();
+	notifySubagentRegistryChanged();
 }

@@ -9,7 +9,9 @@ import type {
 } from "@earendil-works/pi-coding-agent";
 import {
 	abortAllLiveSubagents,
+	activeSubagentCount,
 	listLiveSubagents,
+	subscribeSubagentRegistry,
 	type LiveSubagentRun,
 } from "../shared/subagent/registry.js";
 import { SUBAGENT_RUNS_ROOT } from "../shared/subagent/run-paths.js";
@@ -217,9 +219,25 @@ async function enterLatestSubagent(ctx: ExtensionContext): Promise<void> {
 }
 
 export default function subagentConsole(pi: ExtensionAPI): void {
-	pi.on("session_shutdown", (_event: SessionShutdownEvent) => {
-		abortAllLiveSubagents();
+	let unsubscribeStatus: (() => void) | undefined;
+	pi.on("session_start", (_event: unknown, ctx: ExtensionContext) => {
+		unsubscribeStatus?.();
+		const refreshStatus = () => {
+			const count = activeSubagentCount();
+			ctx.ui.setStatus("subagent", count > 0 ? `subagent*${count}` : undefined);
+		};
+		unsubscribeStatus = subscribeSubagentRegistry(refreshStatus);
+		refreshStatus();
 	});
+	pi.on(
+		"session_shutdown",
+		(_event: SessionShutdownEvent, ctx: ExtensionContext) => {
+			unsubscribeStatus?.();
+			unsubscribeStatus = undefined;
+			ctx.ui.setStatus("subagent", undefined);
+			abortAllLiveSubagents();
+		},
+	);
 	pi.registerCommand("subagents", {
 		description: "查看、取消或清理交互式子 Agent",
 		handler: async (_args: string, ctx: ExtensionCommandContext) =>

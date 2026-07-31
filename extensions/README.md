@@ -18,7 +18,7 @@
 | --- | --- | --- |
 | Multi Task | 对独立、非重叠文件任务运行后台并行 worker，并提供状态、收集和取消操作 | [`multi-task/README.md`](multi-task/README.md) |
 | Repo Search Subagent | 面向当前本地仓库大规模文件检索的独立只读子 Agent及过程 Overlay | [`repo-search-subagent/README.md`](repo-search-subagent/README.md) |
-| Subagent Console | 用 `/subagents` 列表快捷键查看、取消、终止和清理子 Agent，或用 `Alt+A` 进入最近任务 | `subagent-console/index.ts` |
+| Subagent Console | 用 `/subagents` 查看和管理子 Agent、用 `Alt+A` 进入最近任务，并在 Footer 按 `subagent*N` 显示活跃数量 | `subagent-console/index.ts` |
 | Agent Todos | Cursor TodoWrite 风格任务清单，editor 上方完整进度 | [`agent-todos/README.md`](agent-todos/README.md) |
 | Chat Mode | 使用 `Alt+M` 切换 Build/Ask；Ask 仅允许 `.pi/**` 项目写入 | [`chat-mode/README.md`](chat-mode/README.md) |
 | Cursor Models | Cursor 模型折叠、思考等级和 Fast 模式 | [`cursor-models/README.md`](cursor-models/README.md) |

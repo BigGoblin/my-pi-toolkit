@@ -2,6 +2,7 @@ import { appendFileSync } from "node:fs";
 import { join } from "node:path";
 import type { ChildProcessWithoutNullStreams } from "node:child_process";
 import {
+	notifySubagentRegistryChanged,
 	registerLiveSubagent,
 	removeLiveSubagent,
 	type LiveSubagentRun,
@@ -81,12 +82,10 @@ export class RpcSubagentSession {
 		this.send(task);
 		return this.result;
 	}
-
 	private readonly stop = () => {
 		this.dispose();
 		if (!this.settled) this.rejectResult(new Error("子 Agent 已取消"));
 	};
-
 	private send(message: string): void {
 		if (!message.trim()) return;
 		this.entries.push({ kind: "user", text: message.trim() });
@@ -97,7 +96,6 @@ export class RpcSubagentSession {
 			...(this.streaming ? { streamingBehavior: "steer" } : {}),
 		});
 	}
-
 	private dispose(): void {
 		sendRpc(this.child, { type: "abort" });
 		this.child.stdin.end();
@@ -105,8 +103,10 @@ export class RpcSubagentSession {
 	}
 
 	private setStatus(status: LiveSubagentRun["status"]): void {
+		if (this.status === status) return;
 		this.status = status;
 		this.run.status = status;
+		notifySubagentRegistryChanged();
 	}
 
 	private append(line: string): void {
