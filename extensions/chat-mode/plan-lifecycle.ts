@@ -39,7 +39,7 @@ export function onEnterPlan(): void {
 /**
  * Call when leaving plan.
  * @param viaToolApproval - true for exit_plan_mode approved/abandoned (tool
- *   result already signals the model). false for Alt+M / mode cycle (arm exit reminder).
+ *   result already signals the model). false for Shift+Tab / mode cycle (arm exit reminder).
  */
 export function onLeavePlan(viaToolApproval: boolean): void {
 	wasPreviouslyActive = true;

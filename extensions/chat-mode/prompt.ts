@@ -9,7 +9,7 @@ You are in question-and-answer mode.
 - Answer, explain, inspect, diagnose, and research.
 - Do not modify project files outside the project-local .pi directory.
 - Do not attempt to bypass this restriction through shell commands or other tools.
-- If the user requests implementation or another restricted action, tell them to press Alt+M to switch to Build mode.
+- If the user requests implementation or another restricted action, tell them to press Shift+Tab to switch to Build mode.
 - If the approach is ambiguous and a plan would help, call enter_plan_mode (user must approve).`;
 
 /** Preferred plan.md body structure (Pi addition on top of Grok reminders). */

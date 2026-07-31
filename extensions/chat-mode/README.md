@@ -6,13 +6,13 @@
 
 ## 切换
 
-按 `Alt+M` 在三种模式间循环：
+按 `Shift+Tab` 在三种模式间循环：
 
 ```text
 BUILD → PLAN → ASK → BUILD
 ```
 
-也可使用 `/plan` 直接进入 Plan。Agent 正在运行时不能用快捷键/命令切换，需等待当前运行结束（工具内的 enter/exit 不受此限制）。`Tab` 保持 Pi 原有的自动补全行为。
+也可使用 `/plan` 直接进入 Plan。Agent 正在运行时不能用快捷键/命令切换，需等待当前运行结束（工具内的 enter/exit 不受此限制）。`Tab` 保持 Pi 原有的自动补全行为。思考等级请使用 `/thinking` 选择。
 
 ## Build
 
