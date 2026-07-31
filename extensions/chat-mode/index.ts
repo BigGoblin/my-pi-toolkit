@@ -162,7 +162,7 @@ export default function chatModeExtension(pi: ExtensionAPI): void {
 		handler: async (_args, ctx) => {
 			if (!ctx.isIdle()) {
 				ctx.ui.notify(
-					"Wait for the current agent run before switching mode.",
+					"请等待当前 Agent 运行结束后再切换模式。",
 					"warning",
 				);
 				return;
