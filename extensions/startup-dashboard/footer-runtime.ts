@@ -69,5 +69,11 @@ export function runtimeSegments(
 				}
 			: undefined,
 		fastSegment(snapshot, theme, compact),
+		snapshot.subagentStatus
+			? {
+					id: "subagent",
+					content: theme.fg("warning", snapshot.subagentStatus),
+				}
+			: undefined,
 	].filter((segment): segment is FooterSegment => segment !== undefined);
 }

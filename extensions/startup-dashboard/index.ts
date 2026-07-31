@@ -67,6 +67,7 @@ export default function startupDashboard(pi: ExtensionAPI) {
 								footerData.getGitBranch(),
 								pi.getSessionName(),
 								footerData.getExtensionStatuses().get("chat-mode"),
+								footerData.getExtensionStatuses().get("subagent"),
 							),
 							theme,
 						),
@@ -131,7 +132,7 @@ export default function startupDashboard(pi: ExtensionAPI) {
 
 	pi.registerCommand("dashboard-footer", {
 		description: "Toggle the custom dashboard footer",
-		handler: (_args: string, ctx: ExtensionCommandContext) => {
+		handler: async (_args: string, ctx: ExtensionCommandContext) => {
 			if (ctx.mode !== "tui") return;
 			footerEnabled = !footerEnabled;
 			installFooter(ctx);

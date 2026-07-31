@@ -9,6 +9,7 @@ import agentTodos from "../agent-todos/index.js";
 import chatMode from "../chat-mode/index.js";
 import cursorModels from "../cursor-models/index.js";
 import modelManager from "../model-manager/index.js";
+import multiTask from "../multi-task/index.js";
 import piLens from "../pi-lens/index.js";
 import repoSearchSubagent from "../repo-search-subagent/index.js";
 import startupDashboard from "../startup-dashboard/index.js";
@@ -21,6 +22,7 @@ export default function mingCore(pi: ExtensionAPI): void {
 	piLens(pi);
 	chatMode(pi);
 	agentTodos(pi);
+	multiTask(pi);
 	repoSearchSubagent(pi);
 	subagentConsole(pi);
 	titlebarWorking(pi);

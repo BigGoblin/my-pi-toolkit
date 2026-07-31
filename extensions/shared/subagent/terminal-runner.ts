@@ -36,6 +36,7 @@ export interface TerminalSubagentOptions {
 	presentation?: SubagentPresentation;
 	parentSessionId?: string;
 	keepOpen?: boolean;
+	env?: Record<string, string>;
 	signal?: AbortSignal;
 	onUpdate?: (update: TerminalSubagentUpdate) => void;
 }
