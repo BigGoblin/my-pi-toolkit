@@ -53,21 +53,17 @@ Pi 没有 renderer-only 注册 API。本模块采用官方支持的同名 tool o
 
 切换配置后命令会调用 Pi 的 `ctx.reload()`。
 
-## 冲突保护
+## 注册时序与冲突
 
-注册前模块通过 `pi.getAllTools()` 检查有效来源：
+Pi reload 会在 `session_start` 之前重建历史 transcript。模块因此在 extension load 阶段先注册 renderer，确保历史 tool row 与新调用使用同一展示；`session_start` 再用当前 cwd、信任状态和 SettingsManager 刷新 definition。
 
-- `sourceInfo.source === "builtin"`：允许覆盖；
-- 已由其他扩展、SDK、SSH 或 sandbox 提供：跳过并通知；
-- 当前 runtime 已由本模块注册：允许为新 session cwd 重建 definition。
-
-因此第三方执行后端优先于视觉覆盖。
+Pi 对同名扩展工具采用加载顺序优先：更早注册的第三方 SSH、sandbox 或 SDK 工具仍然生效；模块在 `session_start` 后检查最终 `sourceInfo`，对未生效的目标给出 skipped 通知。若本模块加载在第三方 override 之前，则本模块 definition 优先，用户应使用 `/grok-tools native` 或调整扩展顺序。
 
 ## 已知限制
 
 - Pi 可能把同名注册显示为 built-in override 提示。
 - 这是完整 definition override，不是真正的 renderer-only；模块通过公开的 `SettingsManager` 将 Pi 的 `shellPath`、`shellCommandPrefix` 和图片自动缩放设置传入官方 factory。
-- SSH、sandbox 或 remote operations 不属于 SettingsManager 配置；发现对应第三方 tool source 时模块会跳过覆盖。
+- SSH、sandbox 或 remote operations 不属于 SettingsManager 配置；同名工具冲突遵循 Pi 的扩展加载顺序，并在 session start 后报告最终结果。
 - Pi 升级后若 input/details 类型变化，需要同步 renderer。
 - Edit 的 final diff 会保留；原生 renderer 在执行前异步读取文件生成的 preview 不会复制，避免视觉 renderer 自行做 I/O。
 

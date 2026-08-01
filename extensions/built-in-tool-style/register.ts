@@ -1,4 +1,8 @@
-import type { ExtensionAPI, ToolInfo } from "@earendil-works/pi-coding-agent";
+import type {
+	ExtensionAPI,
+	SourceInfo,
+	ToolInfo,
+} from "@earendil-works/pi-coding-agent";
 import type { BuiltinToolName } from "./config.js";
 import type { StyledDefinitions } from "./definitions.js";
 
@@ -8,39 +12,38 @@ export interface RegistrationReport {
 	missing: BuiltinToolName[];
 }
 
-function effectiveTools(tools: ToolInfo[]): Map<string, ToolInfo> {
-	return new Map(tools.map((tool) => [tool.name, tool]));
+function sameSource(left: SourceInfo, right: SourceInfo): boolean {
+	return left.path === right.path && left.source === right.source;
 }
 
-export function registerStyledBuiltins(
+export function registerStyledDefinitions(
 	pi: ExtensionAPI,
 	enabledTools: BuiltinToolName[],
 	definitions: StyledDefinitions,
-	ownedSources: ReadonlyMap<BuiltinToolName, string> = new Map(),
+): void {
+	for (const name of enabledTools) pi.registerTool(definitions[name]);
+}
+
+export function inspectRegistration(
+	tools: ToolInfo[],
+	enabledTools: BuiltinToolName[],
+	owner: SourceInfo,
 ): RegistrationReport {
-	const available = effectiveTools(pi.getAllTools());
+	const available = new Map(tools.map((tool) => [tool.name, tool]));
 	const report: RegistrationReport = {
 		registered: [],
 		skipped: [],
 		missing: [],
 	};
-
 	for (const name of enabledTools) {
 		const current = available.get(name);
-		const definition = definitions[name];
-		if (!current || !definition) {
+		if (!current) {
 			report.missing.push(name);
 			continue;
 		}
-		const source = current.sourceInfo.source;
-		if (source !== "builtin" && ownedSources.get(name) !== source) {
-			report.skipped.push({ name, source });
-			continue;
-		}
-		pi.registerTool(definition);
-		report.registered.push(name);
+		if (sameSource(current.sourceInfo, owner)) report.registered.push(name);
+		else report.skipped.push({ name, source: current.sourceInfo.source });
 	}
-
 	return report;
 }
 

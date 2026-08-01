@@ -137,7 +137,7 @@ renderResult(result, { expanded }, theme) {
 - 路径、查询和用户文本必须压缩或截断，避免单行撑破终端。
 - Markdown 报告可在 expanded 状态使用 `Container` / `Markdown`，但 Header 仍应使用 `toolHeader()`。
 - Pi 内置工具视觉覆盖只能使用 Pi 导出的 `create*ToolDefinition()` factory，并完整保留其 schema、execute、prompt metadata 和 execution mode；不得手写或复制执行逻辑。
-- 注册同名内置工具前必须检查 `pi.getAllTools()` 的 `sourceInfo`。目标已由第三方扩展、SDK、SSH、sandbox 或 remote operations 覆盖时必须跳过，不得用视觉模块替换其执行后端。
+- 同名内置工具覆盖必须遵循 Pi 的扩展加载顺序并检查最终 `sourceInfo`。若 reload 会在 `session_start` 前重建历史 transcript，可在 extension load 阶段预注册 renderer，但必须在 session start 后报告冲突，并提供关闭开关；不得宣称能绕过 Pi 的 first-registration-wins 规则。
 - 不得复制、patch 或 monkey patch 内部 `ToolExecutionComponent`。如果公开 factory 无法保留宿主执行配置，该工具必须保持 native，并在模块 README 说明限制。
 
 ## 6. 信息层级

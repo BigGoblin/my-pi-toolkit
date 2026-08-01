@@ -5,19 +5,21 @@ import {
 	type ExtensionCommandContext,
 	type ExtensionContext,
 	type SessionStartEvent,
-	type ToolInfo,
+	type SlashCommandInfo,
+	type SourceInfo,
 } from "@earendil-works/pi-coding-agent";
 import {
 	READ_ONLY_TOOL_NAMES,
 	resolveBuiltinToolStyle,
 	writeBuiltinToolStyle,
-	type BuiltinToolName,
 	type BuiltinToolStyle,
+	type ResolvedBuiltinToolStyle,
 } from "./config.js";
 import { createStyledDefinitions } from "./definitions.js";
 import {
 	formatRegistrationReport,
-	registerStyledBuiltins,
+	inspectRegistration,
+	registerStyledDefinitions,
 	type RegistrationReport,
 } from "./register.js";
 
@@ -53,54 +55,38 @@ function notifyStatus(
 	);
 }
 
-function registerForSession(
+function registerConfigured(
 	pi: ExtensionAPI,
-	ctx: ExtensionContext,
-	ownedSources: Map<BuiltinToolName, string>,
-): RegistrationReport | undefined {
-	let config;
-	try {
-		config = resolveBuiltinToolStyle();
-	} catch (error) {
-		const message = error instanceof Error ? error.message : String(error);
-		ctx.ui.notify(`Built-in tool style disabled: ${message}`, "error");
-		return undefined;
-	}
-	if (config.enabledTools.length === 0) {
-		return { registered: [], skipped: [], missing: [] };
-	}
-	const settings = SettingsManager.create(ctx.cwd, getAgentDir(), {
-		projectTrusted: ctx.projectTrusted,
-	});
-	const definitions = createStyledDefinitions(ctx.cwd, {
+	cwd: string,
+	projectTrusted: boolean,
+	config: ResolvedBuiltinToolStyle,
+): void {
+	if (config.enabledTools.length === 0) return;
+	const settings = SettingsManager.create(cwd, getAgentDir(), { projectTrusted });
+	const definitions = createStyledDefinitions(cwd, {
 		read: { autoResizeImages: settings.getImageAutoResize() },
 		bash: {
 			commandPrefix: settings.getShellCommandPrefix(),
 			shellPath: settings.getShellPath(),
 		},
 	});
-	const report = registerStyledBuiltins(
-		pi,
-		config.enabledTools,
-		definitions,
-		ownedSources,
-	);
-	const effectiveTools = new Map<string, string>(
-		pi
-			.getAllTools()
-			.map((tool: ToolInfo): [string, string] => [
-				tool.name,
-				tool.sourceInfo.source,
-			]),
-	);
-	for (const name of report.registered) {
-		const source = effectiveTools.get(name);
-		if (source && source !== "builtin") ownedSources.set(name, source);
-	}
-	if (report.skipped.length > 0) {
-		ctx.ui.notify(formatRegistrationReport(report), "warning");
-	}
-	return report;
+	registerStyledDefinitions(pi, config.enabledTools, definitions);
+}
+
+function extensionSource(pi: ExtensionAPI): SourceInfo | undefined {
+	return pi
+		.getCommands()
+		.find((command: SlashCommandInfo) => command.name === "grok-tools")
+		?.sourceInfo;
+}
+
+function inspectEffectiveRegistration(
+	pi: ExtensionAPI,
+	config: ResolvedBuiltinToolStyle,
+): RegistrationReport | undefined {
+	const owner = extensionSource(pi);
+	if (!owner) return undefined;
+	return inspectRegistration(pi.getAllTools(), config.enabledTools, owner);
 }
 
 async function handleCommand(
@@ -108,7 +94,7 @@ async function handleCommand(
 	ctx: ExtensionCommandContext,
 	lastReport: RegistrationReport | undefined,
 ): Promise<void> {
-	let current;
+	let current: ResolvedBuiltinToolStyle;
 	try {
 		current = resolveBuiltinToolStyle();
 	} catch (error) {
@@ -134,14 +120,32 @@ async function handleCommand(
 }
 
 export default function builtInToolStyle(pi: ExtensionAPI): void {
-	const ownedSources = new Map<BuiltinToolName, string>();
 	let lastReport: RegistrationReport | undefined;
-	pi.on("session_start", (_event: SessionStartEvent, ctx: ExtensionContext) => {
-		lastReport = registerForSession(pi, ctx, ownedSources);
-	});
+	let loadError: string | undefined;
+	let config: ResolvedBuiltinToolStyle | undefined;
+
 	pi.registerCommand("grok-tools", {
 		description: "Show or set Grok styling for Pi built-in tools",
 		handler: (args: string, ctx: ExtensionCommandContext) =>
 			handleCommand(args, ctx, lastReport),
+	});
+
+	try {
+		config = resolveBuiltinToolStyle();
+		registerConfigured(pi, process.cwd(), false, config);
+	} catch (error) {
+		loadError = error instanceof Error ? error.message : String(error);
+	}
+
+	pi.on("session_start", (_event: SessionStartEvent, ctx: ExtensionContext) => {
+		if (!config) {
+			ctx.ui.notify(`Built-in tool style disabled: ${loadError}`, "error");
+			return;
+		}
+		registerConfigured(pi, ctx.cwd, ctx.projectTrusted, config);
+		lastReport = inspectEffectiveRegistration(pi, config);
+		if (lastReport?.skipped.length) {
+			ctx.ui.notify(formatRegistrationReport(lastReport), "warning");
+		}
 	});
 }
