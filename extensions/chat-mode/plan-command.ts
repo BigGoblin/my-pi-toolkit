@@ -48,13 +48,16 @@ export function registerPlanCommand(
 			return COMPLETIONS.filter((item) => item.value.startsWith(normalized));
 		},
 		handler: async (args: string, ctx: ExtensionCommandContext) => {
-			if (!ctx.isIdle()) {
-				ctx.ui.notify("请等待当前 Agent 运行结束后再执行 Plan 命令。", "warning");
-				return;
-			}
 			const action = args.trim().toLowerCase();
 			if (action === "review") {
 				await reviewPlan(ctx, options.getPlan());
+				return;
+			}
+			if (!ctx.isIdle()) {
+				ctx.ui.notify(
+					"请等待当前 Agent 运行结束后再执行 Plan 命令。",
+					"warning",
+				);
 				return;
 			}
 			if (action) {

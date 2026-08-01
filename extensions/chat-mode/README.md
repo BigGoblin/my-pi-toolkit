@@ -12,7 +12,7 @@ Plan Mode 对齐 [Grok Build](https://github.com/xai-org/grok-build) 的 `PlanMo
 BUILD → PLAN → ASK → BUILD
 ```
 
-也可使用 `/plan` 进入 Plan，使用 `/plan review` 随时重新打开当前 session 已写入的方案。Agent 运行时不能通过快捷键或命令切换或审阅；模型在运行中仍可调用 Enter/Exit Plan 工具。Pi 无法可靠地为已发出的模型请求动态替换工具集合，因此没有照搬 Grok 的 mid-turn toggle。
+也可使用 `/plan` 进入 Plan，使用 `/plan review` 随时重新打开当前 session 已写入的方案。Agent 运行时不能通过快捷键或命令切换模式；但 `/plan review` 是只读浏览，可在 Agent 运行中打开，不会暂停 Agent、触发审批、切换模式或修改 Plan。模型在运行中仍可调用 Enter/Exit Plan 工具。Pi 无法可靠地为已发出的模型请求动态替换工具集合，因此没有照搬 Grok 的 mid-turn toggle。
 
 ## Build
 
@@ -61,19 +61,19 @@ Plan 用于实施前的只读调研与方案审批：
 | `enter_plan_mode` | 征得同意后进入 Plan，seed 并返回本 session 固定的 `plan.md` |
 | `exit_plan_mode` | 从磁盘读取 Plan，以带背景色的 Markdown 对话框展示全文，再显示审批选项 |
 
-TUI 中 Plan 正文和审批选择分开显示：先在 Grok 风格的 `PLAN REVIEW` 单线边框 Markdown overlay 中展示完整方案，底部单独显示滚动和关闭提示；关闭后选择组件只显示操作。overlay 有固定视口，不会撑高终端内容；支持鼠标滚轮、↑/↓、PageUp/PageDown、Home/End 内部滚动，Enter/Esc 关闭。`/plan review` 仅重新打开该 overlay，不触发审批或切换模式。
+TUI 中 Plan 正文和审批选择分开显示：先在 Grok 风格的 `PLAN REVIEW` 单线边框 Markdown overlay 中展示完整方案，底部单独显示滚动和关闭提示；关闭后选择组件只显示操作。overlay 有固定视口，不会撑高终端内容；支持鼠标滚轮、↑/↓、PageUp/PageDown、Home/End 内部滚动，Enter/Esc 关闭。`/plan review` 仅重新打开该 overlay，不触发审批或切换模式；即使 Agent 正在运行也可只读浏览当前已写入的 Plan。
 
 审批选项：
 
-- **批准并实现**：切 Build，允许立即编码。
-- **批准但暂不实现**：切 Build，模型等待后续实施指令。
+- **批准并实现**：切 Build；下一次模型请求只注入一次实现 kickoff，并过滤历史 Plan reminder，模型应立即使用 `write` / `edit` 开始实现。扩展不会直接代替模型修改文件。
+- **批准但暂不实现**：切 Build 并结束当前 agent loop，等待后续明确的实施指令。
 - **继续编辑**：留在 Plan，继续修改同一个 `plan.md`。
-- **取消计划**：切 Build，不实施；Plan 文件仍保留供同 session 重入。
+- **取消计划**：切 Build 并结束当前 agent loop，不实施；Plan 文件仍保留供同 session 重入。
 - 无 UI 模式默认“批准并实现”。
 
 ## Lifecycle
 
-用户进入时先进入 `pending`，下一次 agent prompt 注入 full/reentry reminder 后转为 `active`；模型通过工具进入时，工具结果本身是进入信号，直接 active。active 状态交替注入 full/sparse reminder。用户切换离开时下一轮注入一次 exit reminder；工具审批退出不会重复注入陈旧 reminder。压缩后下一次恢复 full reminder。
+用户进入时先进入 `pending`，下一次 agent prompt 注入 full/reentry reminder 后转为 `active`；模型通过工具进入时，工具结果本身是进入信号，直接 active。active 状态交替注入 full/sparse reminder。用户切换离开时下一轮注入一次 exit reminder；工具审批退出时，Build/Ask 请求会过滤历史 Plan reminder，批准并实现只追加一次实现 kickoff。压缩后下一次恢复 full reminder。
 
 生命周期通过 session custom entry 保存，并按当前 session branch 恢复。
 

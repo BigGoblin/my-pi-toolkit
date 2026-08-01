@@ -15,7 +15,10 @@ import {
 	type PlanFileSeedStatus,
 	type SessionPlanFile,
 } from "./plan-file.js";
-import { planFileStructure } from "./prompt.js";
+import {
+	IMPLEMENTATION_KICKOFF,
+	planFileStructure,
+} from "./prompt.js";
 import type { ChatMode } from "./state.js";
 import {
 	toolCall,
@@ -42,10 +45,19 @@ export interface PlanModeActions {
 		ctx: ExtensionContext,
 		options?: { viaToolApproval?: boolean; entrySource?: "tool" | "user" },
 	) => void;
+	markImplementationKickoff: () => void;
 }
 
-function textResult(text: string, details?: Record<string, unknown>) {
-	return { content: [{ type: "text" as const, text }], details };
+function textResult(
+	text: string,
+	details?: Record<string, unknown>,
+	terminate = false,
+) {
+	return {
+		content: [{ type: "text" as const, text }],
+		details,
+		terminate,
+	};
 }
 
 type PlanExecuteArgs = [
@@ -239,18 +251,21 @@ export function registerPlanTools(
 				return textResult(
 					`The user abandoned this Plan. The session file remains at ${plan.absolutePath}; do not implement it.`,
 					{ outcome: "abandoned", planFile: plan.absolutePath },
+					true,
 				);
 			}
 			if (approval.decision === "defer") {
 				return textResult(
 					`The Plan was approved at ${plan.absolutePath}, but the user chose not to implement it now. Stop and wait for an explicit implementation request.`,
 					{ outcome: "approved_deferred", planFile: plan.absolutePath },
+					true,
 				);
 			}
 
+			actions.markImplementationKickoff();
 			const body = planContent ? `\n\n## Plan:\n${planContent}` : "";
 			return textResult(
-				`The Plan was approved for implementation. It is saved at ${plan.absolutePath}. You can now start coding.${body}`,
+				`${IMPLEMENTATION_KICKOFF}\n\nThe Plan is saved at ${plan.absolutePath}.${body}`,
 				{ outcome: "approved_implement", planFile: plan.absolutePath },
 			);
 		}),

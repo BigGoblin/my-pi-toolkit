@@ -1,6 +1,14 @@
 import { EXIT_PLAN_TOOL } from "./plan-file.js";
 import type { PlanReminderKind } from "./plan-lifecycle.js";
 
+export const PLAN_MODE_REMINDER_CUSTOM_TYPE = "plan-mode-reminder";
+export const PLAN_EXIT_REMINDER_CUSTOM_TYPE = "plan-mode-exit-reminder";
+export const IMPLEMENTATION_KICKOFF = [
+	"The user approved the Plan.",
+	"You are now in Build mode. Begin implementing the approved Plan immediately.",
+	"Use the available Build tools to make the first concrete change; do not only describe the implementation or ask for another approval.",
+].join("\n");
+
 export const ASK_MODE_PROMPT = `[ASK MODE]
 
 You are in question-and-answer mode.
