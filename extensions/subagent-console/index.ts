@@ -19,12 +19,14 @@ import {
 	openHistoricalSubagentOverlay,
 	openSubagentOverlay,
 } from "./overlay.js";
+import { readHistoricalEntries } from "./history.js";
 import { selectSubagentAction } from "./picker.js";
 
 interface RunSummary {
 	dir: string;
 	title: string;
 	model: string;
+	cwd: string;
 	state: "starting" | "running" | "completed" | "failed" | "exited";
 	startedAt?: string;
 	parentSessionId?: string;
@@ -97,6 +99,7 @@ async function listRuns(): Promise<RunSummary[]> {
 		dir: join(SUBAGENT_RUNS_ROOT, run.id),
 		title: run.title,
 		model: run.model,
+		cwd: run.cwd,
 		state: run.status,
 		startedAt: run.startedAt,
 		parentSessionId: run.parentSessionId,
@@ -122,6 +125,7 @@ async function listRuns(): Promise<RunSummary[]> {
 			dir,
 			title: typeof launch.title === "string" ? launch.title : basename(dir),
 			model: typeof launch.model === "string" ? launch.model : "unknown",
+			cwd: typeof launch.cwd === "string" ? launch.cwd : process.cwd(),
 			state: runState(completed, exited),
 			startedAt:
 				typeof ready?.startedAt === "string" ? ready.startedAt : undefined,
@@ -171,11 +175,15 @@ async function showSubagents(ctx: ExtensionContext): Promise<void> {
 			continue;
 		}
 		if (action === "查看详情") {
+			const entries = readHistoricalEntries(run.dir);
 			await openHistoricalSubagentOverlay(ctx, {
 				title: run.title,
 				model: run.model,
+				cwd: run.cwd,
 				status: run.state,
-				markdown: readHistoricalMarkdown(run.dir),
+				entries,
+				markdown:
+					entries.length === 0 ? readHistoricalMarkdown(run.dir) : undefined,
 			});
 			continue;
 		}

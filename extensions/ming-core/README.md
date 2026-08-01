@@ -14,7 +14,7 @@
 6. `agent-todos` — 任务清单工具与 UI
 7. `multi-task` — 独立文件任务的后台并行 worker 编排
 8. `repo-search-subagent` — 只读 Repo Search 子 Agent
-9. `subagent-console` — `/subagents` 与 `Alt+A`
+9. `subagent-console` — `/subagents` 与 `Alt+A`，完整实时/历史消息和工具时间线
 10. `titlebar-working` — 工作中标题栏动画
 11. `startup-dashboard` — 启动面板与 Footer
 

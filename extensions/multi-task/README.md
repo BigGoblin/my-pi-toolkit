@@ -11,7 +11,7 @@
 3. `collect`：收集每个 worker 的最终报告或错误
 4. `cancel`：取消正在运行和排队的 worker
 
-批次完成后，扩展会向主 Agent 排队一条 follow-up，要求调用 `collect`、整合结果并执行项目级验证。运行过程也会出现在 `/subagents` 和 `Alt+A` 子 Agent 控制台中。
+批次完成后，扩展会向主 Agent 排队一条 follow-up，要求调用 `collect`、整合结果并执行项目级验证。运行过程也会出现在 `/subagents` 和 `Alt+A` 子 Agent 控制台中；worker 完成或退出后，历史详情仍会按主界面样式显示完整消息、可折叠思考块和工具时间线，并遵循当前 `/grok-tools` 配置。
 
 ## 启动示例
 

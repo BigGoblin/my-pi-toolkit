@@ -1,8 +1,6 @@
 import {
-	AssistantMessageComponent,
 	getMarkdownTheme,
-	ToolExecutionComponent,
-	UserMessageComponent,
+	rawKeyHint,
 	type ExtensionContext,
 	type Theme,
 } from "@earendil-works/pi-coding-agent";
@@ -18,18 +16,22 @@ import type {
 	SubagentTranscriptEntry,
 } from "../shared/subagent/registry.js";
 import { fitLine } from "../shared/tui/visual-language.js";
+import {
+	createSubagentEntryRenderer,
+	type SubagentEntryRenderer,
+} from "./entry-render.js";
 import { acquireMouseTracking, mouseWheelDirection } from "./mouse.js";
 
 export interface HistoricalSubagentView {
 	title: string;
 	model: string;
+	cwd: string;
 	status: string;
-	markdown: string;
-}
-
-type SubagentView = Omit<HistoricalSubagentView, "markdown"> & {
 	markdown?: string;
 	entries?: SubagentTranscriptEntry[];
+}
+
+type SubagentView = HistoricalSubagentView & {
 	subscribe?: LiveSubagentRun["subscribe"];
 };
 
@@ -43,75 +45,40 @@ const SUBAGENT_OVERLAY_OPTIONS = {
 	},
 } as const;
 
-function renderTool(
-	entry: Extract<SubagentTranscriptEntry, { kind: "tool" }>,
-	tui: TUI,
-	cwd: string,
-	width: number,
-	expanded: boolean,
-): string[] {
-	const component = new ToolExecutionComponent(
-		entry.name,
-		entry.id,
-		entry.args,
-		{ showImages: false },
-		undefined,
-		tui,
-		cwd,
-	);
-	component.markExecutionStarted();
-	component.setArgsComplete();
-	component.setExpanded(expanded);
-	const result = entry.result as
-		| {
-				content?: Array<{
-					type: string;
-					text?: string;
-					data?: string;
-					mimeType?: string;
-				}>;
-				details?: unknown;
-		  }
-		| undefined;
-	if (result?.content)
-		component.updateResult({
-			content: result.content,
-			details: result.details,
-			isError: entry.isError ?? false,
-		});
-	return component.render(width);
-}
-
-function renderEntry(
-	entry: SubagentTranscriptEntry,
-	tui: TUI,
-	cwd: string,
-	width: number,
-	expanded: boolean,
-): string[] {
-	const markdownTheme = getMarkdownTheme();
-	if (entry.kind === "user")
-		return new UserMessageComponent(entry.text, markdownTheme, 0).render(width);
-	if (entry.kind === "assistant")
-		return new AssistantMessageComponent(
-			entry.message as ConstructorParameters<
-				typeof AssistantMessageComponent
-			>[0],
-			false,
-			markdownTheme,
-			undefined,
-			0,
-		).render(width);
-	return renderTool(entry, tui, cwd, width, expanded);
-}
-
 function subagentStatusColor(status: string): "accent" | "success" | "error" {
 	if (status === "running") return "accent";
 	if (status === "completed") return "success";
 	return "error";
 }
 
+function configuredHint(
+	keybindings: KeybindingsManager,
+	id: "app.thinking.toggle" | "app.tools.expand",
+	description: string,
+	fallback: string,
+): string {
+	const key = keybindings.getKeys(id)[0];
+	return key ? rawKeyHint(key, description) : fallback;
+}
+
+interface SubagentOverlayOptions {
+	run: SubagentView;
+	cwd: string;
+	tui: TUI;
+	requestRender: () => void;
+	theme: Theme;
+	keybindings: KeybindingsManager;
+	close: () => void;
+}
+
 class SubagentOverlay implements Component {
+	private readonly run: SubagentView;
+	private readonly tui: TUI;
+	private readonly requestRender: () => void;
+	private readonly theme: Theme;
+	private readonly keybindings: KeybindingsManager;
+	private readonly close: () => void;
+	private readonly renderEntry: SubagentEntryRenderer;
 	private readonly unsubscribe: () => void;
 	private readonly releaseMouseTracking: () => void;
 	private scrollOffset = 0;
@@ -119,15 +86,16 @@ class SubagentOverlay implements Component {
 	private viewportHeight = 1;
 	private autoFollow = true;
 	private toolOutputExpanded = false;
+	private thinkingHidden = true;
 
-	constructor(
-		private readonly run: SubagentView,
-		private readonly cwd: string,
-		private readonly tui: TUI,
-		private readonly requestRender: () => void,
-		private readonly theme: Theme,
-		private readonly close: () => void,
-	) {
+	constructor(options: SubagentOverlayOptions) {
+		this.run = options.run;
+		this.tui = options.tui;
+		this.requestRender = options.requestRender;
+		this.theme = options.theme;
+		this.keybindings = options.keybindings;
+		this.close = options.close;
+		this.renderEntry = createSubagentEntryRenderer(options.cwd, options.tui);
 		this.unsubscribe = this.run.subscribe?.(this.requestRender) ?? (() => {});
 		this.releaseMouseTracking = acquireMouseTracking(this.tui);
 	}
@@ -140,7 +108,12 @@ class SubagentOverlay implements Component {
 			this.scrollTo(nextOffset, wheelDirection > 0 && nextOffset >= maximum);
 			return;
 		}
-		if (matchesKey(data, "ctrl+o")) {
+		if (this.keybindings.matches(data, "app.thinking.toggle")) {
+			this.thinkingHidden = !this.thinkingHidden;
+			this.requestRender();
+			return;
+		}
+		if (this.keybindings.matches(data, "app.tools.expand")) {
 			this.toolOutputExpanded = !this.toolOutputExpanded;
 			this.requestRender();
 			return;
@@ -177,13 +150,10 @@ class SubagentOverlay implements Component {
 		const panelHeight = Math.max(8, Math.floor(this.tui.terminal.rows * 0.88));
 		this.viewportHeight = Math.max(1, panelHeight - 6);
 		const renderedEntries = this.run.entries?.flatMap((entry) =>
-			renderEntry(
-				entry,
-				this.tui,
-				this.cwd,
-				innerWidth,
-				this.toolOutputExpanded,
-			),
+			this.renderEntry(entry, innerWidth, {
+				toolsExpanded: this.toolOutputExpanded,
+				thinkingHidden: this.thinkingHidden,
+			}),
 		);
 		const renderedMarkdown = this.run.markdown
 			? new Markdown(this.run.markdown, 0, 0, getMarkdownTheme()).render(
@@ -215,10 +185,28 @@ class SubagentOverlay implements Component {
 		const position = this.contentHeight
 			? `${this.scrollOffset + 1}-${endLine}/${this.contentHeight}`
 			: "0/0";
+		const thinkingAction = this.thinkingHidden
+			? "show thinking"
+			: "hide thinking";
+		const toolAction = this.toolOutputExpanded
+			? "collapse tools"
+			: "expand tools";
+		const thinkingHint = configuredHint(
+			this.keybindings,
+			"app.thinking.toggle",
+			thinkingAction,
+			"toggle thinking",
+		);
+		const toolsHint = configuredHint(
+			this.keybindings,
+			"app.tools.expand",
+			toolAction,
+			"toggle tools",
+		);
 		const help = fitLine(
 			this.theme.fg(
 				"dim",
-				`↑↓/wheel scroll · Ctrl+O expand tools · End follow · Esc close · ${position}`,
+				`↑↓/wheel scroll · ${thinkingHint} · ${toolsHint} · End follow · Esc close · ${position}`,
 			),
 			innerWidth,
 		);
@@ -247,23 +235,23 @@ class SubagentOverlay implements Component {
 async function showOverlay(
 	ctx: ExtensionContext,
 	run: SubagentView,
-	cwd: string,
 ): Promise<void> {
 	await ctx.ui.custom<void>(
 		(
 			tui: TUI,
 			theme: Theme,
-			_keybindings: KeybindingsManager,
+			keybindings: KeybindingsManager,
 			done: (value: void) => void,
 		) =>
-			new SubagentOverlay(
+			new SubagentOverlay({
 				run,
-				cwd,
+				cwd: run.cwd,
 				tui,
-				() => tui.requestRender(),
+				requestRender: () => tui.requestRender(),
 				theme,
-				() => done(),
-			),
+				keybindings,
+				close: () => done(),
+			}),
 		SUBAGENT_OVERLAY_OPTIONS,
 	);
 }
@@ -272,12 +260,12 @@ export async function openSubagentOverlay(
 	ctx: ExtensionContext,
 	run: LiveSubagentRun,
 ): Promise<void> {
-	await showOverlay(ctx, run, run.cwd);
+	await showOverlay(ctx, run);
 }
 
 export async function openHistoricalSubagentOverlay(
 	ctx: ExtensionContext,
 	run: HistoricalSubagentView,
 ): Promise<void> {
-	await showOverlay(ctx, run, process.cwd());
+	await showOverlay(ctx, run);
 }

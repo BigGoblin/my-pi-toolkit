@@ -88,7 +88,7 @@ read, grep, find, ls
 
 ## 后台子 Agent 与只读 Overlay
 
-默认使用 `presentation: "manual"`：Repo Search 子 Agent 在持久 RPC Session 中后台运行，不会自动抢占焦点或创建分屏。按 `Alt+A` 可在当前 TUI 上方打开居中的大尺寸只读 Overlay，以主 Agent 相同的消息、Markdown、思考块和工具组件查看最近子 Agent 的过程；Overlay 不提供输入框，支持鼠标滚轮以及 `↑`、`↓`、`PageUp`、`PageDown`、`Home`、`End` 滚动，并使用 `Ctrl+O` 展开或折叠工具输出。按 `Esc` 返回主 Agent，但不会终止子 Agent。也可用 `/subagents` 管理指定子 Agent：列表中按 `Enter` 进入实时过程或查看历史详情；历史任务的最终报告会直接显示为 Markdown 预览。按 `C` 请求取消，按 `X` 强制终止活跃任务，按 `D` 清理已退出的任务记录。列表默认只显示当前主会话创建的子 Agent，按 `Tab` 可切换到所有会话记录；操作后会刷新列表。首轮任务完成后报告仍会自动返回主 Agent。
+默认使用 `presentation: "manual"`：Repo Search 子 Agent 在持久 RPC Session 中后台运行，不会自动抢占焦点或创建分屏。按 `Alt+A` 可在当前 TUI 上方打开居中的大尺寸只读 Overlay，以主 Agent 相同的消息、Markdown、思考块和工具组件查看最近子 Agent 的过程；Overlay 不提供输入框，支持鼠标滚轮以及 `↑`、`↓`、`PageUp`、`PageDown`、`Home`、`End` 滚动，并使用 `Ctrl+O` 展开或折叠工具输出。按 `Esc` 返回主 Agent，但不会终止子 Agent。也可用 `/subagents` 管理指定子 Agent：列表中按 `Enter` 进入实时过程或查看历史详情；completed/exited 历史会从子 Agent session 重建完整消息、思考块和工具时间线，并继续使用主界面组件样式；thinking 可用 `app.thinking.toggle`（默认 `Ctrl+T`）折叠，built-in 工具遵循当前 `/grok-tools` 配置。只有旧记录缺少或损坏 session 时，才回退到最终 Markdown 或 transcript 文本摘要。按 `C` 请求取消，按 `X` 强制终止活跃任务，按 `D` 清理已退出的任务记录。列表默认只显示当前主会话创建的子 Agent，按 `Tab` 可切换到所有会话记录；操作后会刷新列表。首轮任务完成后报告仍会自动返回主 Agent。
 
 如需原来的 Windows Terminal 行为，可显式设置 `presentation: "split"` 或 `"tab"`；`"auto"` 会在原生 Windows Terminal 中自动分屏，在其他环境回退到内联模式。
 

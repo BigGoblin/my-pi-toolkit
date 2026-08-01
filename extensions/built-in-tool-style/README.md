@@ -71,6 +71,7 @@ Pi 对同名扩展工具采用加载顺序优先：更早注册的第三方 SSH�
 
 - `renderShell: "default"`，复用 Pi 的状态背景：运行中 `toolPendingBg`、成功 `toolSuccessBg`、失败 `toolErrorBg`；状态同时使用 `●` / `✓` / `✗`。
 - `Ctrl+O` 继续控制展开；提示由 `keyHint("app.tools.expand", ...)` 生成。
+- Subagent Console 的 live/history Overlay 复用同一批 styled definitions，并遵循当前 `grok`、`native` 或部分工具配置；只借用 renderer，不改变子 Agent 工具执行。
 - Read/Write 展开时语法高亮。
 - Edit 展开时显示带语义色的 diff。
 - Bash 折叠时显示尾部输出、耗时、截断和 full output path。
