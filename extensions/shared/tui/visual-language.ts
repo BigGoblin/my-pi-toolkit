@@ -45,7 +45,7 @@ export function secondaryLine(theme: Theme, text: string): string {
 
 export function timelineLine(theme: Theme, text = ""): string {
 	const content = text ? ` ${theme.fg("muted", text)}` : "";
-	return `${theme.fg("dim", UI_GLYPHS.line)}${content}`;
+	return `  ${theme.fg("dim", UI_GLYPHS.line)}${content}`;
 }
 
 export function sectionRule(theme: Theme, width: number): string {
