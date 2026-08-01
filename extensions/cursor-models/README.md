@@ -9,7 +9,7 @@
 - Fast 状态独立保存，并在 Cursor 模型请求时生效。
 - 会话启动时迁移旧的扁平模型选择。
 
-思考等级请使用 `/thinking`（由 model-manager 提供）；`Shift+Tab` 用于切换 Build/Plan/Ask 会话模式。
+思考等级请使用 `/effort`（由 model-manager 提供）；`Shift+Tab` 用于切换 Build/Plan/Ask 会话模式。
 
 ## Command and shortcut
 

@@ -1,13 +1,13 @@
 # Model Manager
 
-用于集中管理 Pi 模型相关行为。当前提供“新对话固定默认模型”与 `/thinking` 思考等级选择器。
+用于集中管理 Pi 模型相关行为。当前提供“新对话固定默认模型”与 `/effort` 思考等级选择器。
 
-## `/thinking`
+## `/effort`
 
 打开当前模型支持的思考等级选择器（与 Pi 内置 Thinking Level UI 一致）。`Shift+Tab` 已用于 Build/Plan/Ask 模式切换，因此用本命令代替循环切换。
 
 ```text
-/thinking
+/effort
 ```
 
 - 仅交互（TUI）模式可用。
