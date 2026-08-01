@@ -3,3 +3,5 @@ node_modules/
 .tmp-*
 nul
 plan
+.pi/plan.md
+.pi/plans/
