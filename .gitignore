@@ -4,4 +4,5 @@ node_modules/
 nul
 plan
 .pi/plan.md
+.pi/model-manager.json
 .pi/plans/
