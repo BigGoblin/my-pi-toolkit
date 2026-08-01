@@ -1,4 +1,9 @@
-export type MultiTaskAction = "start" | "status" | "collect" | "cancel";
+export type MultiTaskAction =
+	| "run"
+	| "start"
+	| "status"
+	| "collect"
+	| "cancel";
 export type BatchStatus = "running" | "completed" | "failed" | "cancelled";
 export type WorkerStatus =
 	| "queued"
@@ -21,6 +26,11 @@ export interface MultiTaskInput {
 	model?: string;
 }
 
+export interface MultiTaskToolCall {
+	name: string;
+	arguments: Record<string, unknown>;
+}
+
 export interface MultiTaskWorker {
 	id: string;
 	task: string;
@@ -31,6 +41,8 @@ export interface MultiTaskWorker {
 	output?: string;
 	error?: string;
 	runDir?: string;
+	progress?: string;
+	toolCalls: MultiTaskToolCall[];
 	controller: AbortController;
 }
 
@@ -57,6 +69,8 @@ export interface MultiTaskWorkerView {
 	output?: string;
 	error?: string;
 	runDir?: string;
+	progress?: string;
+	toolCalls: MultiTaskToolCall[];
 }
 
 export interface MultiTaskBatchView {
@@ -72,4 +86,9 @@ export interface MultiTaskBatchView {
 export interface MultiTaskDetails {
 	action: MultiTaskAction;
 	batch: MultiTaskBatchView;
+}
+
+export interface MultiTaskBatchHandle {
+	batch: MultiTaskBatch;
+	completion: Promise<MultiTaskBatch>;
 }

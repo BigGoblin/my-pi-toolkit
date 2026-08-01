@@ -8,6 +8,8 @@ import {
 	type Theme,
 	type ToolRenderResultOptions,
 } from "@earendil-works/pi-coding-agent";
+import { truncateToWidth } from "@earendil-works/pi-tui";
+import { statusGlyph } from "../shared/tui/visual-language.js";
 import { toolCall, toolResult } from "../shared/tui/tool-render.js";
 // @ts-expect-error -- TypeBox's .d.mts exports require a newer resolver than the workspace LSP.
 import { Type } from "typebox";
@@ -27,12 +29,23 @@ import type {
 
 const EXTENSION_DIR = dirname(fileURLToPath(import.meta.url));
 const PATH_GUARD_EXTENSION = resolve(EXTENSION_DIR, "path-guard.ts");
+const PI_LENS_EXTENSION = resolve(EXTENSION_DIR, "../pi-lens/index.js");
 const CURSOR_PROVIDER_EXTENSION = resolve(
 	EXTENSION_DIR,
 	"../cursor-models/index.ts",
 );
+const WORKER_EXTENSIONS = [
+	CURSOR_PROVIDER_EXTENSION,
+	PI_LENS_EXTENSION,
+	PATH_GUARD_EXTENSION,
+];
 const MAX_RESULT_BYTES = 50 * 1024;
 const MAX_RESULT_LINES = 2000;
+
+type MultiTaskToolUpdate = {
+	content: Array<{ type: "text"; text: string }>;
+	details: MultiTaskDetails;
+};
 
 function snapshot(
 	batch: MultiTaskBatch,
@@ -52,6 +65,8 @@ function snapshot(
 			status: worker.status,
 			startedAt: worker.startedAt,
 			completedAt: worker.completedAt,
+			progress: worker.progress,
+			toolCalls: worker.toolCalls,
 			...(includeOutput
 				? { output: worker.output, runDir: worker.runDir }
 				: {}),
@@ -75,6 +90,73 @@ function summarize(batch: MultiTaskBatchView): string {
 		.map(([status, count]) => `${status}=${count}`)
 		.join(", ");
 	return `Batch ${batch.id}: ${batch.status} (${statuses})`;
+}
+
+function progressText(batch: MultiTaskBatchView): string {
+	const workers = batch.workers.map((worker) => {
+		const lastCall = worker.toolCalls.slice(-1)[0];
+		const activity = lastCall
+			? `→ ${previewToolCall(lastCall.name, lastCall.arguments)}`
+			: worker.progress ?? worker.status;
+		return `${worker.id}: ${worker.status} ${activity}`;
+	});
+	return [summarize(batch), ...workers].join("\n");
+}
+
+function workerStatusVisual(
+	status: MultiTaskBatchView["workers"][number]["status"],
+): "active" | "success" | "error" | "pending" {
+	if (status === "running") return "active";
+	if (status === "completed") return "success";
+	if (status === "queued") return "pending";
+	return "error";
+}
+
+type ClipValue = (value: unknown, width?: number) => string;
+type ToolPreviewer = (args: Record<string, unknown>, clip: ClipValue) => string;
+
+const TOOL_PREVIEWERS: Record<string, ToolPreviewer> = {
+	read: (args, clip) => `read ${clip(args.path ?? "...")}`,
+	write: (args, clip) => `write ${clip(args.path ?? "...")}`,
+	edit: (args, clip) => `edit ${clip(args.path ?? "...")}`,
+	grep: (args, clip) =>
+		`grep /${clip(args.pattern ?? "", 36)}/ in ${clip(args.path ?? ".")}`,
+	find: (args, clip) =>
+		`find ${clip(args.pattern ?? "*", 36)} in ${clip(args.path ?? ".")}`,
+	ls: (args, clip) => `ls ${clip(args.path ?? ".")}`,
+};
+
+function previewToolCall(
+	name: string,
+	args: Record<string, unknown>,
+): string {
+	const clip: ClipValue = (value, width = 56) =>
+		truncateToWidth(String(value ?? ""), width, "…");
+	return TOOL_PREVIEWERS[name]?.(args, clip) ?? clip(name, 72);
+}
+
+function progressDetails(
+	batch: MultiTaskBatchView,
+	theme: Theme,
+	expanded: boolean,
+): string[] {
+	const details: string[] = [];
+	for (const worker of batch.workers) {
+		const lastCall = worker.toolCalls.slice(-1)[0];
+		const activity = lastCall
+			? previewToolCall(lastCall.name, lastCall.arguments)
+			: worker.progress ?? worker.status;
+		details.push(
+			`${statusGlyph(theme, workerStatusVisual(worker.status))} ${truncateToWidth(`${worker.id} · ${worker.status} · ${activity}`, 120, "…")}`,
+		);
+		if (expanded) {
+			for (const call of worker.toolCalls.slice(-4, -1))
+				details.push(
+					`  └ ${truncateToWidth(`${worker.id}: ${previewToolCall(call.name, call.arguments)}`, 116, "…")}`,
+				);
+		}
+	}
+	return details;
 }
 
 function collectText(batch: MultiTaskBatchView): string {
@@ -113,23 +195,136 @@ function currentModel(params: MultiTaskInput, ctx: ExtensionContext): string {
 	throw new Error("未指定 worker 模型，且主 Agent 当前没有可继承的模型");
 }
 
-export default function multiTaskExtension(pi: ExtensionAPI): void {
-	pi.registerTool({
+interface MultiTaskExecutionOptions {
+	params: MultiTaskInput;
+	signal: AbortSignal | undefined;
+	onUpdate: ((partial: MultiTaskToolUpdate) => void) | undefined;
+	ctx: ExtensionContext;
+	pi: ExtensionAPI;
+}
+
+type MultiTaskToolExecuteArgs = [
+	string,
+	MultiTaskInput,
+	AbortSignal | undefined,
+	((partial: MultiTaskToolUpdate) => void) | undefined,
+	ExtensionContext,
+];
+
+async function runBatch(
+	options: MultiTaskExecutionOptions,
+): Promise<MultiTaskBatch> {
+	const { params, ctx, signal, onUpdate } = options;
+	if (!params.tasks) throw new Error("multi_task run 需要 tasks");
+	const handle = startBatch({
+		cwd: ctx.cwd,
+		model: currentModel(params, ctx),
+		parentSessionId: ctx.sessionManager.getSessionId(),
+		tasks: params.tasks,
+		maxConcurrency: params.maxConcurrency ?? 3,
+		extensionPaths: WORKER_EXTENSIONS,
+		signal,
+		onProgress: (current) => {
+			const view = snapshot(current, false);
+			onUpdate?.({
+				content: [{ type: "text", text: progressText(view) }],
+				details: { action: "run", batch: view },
+			});
+		},
+	});
+	const batch = await handle.completion;
+	if (signal?.aborted) throw new Error("Multi Task 已取消");
+	return batch;
+}
+
+function startBackgroundBatch(
+	options: MultiTaskExecutionOptions,
+): MultiTaskBatch {
+	const { params, ctx, pi } = options;
+	if (!params.tasks) throw new Error("multi_task start 需要 tasks");
+	const handle = startBatch({
+		cwd: ctx.cwd,
+		model: currentModel(params, ctx),
+		parentSessionId: ctx.sessionManager.getSessionId(),
+		tasks: params.tasks,
+		maxConcurrency: params.maxConcurrency ?? 3,
+		extensionPaths: WORKER_EXTENSIONS,
+		onSettled: (settled) =>
+			pi.sendMessage(
+				{
+					customType: "multi-task-complete",
+					content: `Multi Task batch ${settled.id} finished with status ${settled.status}. Do not poll this background batch; call multi_task collect with this batchId after this completion notice, integrate the results, then run project-level verification.`,
+					display: true,
+					details: { batchId: settled.id, status: settled.status },
+				},
+				{ deliverAs: "followUp", triggerTurn: true },
+			),
+	});
+	return handle.batch;
+}
+
+function responseText(
+	action: MultiTaskInput["action"],
+	view: MultiTaskBatchView,
+	includeOutput: boolean,
+): string {
+	if (includeOutput) return collectText(view);
+	if (action === "start")
+		return `${summarize(view)}\n\n后台批次已启动；等待完成通知，不要轮询 status。`;
+	if (action === "status") return progressText(view);
+	return summarize(view);
+}
+
+async function executeMultiTask(
+	options: MultiTaskExecutionOptions,
+): Promise<{
+	content: Array<{ type: "text"; text: string }>;
+	details: MultiTaskDetails;
+}> {
+	const { params } = options;
+	let batch: MultiTaskBatch;
+	let includeOutput = false;
+	if (params.action === "run") {
+		batch = await runBatch(options);
+		includeOutput = true;
+	} else if (params.action === "start") {
+		batch = startBackgroundBatch(options);
+	} else if (params.action === "status") {
+		batch = requireBatch(params.batchId);
+	} else if (params.action === "collect") {
+		batch = requireBatch(params.batchId);
+		includeOutput = true;
+	} else if (params.action === "cancel") {
+		batch = requireBatch(params.batchId);
+		cancelBatch(batch);
+	} else {
+		throw new Error(`不支持的 Multi Task 操作: ${String(params.action)}`);
+	}
+	const view = snapshot(batch, includeOutput);
+	return {
+		content: [{ type: "text", text: responseText(params.action, view, includeOutput) }],
+		details: { action: params.action, batch: view },
+	};
+}
+
+function createMultiTaskTool(pi: ExtensionAPI) {
+	return {
 		name: "multi_task",
 		label: "Multi Task",
 		description:
-			"Start and manage a background pool of isolated worker agents for independent, non-overlapping file tasks. Actions: start, status, collect, cancel.",
+			"Run or manage isolated worker agents for independent, non-overlapping file tasks. The default run action keeps one tool call open and streams aggregated worker progress without polling; start is the advanced fire-and-forget mode. Actions: run, start, status, collect, cancel.",
 		promptSnippet:
 			"Run independent, non-overlapping file tasks concurrently in background worker agents",
 		promptGuidelines: [
-			"Use multi_task only when tasks are independent, have explicit non-overlapping write paths, and the main agent can continue without their immediate results.",
+			"Use multi_task run by default when independent tasks can be completed in one coordinated batch; it streams progress in the existing tool card and returns final reports without status/collect polling.",
+			"Use multi_task start only when the main agent has other independent work to do while workers run; do not poll status repeatedly, wait for the completion follow-up.",
 			"Do not use multi_task for tasks that modify shared files, depend on one another, or require unresolved architecture decisions.",
-			"After a multi_task batch completes, collect its results and run project-level verification before declaring the work complete.",
+			"Every multi_task worker loads Pi Lens and must run bounded diagnostics after editing; integrate worker reports and run project-level verification before declaring the work complete.",
 		],
 		parameters: Type.Object({
 			action: Type.Unsafe<MultiTaskInput["action"]>({
 				type: "string",
-				enum: ["start", "status", "collect", "cancel"],
+				enum: ["run", "start", "status", "collect", "cancel"],
 			}),
 			batchId: Type.Optional(Type.String()),
 			tasks: Type.Optional(
@@ -145,58 +340,9 @@ export default function multiTaskExtension(pi: ExtensionAPI): void {
 			maxConcurrency: Type.Optional(Type.Integer({ minimum: 1, maximum: 6 })),
 			model: Type.Optional(Type.String()),
 		}),
-		async execute(
-			_toolCallId: string,
-			params: MultiTaskInput,
-			_signal: AbortSignal | undefined,
-			_onUpdate: unknown,
-			ctx: ExtensionContext,
-		) {
-			let batch: MultiTaskBatch;
-			let includeOutput = false;
-			switch (params.action) {
-				case "start": {
-					if (!params.tasks) throw new Error("multi_task start 需要 tasks");
-					batch = startBatch({
-						cwd: ctx.cwd,
-						model: currentModel(params, ctx),
-						parentSessionId: ctx.sessionManager.getSessionId(),
-						tasks: params.tasks,
-						maxConcurrency: params.maxConcurrency ?? 3,
-						extensionPaths: [CURSOR_PROVIDER_EXTENSION, PATH_GUARD_EXTENSION],
-						onSettled: (settled) =>
-							pi.sendMessage(
-								{
-									customType: "multi-task-complete",
-									content: `Multi Task batch ${settled.id} finished with status ${settled.status}. Call multi_task collect with this batchId, integrate the results, then run project-level verification.`,
-									display: true,
-									details: { batchId: settled.id, status: settled.status },
-								},
-								{ deliverAs: "followUp", triggerTurn: true },
-							),
-					});
-					break;
-				}
-				case "status":
-					batch = requireBatch(params.batchId);
-					break;
-				case "collect":
-					batch = requireBatch(params.batchId);
-					includeOutput = true;
-					break;
-				case "cancel":
-					batch = requireBatch(params.batchId);
-					cancelBatch(batch);
-					break;
-				default:
-					throw new Error(`不支持的 Multi Task 操作: ${String(params.action)}`);
-			}
-			const view = snapshot(batch, includeOutput);
-			const text = includeOutput ? collectText(view) : summarize(view);
-			return {
-				content: [{ type: "text" as const, text }],
-				details: { action: params.action, batch: view } as MultiTaskDetails,
-			};
+		async execute(...args: MultiTaskToolExecuteArgs) {
+			const [, params, signal, onUpdate, ctx] = args;
+			return executeMultiTask({ params, signal, onUpdate, ctx, pi });
 		},
 		renderCall(args: MultiTaskInput, theme: Theme) {
 			const count = args.tasks?.length;
@@ -209,7 +355,7 @@ export default function multiTaskExtension(pi: ExtensionAPI): void {
 		},
 		renderResult(
 			result: AgentToolResult<MultiTaskDetails>,
-			_options: ToolRenderResultOptions,
+			{ expanded, isPartial }: ToolRenderResultOptions,
 			theme: Theme,
 		) {
 			const batch = result.details?.batch;
@@ -220,13 +366,28 @@ export default function multiTaskExtension(pi: ExtensionAPI): void {
 					summary: "no batch details",
 				});
 			}
+			let hasOutput = false;
+			for (const worker of batch.workers) {
+				if (worker.output || worker.error) {
+					hasOutput = true;
+					break;
+				}
+			}
 			return toolResult(theme, {
 				status: batchVisualStatus(batch.status),
-				title: "multi_task",
+				title: isPartial ? "multi_task · running" : "multi_task",
 				summary: summarize(batch),
+				details: progressDetails(batch, theme, expanded),
+				body: expanded && hasOutput ? collectText(batch) : undefined,
+				hint:
+					!expanded && hasOutput ? "(Ctrl+O to expand worker reports)" : undefined,
 			});
 		},
-	});
+	};
+}
+
+export default function multiTaskExtension(pi: ExtensionAPI): void {
+	pi.registerTool(createMultiTaskTool(pi));
 
 	pi.on("tool_call", (event: unknown, ctx: ExtensionContext) => {
 		const toolEvent = event as { toolName: string; input: unknown };

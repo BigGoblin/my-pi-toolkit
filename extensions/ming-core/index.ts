@@ -1,8 +1,8 @@
 /**
  * ming-core — 编排本 toolkit 的通用能力扩展。
  *
- * tapd / context7 仍为独立入口。子 Agent 继续通过瘦路径
- * `extensions/cursor-models/index.ts` 单独加载 provider，勿改指向本入口。
+ * tapd / context7 仍为独立入口。子 Agent 使用瘦加载路径：
+ * Multi Task 只显式加载 cursor-models、pi-lens 和 path-guard，勿改为指向本入口。
  */
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import agentTodos from "../agent-todos/index.js";
