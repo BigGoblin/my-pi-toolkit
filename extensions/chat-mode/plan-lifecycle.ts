@@ -1,59 +1,74 @@
-/**
- * Plan-mode lifecycle tracker adapted from Grok Build's PlanModeTracker
- * (xai-grok-shell/src/session/plan_mode.rs): reminder alternation, reentry,
- * and one-shot exit reminder after user-initiated leave.
- */
+/** Grok-inspired, session-scoped Plan Mode lifecycle and reminder tracker. */
+
+export type PlanModeState = "inactive" | "pending" | "active";
 
 export interface PlanLifecycleSnapshot {
+	version?: 1;
+	state?: PlanModeState;
 	wasPreviouslyActive: boolean;
 	reminderCount: number;
 	pendingExitReminder: boolean;
 }
 
+let state: PlanModeState = "inactive";
 let wasPreviouslyActive = false;
 let reminderCount = 0;
 let pendingExitReminder = false;
 
 export function getPlanLifecycleSnapshot(): PlanLifecycleSnapshot {
-	return { wasPreviouslyActive, reminderCount, pendingExitReminder };
+	return {
+		version: 1,
+		state,
+		wasPreviouslyActive,
+		reminderCount,
+		pendingExitReminder,
+	};
 }
 
-export function restorePlanLifecycle(snapshot: Partial<PlanLifecycleSnapshot> | undefined): void {
+export function restorePlanLifecycle(
+	snapshot: Partial<PlanLifecycleSnapshot> | undefined,
+): void {
+	state =
+		snapshot?.state === "pending" || snapshot?.state === "active"
+			? snapshot.state
+			: "inactive";
 	wasPreviouslyActive = snapshot?.wasPreviouslyActive ?? false;
 	reminderCount = snapshot?.reminderCount ?? 0;
 	pendingExitReminder = snapshot?.pendingExitReminder ?? false;
 }
 
 export function resetPlanLifecycle(): void {
+	state = "inactive";
 	wasPreviouslyActive = false;
 	reminderCount = 0;
 	pendingExitReminder = false;
 }
 
-/** Call when entering plan (user toggle, /plan, or enter_plan_mode). */
-export function onEnterPlan(): void {
+/** User entry is pending until the next prompt receives its activation reminder. */
+export function enterPlanFromUser(): void {
+	state = "pending";
 	pendingExitReminder = false;
 	reminderCount = 0;
 }
 
-/**
- * Call when leaving plan.
- * @param viaToolApproval - true for exit_plan_mode approved/abandoned (tool
- *   result already signals the model). false for Shift+Tab / mode cycle (arm exit reminder).
- */
-export function onLeavePlan(viaToolApproval: boolean): void {
+/** Tool entry is immediately active because the tool result is the entry signal. */
+export function enterPlanFromTool(): void {
+	state = "active";
+	wasPreviouslyActive = true;
+	pendingExitReminder = false;
+	reminderCount = 0;
+}
+
+export function leavePlan(viaToolResult: boolean): void {
+	if (state === "inactive") return;
+	state = "inactive";
 	wasPreviouslyActive = true;
 	reminderCount = 0;
-	pendingExitReminder = !viaToolApproval;
+	pendingExitReminder = !viaToolResult;
 }
 
 export type PlanReminderKind = "full" | "sparse" | "reentry" | "exit";
 
-/**
- * Pick the reminder for the upcoming agent turn.
- * Mirrors Grok inject_plan_mode_reminders ordering: exit first when armed,
- * else Active-state full/sparse/reentry with alternating count.
- */
 export function takePlanReminder(inPlan: boolean): PlanReminderKind | undefined {
 	if (pendingExitReminder && !inPlan) {
 		pendingExitReminder = false;
@@ -61,11 +76,27 @@ export function takePlanReminder(inPlan: boolean): PlanReminderKind | undefined 
 	}
 	if (!inPlan) return undefined;
 
-	if (wasPreviouslyActive && reminderCount === 0) {
+	if (state === "pending") {
+		const kind: PlanReminderKind = wasPreviouslyActive ? "reentry" : "full";
+		state = "active";
+		wasPreviouslyActive = true;
 		reminderCount = 1;
-		return "reentry";
+		return kind;
 	}
+
+	if (state === "inactive") {
+		// Compatibility for legacy snapshots that persisted mode without state.
+		state = "active";
+		wasPreviouslyActive = true;
+		reminderCount = 1;
+		return "full";
+	}
+
 	const kind: PlanReminderKind = reminderCount % 2 === 0 ? "full" : "sparse";
 	reminderCount += 1;
 	return kind;
+}
+
+export function resetPlanRemindersAfterCompaction(): void {
+	if (state === "active") reminderCount = 0;
 }

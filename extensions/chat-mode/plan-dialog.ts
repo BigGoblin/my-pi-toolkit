@@ -1,0 +1,195 @@
+import {
+	getMarkdownTheme,
+	type ExtensionContext,
+	type Theme,
+} from "@earendil-works/pi-coding-agent";
+import {
+	Box,
+	type Component,
+	type KeybindingsManager,
+	Markdown,
+	matchesKey,
+	Text,
+	truncateToWidth,
+	type TUI,
+} from "@earendil-works/pi-tui";
+import {
+	acquireMouseTracking,
+	mouseWheelDirection,
+} from "../shared/tui/mouse.js";
+
+const PANEL_HEIGHT_RATIO = 0.84;
+const WHEEL_STEP = 3;
+
+interface PlanDialogOptions {
+	tui: TUI;
+	theme: Theme;
+	planPath: string;
+	planContent: string | undefined;
+	close: () => void;
+}
+
+function scrollTarget(
+	data: string,
+	current: number,
+	viewport: number,
+	maximum: number,
+): number | undefined {
+	const wheel = mouseWheelDirection(data);
+	if (wheel !== undefined) return current + wheel * WHEEL_STEP;
+	if (matchesKey(data, "up")) return current - 1;
+	if (matchesKey(data, "down")) return current + 1;
+	if (matchesKey(data, "pageUp")) return current - viewport;
+	if (matchesKey(data, "pageDown")) return current + viewport;
+	if (matchesKey(data, "home")) return 0;
+	if (matchesKey(data, "end")) return maximum;
+	return undefined;
+}
+
+class PlanReviewDialog implements Component {
+	private readonly contentBox: Box;
+	private readonly releaseMouse: () => void;
+	private readonly tui: TUI;
+	private readonly theme: Theme;
+	private readonly planPath: string;
+	private readonly close: () => void;
+	private scrollOffset = 0;
+	private viewportHeight = 1;
+	private contentHeight = 0;
+
+	constructor(options: PlanDialogOptions) {
+		this.tui = options.tui;
+		this.theme = options.theme;
+		this.planPath = options.planPath;
+		this.close = options.close;
+		this.contentBox = new Box(
+			1,
+			0,
+			(text: string) => options.theme.bg("customMessageBg", text),
+		);
+		this.contentBox.addChild(
+			new Markdown(
+				options.planContent ?? "_该 Plan 尚未写入内容。_",
+				0,
+				0,
+				getMarkdownTheme(),
+			),
+		);
+		this.releaseMouse = acquireMouseTracking(options.tui);
+	}
+
+	handleInput(data: string): void {
+		if (matchesKey(data, "enter") || matchesKey(data, "escape")) {
+			this.close();
+			return;
+		}
+		const target = scrollTarget(
+			data,
+			this.scrollOffset,
+			this.viewportHeight,
+			this.maximumOffset(),
+		);
+		if (target !== undefined) this.scrollTo(target);
+	}
+
+	private maximumOffset(): number {
+		return Math.max(0, this.contentHeight - this.viewportHeight);
+	}
+
+	private scrollTo(offset: number): void {
+		this.scrollOffset = Math.max(0, Math.min(this.maximumOffset(), offset));
+		this.tui.requestRender();
+	}
+
+	render(width: number): string[] {
+		const innerWidth = Math.max(20, width - 2);
+		const background = (text: string) =>
+			this.theme.bg("customMessageBg", text);
+		const title = new Text(
+			this.theme.fg("accent", this.theme.bold(`Plan Review · ${this.planPath}`)),
+			1,
+			0,
+			background,
+		).render(innerWidth);
+		const content = this.contentBox.render(innerWidth);
+		this.contentHeight = content.length;
+
+		const panelHeight = Math.max(
+			8,
+			Math.floor(this.tui.terminal.rows * PANEL_HEIGHT_RATIO),
+		);
+		this.viewportHeight = Math.max(1, panelHeight - title.length - 3);
+		this.scrollOffset = Math.min(this.scrollOffset, this.maximumOffset());
+		const visible = content.slice(
+			this.scrollOffset,
+			this.scrollOffset + this.viewportHeight,
+		);
+		const blank = background(" ".repeat(innerWidth));
+		while (visible.length < this.viewportHeight) visible.push(blank);
+
+		const end = Math.min(
+			this.contentHeight,
+			this.scrollOffset + this.viewportHeight,
+		);
+		const status = [
+			`${this.scrollOffset + 1}-${end} / ${this.contentHeight}`,
+			"滚轮/↑↓/PgUp/PgDn/Home/End 滚动",
+			"Enter/Esc 关闭",
+		].join(" · ");
+		const footer = new Text(this.theme.fg("dim", status), 1, 0, background)
+			.render(innerWidth)
+			.slice(0, 1);
+		const border = (text: string) => this.theme.fg("accent", text);
+		const body = [...title, ...visible, ...footer].map(
+			(line) =>
+				`${border("│")}${truncateToWidth(line, innerWidth, "", true)}${border("│")}`,
+		);
+		return [
+			border(`╭${"─".repeat(innerWidth)}╮`),
+			...body,
+			border(`╰${"─".repeat(innerWidth)}╯`),
+		];
+	}
+
+	invalidate(): void {
+		this.contentBox.invalidate();
+	}
+
+	dispose(): void {
+		this.releaseMouse();
+	}
+}
+
+export async function showPlanDialog(
+	ctx: ExtensionContext,
+	planPath: string,
+	planContent: string | undefined,
+): Promise<void> {
+	if (ctx.mode !== "tui") return;
+
+	await ctx.ui.custom<void>(
+		(
+			tui: TUI,
+			theme: Theme,
+			_keybindings: KeybindingsManager,
+			done: (result: void) => void,
+		) =>
+			new PlanReviewDialog({
+				tui,
+				theme,
+				planPath,
+				planContent,
+				close: done,
+			}),
+		{
+			overlay: true,
+			overlayOptions: {
+				width: "90%",
+				minWidth: 48,
+				maxHeight: "84%",
+				anchor: "center",
+				margin: 1,
+			},
+		},
+	);
+}

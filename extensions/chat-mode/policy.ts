@@ -1,5 +1,5 @@
 import type { ToolCallEvent } from "@earendil-works/pi-coding-agent";
-import { isPlanFilePath, isProjectPiPath, PLAN_FILE_RELATIVE } from "./paths.js";
+import { isPlanFilePath, isProjectPiPath } from "./paths.js";
 import { ENTER_PLAN_TOOL, EXIT_PLAN_TOOL } from "./plan-file.js";
 
 const PATH_GATED_TOOLS = new Set(["write", "edit"]);
@@ -55,6 +55,7 @@ export async function checkAskToolCall(
 export async function checkPlanToolCall(
 	event: ToolCallEvent,
 	cwd: string,
+	activePlanRelativePath: string | undefined,
 ): Promise<string | undefined> {
 	if (SAFE_TOOLS.has(event.toolName)) return undefined;
 	if (!PATH_GATED_TOOLS.has(event.toolName)) {
@@ -65,6 +66,9 @@ export async function checkPlanToolCall(
 	if (typeof input.path !== "string") {
 		return `Rejected: "${event.toolName}" requires a target path.`;
 	}
-	if (await isPlanFilePath(cwd, input.path)) return undefined;
-	return `Rejected: file edits are not allowed in plan mode - the only editable file is the plan file (${PLAN_FILE_RELATIVE}).`;
+	if (await isPlanFilePath(cwd, input.path, activePlanRelativePath)) {
+		return undefined;
+	}
+	const target = activePlanRelativePath ?? "unavailable";
+	return `Rejected: file edits are not allowed in plan mode - the only editable file is the active plan (${target}).`;
 }

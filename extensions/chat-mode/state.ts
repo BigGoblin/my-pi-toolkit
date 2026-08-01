@@ -14,7 +14,7 @@ export function setChatMode(mode: ChatMode): void {
 
 export function nextChatMode(mode: ChatMode = currentMode): ChatMode {
 	const index = MODE_CYCLE.indexOf(mode);
-	return MODE_CYCLE[(index + 1) % MODE_CYCLE.length]!;
+	return MODE_CYCLE[(index + 1) % MODE_CYCLE.length] ?? "build";
 }
 
 export function isRestrictedMode(mode: ChatMode): boolean {
