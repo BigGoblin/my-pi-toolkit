@@ -21,6 +21,7 @@
 | Subagent Console | 用 `/subagents` 查看和管理子 Agent、用 `Alt+A` 进入最近任务；Grok 风格 picker/overlay 支持键盘与鼠标滚轮，并在 Footer 显示活跃数量 | `subagent-console/index.ts` |
 | Agent Todos | Cursor TodoWrite 风格任务清单，editor 上方完整进度 | [`agent-todos/README.md`](agent-todos/README.md) |
 | Chat Mode | 使用 `Shift+Tab` 循环 Build/Plan/Ask；Plan 仅可写 `.pi/plan.md`，含 enter/exit_plan_mode 审批 | [`chat-mode/README.md`](chat-mode/README.md) |
+| Built-in Tool Style | 通过官方 tool factory 为 Pi 七个内置工具提供可选 Grok 时间线；`/grok-tools` 配置 | [`built-in-tool-style/README.md`](built-in-tool-style/README.md) |
 | Cursor Models | Cursor 模型折叠、思考等级和 Fast 模式 | [`cursor-models/README.md`](cursor-models/README.md) |
 | Model Manager | 为新对话应用可配置的默认模型和思考等级；`/effort` 选择当前模型思考等级 | [`model-manager/README.md`](model-manager/README.md) |
 | Pi Lens | LSP、AST 搜索、诊断和代码分析扩展加载入口 | [`pi-lens/README.md`](pi-lens/README.md) |
@@ -32,6 +33,6 @@
 
 ## TUI 视觉层
 
-`shared/tui/visual-language.ts` 统一状态字符、模式 badge、间距与行宽处理；`tool-render.ts` 和 `tool-format.ts` 为 toolkit 工具提供运行/成功/失败时间线。该视觉层不替换 Pi 内置主对话 renderer，也不承诺主对话区鼠标点击；Plan 与 Subagent overlay 仅使用扩展层已有的 SGR 鼠标滚轮支持。
+`shared/tui/visual-language.ts` 统一状态字符、模式 badge、间距与行宽处理；`tool-render.ts` 和 `tool-format.ts` 为 toolkit 工具提供运行/成功/失败时间线。`built-in-tool-style` 可选择性覆盖仍由 Pi builtin 提供的工具 definition；它不替换 Pi 内置主对话 renderer，也不承诺主对话区鼠标点击。Plan 与 Subagent overlay 仅使用扩展层已有的 SGR 鼠标滚轮支持。
 
 新增模块或更新任何 TUI 功能时，必须遵循 [`docs/tui-development-guidelines.md`](../docs/tui-development-guidelines.md)，包括共享视觉语义、响应式宽度、overlay 高度预算、输入与资源释放、工具 renderer、文档和验证清单。

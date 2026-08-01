@@ -10,16 +10,17 @@
 2. `model-manager` — 新对话默认模型与思考等级
 3. `pi-lens` — LSP / AST / 诊断（npm `pi-lens` 转发）
 4. `chat-mode` — Build / Plan / Ask（`Shift+Tab`、`/plan`、`enter_plan_mode` / `exit_plan_mode`）
-5. `agent-todos` — 任务清单工具与 UI
-6. `multi-task` — 独立文件任务的后台并行 worker 编排
-7. `repo-search-subagent` — 只读 Repo Search 子 Agent
-8. `subagent-console` — `/subagents` 与 `Alt+A`
-9. `titlebar-working` — 工作中标题栏动画
-10. `startup-dashboard` — 启动面板与 Footer
+5. `built-in-tool-style` — 可选 Grok 风格 Pi 内置工具时间线（`/grok-tools`）
+6. `agent-todos` — 任务清单工具与 UI
+7. `multi-task` — 独立文件任务的后台并行 worker 编排
+8. `repo-search-subagent` — 只读 Repo Search 子 Agent
+9. `subagent-console` — `/subagents` 与 `Alt+A`
+10. `titlebar-working` — 工作中标题栏动画
+11. `startup-dashboard` — 启动面板与 Footer
 
 实现仍在各自目录；本入口只做组合注册。新增或更新这些模块的终端 UI 时，必须遵循 [`docs/tui-development-guidelines.md`](../../docs/tui-development-guidelines.md)，并优先复用 `extensions/shared/tui/`。
 
-`model-manager` 同时提供 `/effort`，用于唤起当前模型的思考等级选择器（`Shift+Tab` 已用于切换会话模式）。
+`model-manager` 同时提供 `/effort`，用于唤起当前模型的思考等级选择器（`Shift+Tab` 已用于切换会话模式）。`built-in-tool-style` 默认启用七个工具的 Grok 展示；使用 `/grok-tools native` 可关闭，`/grok-tools readonly` 可只保留只读工具。切换后会 reload 扩展。
 
 ## 独立加载路径
 

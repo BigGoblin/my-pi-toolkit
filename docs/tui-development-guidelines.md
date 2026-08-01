@@ -136,7 +136,9 @@ renderResult(result, { expanded }, theme) {
 - 错误不得渲染为 success；partial update/running 使用 active。
 - 路径、查询和用户文本必须压缩或截断，避免单行撑破终端。
 - Markdown 报告可在 expanded 状态使用 `Container` / `Markdown`，但 Header 仍应使用 `toolHeader()`。
-- Pi 内置工具无法由 toolkit 全局替换时，使用 Theme 保持颜色一致，不复制内部 `ToolExecutionComponent` 实现。
+- Pi 内置工具视觉覆盖只能使用 Pi 导出的 `create*ToolDefinition()` factory，并完整保留其 schema、execute、prompt metadata 和 execution mode；不得手写或复制执行逻辑。
+- 注册同名内置工具前必须检查 `pi.getAllTools()` 的 `sourceInfo`。目标已由第三方扩展、SDK、SSH、sandbox 或 remote operations 覆盖时必须跳过，不得用视觉模块替换其执行后端。
+- 不得复制、patch 或 monkey patch 内部 `ToolExecutionComponent`。如果公开 factory 无法保留宿主执行配置，该工具必须保持 native，并在模块 README 说明限制。
 
 ## 6. 信息层级
 
@@ -167,6 +169,7 @@ renderResult(result, { expanded }, theme) {
 - 子 Agent 仍走瘦加载路径，不得加载整个 `ming-core`。
 - 保持现有命令、快捷键、tool name、status key 和 session custom entry 兼容；破坏性变化必须提供迁移说明。
 - 不得为视觉改造改变工具权限、Plan 生命周期、worker 隔离或安全门禁。
+- 内置 tool override 必须默认可关闭，并验证包装前后除 `renderShell`、`renderCall`、`renderResult` 外的 definition 字段保持一致。
 - 新功能若受 Pi 公共 API 限制，必须在文档中明确能力边界，不得以脆弱 hack 冒充正式支持。
 
 ## 8. 文档要求
