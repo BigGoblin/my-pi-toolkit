@@ -8,7 +8,8 @@ import {
 	type Theme,
 	type ToolRenderResultOptions,
 } from "@earendil-works/pi-coding-agent";
-import { Text } from "@earendil-works/pi-tui";
+import { toolCall, toolResult } from "../shared/tui/tool-render.js";
+// @ts-expect-error -- TypeBox's .d.mts exports require a newer resolver than the workspace LSP.
 import { Type } from "typebox";
 import {
 	cancelBatch,
@@ -33,7 +34,10 @@ const CURSOR_PROVIDER_EXTENSION = resolve(
 const MAX_RESULT_BYTES = 50 * 1024;
 const MAX_RESULT_LINES = 2000;
 
-function snapshot(batch: MultiTaskBatch, includeOutput: boolean): MultiTaskBatchView {
+function snapshot(
+	batch: MultiTaskBatch,
+	includeOutput: boolean,
+): MultiTaskBatchView {
 	return {
 		id: batch.id,
 		model: batch.model,
@@ -48,7 +52,9 @@ function snapshot(batch: MultiTaskBatch, includeOutput: boolean): MultiTaskBatch
 			status: worker.status,
 			startedAt: worker.startedAt,
 			completedAt: worker.completedAt,
-			...(includeOutput ? { output: worker.output, runDir: worker.runDir } : {}),
+			...(includeOutput
+				? { output: worker.output, runDir: worker.runDir }
+				: {}),
 			error: worker.error,
 		})),
 	};
@@ -86,10 +92,22 @@ function collectText(batch: MultiTaskBatchView): string {
 		: truncated.content;
 }
 
-function currentModel(
-	params: MultiTaskInput,
-	ctx: ExtensionContext,
-): string {
+function workerSummary(
+	count: number | undefined,
+	batchId: string | undefined,
+): string | undefined {
+	if (count === undefined) return batchId;
+	return `${count} worker${count === 1 ? "" : "s"}`;
+}
+
+function batchVisualStatus(
+	status: MultiTaskBatchView["status"],
+): "active" | "success" | "error" {
+	if (status === "running") return "active";
+	return status === "completed" ? "success" : "error";
+}
+
+function currentModel(params: MultiTaskInput, ctx: ExtensionContext): string {
 	if (params.model?.trim()) return params.model.trim();
 	if (ctx.model) return `${ctx.model.provider}/${ctx.model.id}`;
 	throw new Error("未指定 worker 模型，且主 Agent 当前没有可继承的模型");
@@ -124,12 +142,16 @@ export default function multiTaskExtension(pi: ExtensionAPI): void {
 					{ maxItems: 8 },
 				),
 			),
-			maxConcurrency: Type.Optional(
-				Type.Integer({ minimum: 1, maximum: 6 }),
-			),
+			maxConcurrency: Type.Optional(Type.Integer({ minimum: 1, maximum: 6 })),
 			model: Type.Optional(Type.String()),
 		}),
-		async execute(_toolCallId, params: MultiTaskInput, _signal, _onUpdate, ctx) {
+		async execute(
+			_toolCallId: string,
+			params: MultiTaskInput,
+			_signal: AbortSignal | undefined,
+			_onUpdate: unknown,
+			ctx: ExtensionContext,
+		) {
 			let batch: MultiTaskBatch;
 			let includeOutput = false;
 			switch (params.action) {
@@ -141,10 +163,7 @@ export default function multiTaskExtension(pi: ExtensionAPI): void {
 						parentSessionId: ctx.sessionManager.getSessionId(),
 						tasks: params.tasks,
 						maxConcurrency: params.maxConcurrency ?? 3,
-						extensionPaths: [
-							CURSOR_PROVIDER_EXTENSION,
-							PATH_GUARD_EXTENSION,
-						],
+						extensionPaths: [CURSOR_PROVIDER_EXTENSION, PATH_GUARD_EXTENSION],
 						onSettled: (settled) =>
 							pi.sendMessage(
 								{
@@ -169,6 +188,8 @@ export default function multiTaskExtension(pi: ExtensionAPI): void {
 					batch = requireBatch(params.batchId);
 					cancelBatch(batch);
 					break;
+				default:
+					throw new Error(`不支持的 Multi Task 操作: ${String(params.action)}`);
 			}
 			const view = snapshot(batch, includeOutput);
 			const text = includeOutput ? collectText(view) : summarize(view);
@@ -178,10 +199,12 @@ export default function multiTaskExtension(pi: ExtensionAPI): void {
 			};
 		},
 		renderCall(args: MultiTaskInput, theme: Theme) {
-			return new Text(
-				`${theme.fg("toolTitle", theme.bold("multi_task "))}${theme.fg("muted", args.action)}`,
-				0,
-				0,
+			const count = args.tasks?.length;
+			return toolCall(
+				theme,
+				"multi_task",
+				args.action,
+				workerSummary(count, args.batchId),
 			);
 		},
 		renderResult(
@@ -190,19 +213,25 @@ export default function multiTaskExtension(pi: ExtensionAPI): void {
 			theme: Theme,
 		) {
 			const batch = result.details?.batch;
-			if (!batch) return new Text("Multi Task returned no batch details", 0, 0);
-			const icon = batch.status === "running" ? "⏳" : batch.status === "completed" ? "✓" : "✗";
-			return new Text(
-				`${theme.fg(batch.status === "completed" ? "success" : batch.status === "running" ? "warning" : "error", icon)} ${theme.fg("toolTitle", "multi_task")} ${theme.fg("muted", summarize(batch))}`,
-				0,
-				0,
-			);
+			if (!batch) {
+				return toolResult(theme, {
+					status: "error",
+					title: "multi_task",
+					summary: "no batch details",
+				});
+			}
+			return toolResult(theme, {
+				status: batchVisualStatus(batch.status),
+				title: "multi_task",
+				summary: summarize(batch),
+			});
 		},
 	});
 
-	pi.on("tool_call", (event, ctx) => {
-		if (event.toolName !== "edit" && event.toolName !== "write") return;
-		const path = (event.input as { path?: unknown }).path;
+	pi.on("tool_call", (event: unknown, ctx: ExtensionContext) => {
+		const toolEvent = event as { toolName: string; input: unknown };
+		if (toolEvent.toolName !== "edit" && toolEvent.toolName !== "write") return;
+		const path = (toolEvent.input as { path?: unknown }).path;
 		if (typeof path !== "string") return;
 		const owner = findActivePathOwner(ctx.cwd, path.replace(/^@/, ""));
 		if (!owner) return;
@@ -212,7 +241,7 @@ export default function multiTaskExtension(pi: ExtensionAPI): void {
 		};
 	});
 
-	pi.on("session_shutdown", (_event, ctx) => {
+	pi.on("session_shutdown", (_event: unknown, ctx: ExtensionContext) => {
 		cancelBatchesForSession(ctx.sessionManager.getSessionId());
 	});
 }

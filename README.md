@@ -65,7 +65,10 @@ pi install git:github.com/BigGoblin/my-pi-toolkit@cursor/chat-mode-plan-8ac0
 
 ### Themes
 
-- `toolkit-midnight`：为 M-PI Dashboard 设计的低亮度深色青紫主题，可通过 `/settings` 选择。
+- `grok-build-dark`：推荐的 Grok Build 风格深色主题，统一消息、Markdown、工具状态与工作流配色。
+- `toolkit-midnight`：原有的 M-PI Dashboard 低亮度深色青紫主题。
+
+可通过 `/settings` 切换主题；主题切换不影响命令、快捷键或会话数据。
 
 ### Skills
 
@@ -91,8 +94,9 @@ vendor/open-cursor/pi-agent/src/
 
 ### Documentation
 
+- [`docs/tui-development-guidelines.md`](docs/tui-development-guidelines.md)：所有 TUI、工具展示、Widget、Overlay、Footer 和 Theme 新增/更新必须遵循的开发规范。
 - [`docs/tapd-api.md`](docs/tapd-api.md)：TAPD Open API 官方资料与接口索引。
-- [`AGENTS.md`](AGENTS.md)：仓库内 Agent 开发规范。
+- [`AGENTS.md`](AGENTS.md)：仓库内 Agent 开发规范；已将 TUI 规范列为强制要求。
 
 ## Development
 

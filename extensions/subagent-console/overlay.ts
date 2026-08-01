@@ -9,7 +9,6 @@ import {
 import {
 	Markdown,
 	matchesKey,
-	truncateToWidth,
 	type Component,
 	type KeybindingsManager,
 	type TUI,
@@ -18,6 +17,7 @@ import type {
 	LiveSubagentRun,
 	SubagentTranscriptEntry,
 } from "../shared/subagent/registry.js";
+import { fitLine } from "../shared/tui/visual-language.js";
 import { acquireMouseTracking, mouseWheelDirection } from "./mouse.js";
 
 export interface HistoricalSubagentView {
@@ -105,6 +105,12 @@ function renderEntry(
 	return renderTool(entry, tui, cwd, width, expanded);
 }
 
+function subagentStatusColor(status: string): "accent" | "success" | "error" {
+	if (status === "running") return "accent";
+	if (status === "completed") return "success";
+	return "error";
+}
+
 class SubagentOverlay implements Component {
 	private readonly unsubscribe: () => void;
 	private readonly releaseMouseTracking: () => void;
@@ -169,7 +175,7 @@ class SubagentOverlay implements Component {
 	render(width: number): string[] {
 		const innerWidth = Math.max(18, width - 2);
 		const panelHeight = Math.max(8, Math.floor(this.tui.terminal.rows * 0.88));
-		this.viewportHeight = Math.max(1, panelHeight - 3);
+		this.viewportHeight = Math.max(1, panelHeight - 6);
 		const renderedEntries = this.run.entries?.flatMap((entry) =>
 			renderEntry(
 				entry,
@@ -197,11 +203,10 @@ class SubagentOverlay implements Component {
 		);
 		while (visible.length < this.viewportHeight) visible.push("");
 		const border = (value: string) => this.theme.fg("border", value);
-		const header = truncateToWidth(
-			`${this.theme.fg("accent", this.theme.bold(this.run.title))} ${this.theme.fg("muted", `${this.run.status} · ${this.run.model}`)}`,
+		const statusColor = subagentStatusColor(this.run.status);
+		const header = fitLine(
+			`${this.theme.bold(this.theme.fg("text", "SUBAGENT"))}  ${this.theme.fg("accent", this.run.title)}  ${this.theme.fg(statusColor, this.run.status.toUpperCase())} ${this.theme.fg("muted", `· ${this.run.model}`)}`,
 			innerWidth,
-			"…",
-			true,
 		);
 		const endLine = Math.min(
 			this.contentHeight,
@@ -210,21 +215,22 @@ class SubagentOverlay implements Component {
 		const position = this.contentHeight
 			? `${this.scrollOffset + 1}-${endLine}/${this.contentHeight}`
 			: "0/0";
-		const help = truncateToWidth(
+		const help = fitLine(
 			this.theme.fg(
 				"dim",
-				`滚轮/↑↓/PgUp/PgDn 滚动 · Ctrl+O 展开工具 · End 跟随 · Esc 返回 · ${position}`,
+				`↑↓/wheel scroll · Ctrl+O expand tools · End follow · Esc close · ${position}`,
 			),
 			innerWidth,
-			"…",
-			true,
 		);
 		return [
-			`${border("╭")}${header}${border("╮")}`,
+			border(`╭${"─".repeat(innerWidth)}╮`),
+			`${border("│")}${header}${border("│")}`,
+			border(`├${"─".repeat(innerWidth)}┤`),
 			...visible.map(
 				(line: string) =>
-					`${border("│")}${truncateToWidth(line, innerWidth, "", true)}${border("│")}`,
+					`${border("│")}${fitLine(line, innerWidth)}${border("│")}`,
 			),
+			border(`├${"─".repeat(innerWidth)}┤`),
 			`${border("│")}${help}${border("│")}`,
 			border(`╰${"─".repeat(innerWidth)}╯`),
 		];

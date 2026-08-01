@@ -18,10 +18,11 @@ function formatTokens(count: number): string {
 }
 
 function joinSegments(segments: Segment[], theme: Theme): string {
-	return segments
-		.filter((segment) => visibleWidth(segment.content) > 0)
-		.map((segment) => segment.content)
-		.join(theme.fg("dim", " · "));
+	const content: string[] = [];
+	for (const segment of segments) {
+		if (visibleWidth(segment.content) > 0) content.push(segment.content);
+	}
+	return content.join(theme.fg("dim", " · "));
 }
 
 function align(left: string, right: string, width: number): string {
@@ -47,11 +48,10 @@ function contextPercent(snapshot: FooterSnapshot): number | undefined {
 
 function contextColor(
 	percent: number | undefined,
-): "success" | "warning" | "error" | "muted" {
-	if (percent === undefined) return "muted";
-	if (percent >= 95) return "error";
-	if (percent >= 70) return "warning";
-	return "success";
+): "warning" | "error" | "muted" {
+	if (percent === undefined || percent < 70) return "muted";
+	if (percent >= 90) return "error";
+	return "warning";
 }
 
 function progressBar(percent: number, width: number): string {
@@ -64,35 +64,53 @@ function progressBar(percent: number, width: number): string {
 	return `${"█".repeat(whole)}${fraction}${"░".repeat(Math.max(0, width - whole - (fraction ? 1 : 0)))}`;
 }
 
+function tokenUsageText(
+	used: number | undefined,
+	maximum: number | undefined,
+): string | undefined {
+	if (used !== undefined && maximum !== undefined) {
+		return `${formatTokens(used)}/${formatTokens(maximum)}`;
+	}
+	if (used !== undefined) return formatTokens(used);
+	if (maximum !== undefined) return `max ${formatTokens(maximum)}`;
+	return undefined;
+}
+
+function styledContext(
+	details: string[],
+	percent: number | undefined,
+	theme: Theme,
+): string {
+	const styled = theme.fg(contextColor(percent), `ctx ${details.join(" ")}`);
+	return percent !== undefined && percent > 90 ? theme.bold(styled) : styled;
+}
+
 function contextText(
 	snapshot: FooterSnapshot,
 	theme: Theme,
 	barWidth: number,
-	percentOnly = false,
 ): string | undefined {
 	const used = validNumber(snapshot.contextTokens);
 	const maximum = validNumber(snapshot.contextWindow);
 	const percent = contextPercent(snapshot);
 	if (used === undefined && maximum === undefined && percent === undefined)
 		return undefined;
-
 	const details: string[] = [];
-	if (!percentOnly) {
-		if (used !== undefined && maximum !== undefined) {
-			details.push(`${formatTokens(used)}/${formatTokens(maximum)}`);
-		} else if (used !== undefined) {
-			details.push(formatTokens(used));
-		} else if (maximum !== undefined) {
-			details.push(`max ${formatTokens(maximum)}`);
-		}
-	}
-	if (percent !== undefined && barWidth > 0 && !percentOnly) {
+	const usage = tokenUsageText(used, maximum);
+	if (usage) details.push(usage);
+	if (percent !== undefined && barWidth > 0)
 		details.push(progressBar(percent, barWidth));
-	}
-	if (percent !== undefined) details.push(`${percent.toFixed(1)}%`);
-	const text = `ctx ${details.join(" ")}`;
-	const styled = theme.fg(contextColor(percent), text);
-	return percent !== undefined && percent > 90 ? theme.bold(styled) : styled;
+	if (percent !== undefined) details.push(`${Math.round(percent)}%`);
+	return styledContext(details, percent, theme);
+}
+
+function compactContextText(
+	snapshot: FooterSnapshot,
+	theme: Theme,
+): string | undefined {
+	const percent = contextPercent(snapshot);
+	if (percent === undefined) return undefined;
+	return styledContext([`${Math.round(percent)}%`], percent, theme);
 }
 
 function identitySegments(snapshot: FooterSnapshot, theme: Theme): Segment[] {
@@ -210,28 +228,32 @@ export function renderFooter(
 		const first = align(identityText, runtimeText, width);
 
 		const usageText = joinSegments(usage, theme);
-		const fixedRight = joinSegments(cost ? [cost] : [], theme);
+		const costText = joinSegments(cost ? [cost] : [], theme);
 		const availableContext = Math.max(
 			0,
-			width - visibleWidth(usageText) - visibleWidth(fixedRight) - 8,
+			width - visibleWidth(usageText) - visibleWidth(costText) - 8,
 		);
 		const context = contextText(
 			snapshot,
 			theme,
 			Math.min(12, Math.max(0, availableContext - 18)),
 		);
-		const resourceRight = joinSegments(
-			[cost, context ? { id: "context", content: context } : undefined].filter(
-				(segment): segment is Segment => segment !== undefined,
-			),
+		const resourceLeft = joinSegments(
+			[
+				context ? { id: "context", content: context } : undefined,
+				...usage,
+			].filter((segment): segment is Segment => segment !== undefined),
 			theme,
 		);
-		return [first, align(usageText, resourceRight, width)].filter(
+		return [first, align(resourceLeft, costText, width)].filter(
 			(line) => visibleWidth(line) > 0,
 		);
 	}
 
-	const context = contextText(snapshot, theme, 0, width < 48);
+	const context =
+		width < 48
+			? compactContextText(snapshot, theme)
+			: contextText(snapshot, theme, 0);
 	const allSegments = [
 		...identity,
 		...runtime,

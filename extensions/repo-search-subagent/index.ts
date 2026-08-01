@@ -5,9 +5,10 @@ import type {
 	Theme,
 	ToolRenderResultOptions,
 } from "@earendil-works/pi-coding-agent";
-import { Text } from "@earendil-works/pi-tui";
 // @ts-expect-error -- TypeBox's .d.mts exports require a newer resolver than the workspace LSP.
 import { Type } from "typebox";
+import { previewLines, resultText } from "../shared/tui/tool-format.js";
+import { toolCall, toolResult } from "../shared/tui/tool-render.js";
 import { registerRepoSearchCommand } from "./command.js";
 import { resolveRepoSearchConfig } from "./config.js";
 import { runRepoSearchSubagent } from "./runner.js";
@@ -91,11 +92,7 @@ export default function repoSearchSubagentExtension(pi: ExtensionAPI) {
 		renderCall(args: { task?: string }, theme: Theme) {
 			const task = args.task || "...";
 			const preview = task.length > 100 ? `${task.slice(0, 100)}...` : task;
-			return new Text(
-				`${theme.fg("toolTitle", theme.bold("repo_search "))}${theme.fg("muted", "read-only subagent")}\n  ${theme.fg("dim", preview)}`,
-				0,
-				0,
-			);
+			return toolCall(theme, "repo_search", "read-only subagent", preview);
 		},
 
 		renderResult(
@@ -105,46 +102,48 @@ export default function repoSearchSubagentExtension(pi: ExtensionAPI) {
 		) {
 			const details = result.details as RepoSearchDetails | undefined;
 			if (!details) {
-				const first = result.content[0];
-				return new Text(
-					first?.type === "text" ? first.text : "(no output)",
-					0,
-					0,
-				);
+				return toolResult(theme, {
+					status: "success",
+					title: "repo_search",
+					body: resultText(result.content, "(no output)"),
+				});
 			}
+
 			if (details.exitCode === -1) {
 				const visibleCalls = expanded
 					? details.toolCalls
 					: details.toolCalls.slice(-6);
-				const calls = visibleCalls.map(
-					(call) => `  → ${previewToolCall(call.name, call.arguments)}`,
-				);
-				return new Text(
-					`${theme.fg("warning", "⏳")} ${theme.fg("toolTitle", "searching")} ${theme.fg("muted", details.model)}${calls.length ? `\n${theme.fg("dim", calls.join("\n"))}` : ""}`,
-					0,
-					0,
-				);
+				return toolResult(theme, {
+					status: "active",
+					title: "searching",
+					summary: details.model,
+					details: visibleCalls.map(
+						(call) => `→ ${previewToolCall(call.name, call.arguments)}`,
+					),
+				});
 			}
+
+			const status = details.exitCode === 0 ? "success" : "error";
 			if (expanded) {
-				const calls = details.toolCalls
-					.map((call) => `→ ${previewToolCall(call.name, call.arguments)}`)
-					.join("\n");
-				return new Text(
-					`${theme.fg("success", "✓")} ${theme.fg("toolTitle", theme.bold("repo_search"))} ${theme.fg("muted", `${details.model} (${details.modelSource})`)}\n${calls ? `${theme.fg("dim", calls)}\n\n` : ""}${details.output}`,
-					0,
-					0,
-				);
+				return toolResult(theme, {
+					status,
+					title: "repo_search",
+					summary: `${details.model} (${details.modelSource})`,
+					details: details.toolCalls.map(
+						(call) => `→ ${previewToolCall(call.name, call.arguments)}`,
+					),
+					body: details.output,
+				});
 			}
-			const summary = details.output.split("\n").slice(0, 12).join("\n");
-			const suffix =
-				details.output.split("\n").length > 12
-					? `\n${theme.fg("muted", "(Ctrl+O to expand)")}`
-					: "";
-			return new Text(
-				`${theme.fg("success", "✓")} ${theme.fg("toolTitle", theme.bold("repo_search"))} ${theme.fg("muted", details.model)}\n${summary}${suffix}`,
-				0,
-				0,
-			);
+
+			const preview = previewLines(details.output, 12);
+			return toolResult(theme, {
+				status,
+				title: "repo_search",
+				summary: details.model,
+				body: preview.text,
+				hint: preview.truncated ? "(Ctrl+O to expand)" : undefined,
+			});
 		},
 	});
 }

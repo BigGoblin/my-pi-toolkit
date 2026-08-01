@@ -9,6 +9,12 @@ import { getMarkdownTheme } from "@earendil-works/pi-coding-agent";
 import { Container, Markdown, Spacer, Text } from "@earendil-works/pi-tui";
 // @ts-expect-error -- TypeBox's .d.mts exports require a newer resolver than the workspace LSP.
 import { Type } from "typebox";
+import { previewLines, resultText } from "../../shared/tui/tool-format.js";
+import {
+	toolCall,
+	toolHeader,
+	toolResult,
+} from "../../shared/tui/tool-render.js";
 import { loadConfig } from "../core/config.js";
 import { DEFAULT_GIT_WORKFLOW_POLICY } from "../git/policy.js";
 import type { TapdConfig } from "../types.js";
@@ -163,11 +169,7 @@ export function registerTapdReviewTool(pi: ExtensionAPI): void {
 
 		renderCall(args: ReviewToolParams, theme: Theme) {
 			const baseRef = args.baseRef || DEFAULT_GIT_WORKFLOW_POLICY.baseRef;
-			return new Text(
-				`${theme.fg("toolTitle", theme.bold("tapd_review "))}${theme.fg("muted", baseRef)}`,
-				0,
-				0,
-			);
+			return toolCall(theme, "tapd_review", baseRef);
 		},
 
 		renderResult(
@@ -177,38 +179,45 @@ export function registerTapdReviewTool(pi: ExtensionAPI): void {
 		) {
 			const details = result.details as TapdReviewToolDetails | undefined;
 			if (!details) {
-				const first = result.content[0];
-				return new Text(
-					first?.type === "text" ? first.text : "(no report)",
-					0,
-					0,
-				);
+				return toolResult(theme, {
+					status: "error",
+					title: "TAPD review",
+					summary: resultText(result.content, "(no report)"),
+				});
 			}
 			if (details.running) {
 				const visibleCalls = expanded
 					? details.toolCalls
 					: details.toolCalls.slice(-6);
-				const calls = visibleCalls.map(
-					(call) => `  → ${previewToolCall(call.name, call.arguments)}`,
+				const calls = visibleCalls.map((call) =>
+					`→ ${previewToolCall(call.name, call.arguments)}`
 				);
-				return new Text(
-					`${theme.fg("warning", "⏳")} ${theme.fg("toolTitle", "reviewing")} ${theme.fg("muted", details.model)}\n${theme.fg("text", details.phase)}${calls.length ? `\n${theme.fg("dim", calls.join("\n"))}` : ""}`,
-					0,
-					0,
-				);
+				return toolResult(theme, {
+					status: "active",
+					title: "reviewing",
+					summary: details.model,
+					details: [details.phase],
+					body: calls.length > 0 ? calls.join("\n") : undefined,
+				});
 			}
 			const report = details.report ?? "(no report)";
-			const header = `${theme.fg("success", "✓")} ${theme.fg("toolTitle", theme.bold("TAPD review"))} ${theme.fg("muted", `risk:${reportRisk(report)} · ${details.model}`)}`;
+			const view = {
+				status: "success" as const,
+				title: "TAPD review",
+				summary: `risk:${reportRisk(report)} · ${details.model}`,
+			};
 			if (!expanded) {
-				const summary = report.split("\n").slice(0, 14).join("\n");
-				return new Text(
-					`${header}\n${summary}\n${theme.fg("muted", "(Ctrl+O to expand full report)")}`,
-					0,
-					0,
-				);
+				const preview = previewLines(report, 14);
+				return toolResult(theme, {
+					...view,
+					body: preview.text,
+					hint: preview.truncated
+						? "Ctrl+O to expand full report"
+						: undefined,
+				});
 			}
 			const container = new Container();
-			container.addChild(new Text(header, 0, 0));
+			container.addChild(new Text(toolHeader(theme, view), 0, 0));
 			container.addChild(new Spacer(1));
 			container.addChild(new Markdown(report, 0, 0, getMarkdownTheme()));
 			return container;

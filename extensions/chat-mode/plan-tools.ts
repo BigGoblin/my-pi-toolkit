@@ -1,8 +1,11 @@
 import { Type } from "@earendil-works/pi-ai";
 import type {
+	AgentToolResult,
 	AgentToolUpdateCallback,
 	ExtensionAPI,
 	ExtensionContext,
+	Theme,
+	ToolRenderResultOptions,
 } from "@earendil-works/pi-coding-agent";
 import { requestPlanApproval } from "./plan-approval.js";
 import {
@@ -14,6 +17,11 @@ import {
 } from "./plan-file.js";
 import { planFileStructure } from "./prompt.js";
 import type { ChatMode } from "./state.js";
+import {
+	toolCall,
+	toolResult,
+	type ToolResultView,
+} from "../shared/tui/tool-render.js";
 
 const EmptyParams = Type.Object({});
 
@@ -65,6 +73,53 @@ function revisePlanMessage(feedback: string | undefined): string {
 	return feedback
 		? `The user wants to revise the Plan. The user said:\n${feedback}`
 		: "The user did not approve the Plan. Continue planning and ask what should change.";
+}
+
+interface PlanToolDetails {
+	outcome?: string;
+	planFile?: string;
+}
+
+function planResultView(
+	tool: "enter" | "exit",
+	outcome: string | undefined,
+): Pick<ToolResultView, "status" | "summary"> {
+	const views: Record<string, Pick<ToolResultView, "status" | "summary">> = {
+		entered: { status: "success", summary: "entered" },
+		already_active: { status: "success", summary: "already active" },
+		declined: { status: "error", summary: "declined" },
+		revise: { status: "pending", summary: "revision requested" },
+		abandoned: { status: "error", summary: "abandoned" },
+		approved_deferred: { status: "pending", summary: "approved · deferred" },
+		approved_implement: { status: "success", summary: "approved" },
+		not_in_plan: { status: "error", summary: "not in plan mode" },
+		missing_plan: { status: "error", summary: "plan unavailable" },
+	};
+	return (
+		(outcome && views[outcome]) || {
+			status: "error",
+			summary: tool === "enter" ? "not entered" : "not completed",
+		}
+	);
+}
+
+function renderPlanResult(
+	tool: "enter" | "exit",
+	result: AgentToolResult<PlanToolDetails>,
+	expanded: boolean,
+	theme: Theme,
+) {
+	const details = result.details as PlanToolDetails | undefined;
+	const view = planResultView(tool, details?.outcome);
+	const first = result.content[0];
+	const body = first?.type === "text" ? first.text : undefined;
+	return toolResult(theme, {
+		...view,
+		title: tool === "enter" ? "Enter Plan Mode" : "Exit Plan Mode",
+		details:
+			expanded && details?.planFile ? [`Plan: ${details.planFile}`] : undefined,
+		body: expanded ? body : undefined,
+	});
 }
 
 export function registerPlanTools(
@@ -128,6 +183,16 @@ export function registerPlanTools(
 				},
 			);
 		}),
+		renderCall(_args: Record<string, never>, theme: Theme) {
+			return toolCall(theme, "Enter Plan Mode", "requesting access");
+		},
+		renderResult(
+			result: AgentToolResult<PlanToolDetails>,
+			{ expanded }: ToolRenderResultOptions,
+			theme: Theme,
+		) {
+			return renderPlanResult("enter", result, expanded, theme);
+		},
 	});
 
 	pi.registerTool<typeof EmptyParams>({
@@ -189,5 +254,15 @@ export function registerPlanTools(
 				{ outcome: "approved_implement", planFile: plan.absolutePath },
 			);
 		}),
+		renderCall(_args: Record<string, never>, theme: Theme) {
+			return toolCall(theme, "Exit Plan Mode", "presenting plan");
+		},
+		renderResult(
+			result: AgentToolResult<PlanToolDetails>,
+			{ expanded }: ToolRenderResultOptions,
+			theme: Theme,
+		) {
+			return renderPlanResult("exit", result, expanded, theme);
+		},
 	});
 }

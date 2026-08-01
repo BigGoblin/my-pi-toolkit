@@ -40,18 +40,18 @@ agent_todo_write({
 
 ## UI
 
-- Widget 在 editor 上方，含：
-  - 标题行：`📋 Todos` + 进度与各状态计数（🔄 / ⏳ / ⛔）
-  - Unicode 进度条（`█` / `░`）
-  - 条目：序号 + emoji 标记 + 文案（完成/取消带删除线）
-- 状态 emoji：`⏳` pending · `🔄` in_progress · `✅` completed · `⛔` cancelled
-- 超过 16 条时底部显示 `… 还有 n 项未显示`
+- Widget 在 editor 上方，采用与工具时间线一致的低噪声样式：
+  - 标题行：`TASKS` + 完成进度与 active / pending / cancelled 计数
+  - Unicode 进度条（`━` / `─`）
+  - 状态：`○` pending · `●` in_progress · `✓` completed · `✗` cancelled
+  - 完成和取消项降低亮度，不依赖删除线或 emoji 宽度
+- 超过 16 条时底部显示 `… n more`
 - `/todos`：手动隐藏或显示面板；隐藏不清除 todo 状态
 - 隐藏后新增未完成 todo 时，面板自动显示
 - Footer：`📋 2/5` 或全部完成时 `✅ 5/5`（面板隐藏后仍保留）
 - print / json 模式跳过 UI，工具仍可用
 
-**关于图片：** Pi TUI 支持 `Image`（Kitty / iTerm 协议），适合插图，不适合当每条 todo 的小图标；状态标记用 emoji 更稳、更省高度。
+状态标记使用单列终端字符，不依赖图片或 emoji；在 Windows Terminal、tmux、SSH 和 CJK 字体环境中更容易保持对齐。
 
 日常查看不依赖命令；仅在需要手动隐藏或恢复面板时使用 `/todos`。
 

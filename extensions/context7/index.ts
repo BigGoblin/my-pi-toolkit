@@ -9,12 +9,22 @@
  */
 
 import type {
+	AgentToolResult,
 	ExtensionAPI,
 	ExtensionCommandContext,
+	Theme,
+	ToolRenderResultOptions,
 } from "@earendil-works/pi-coding-agent";
 // @ts-expect-error -- TypeBox's .d.mts exports require a newer resolver than the workspace LSP.
 import { Type } from "typebox";
 
+import {
+	compactText,
+	formatCount,
+	previewLines,
+	resultText,
+} from "../shared/tui/tool-format.js";
+import { toolCall, toolResult } from "../shared/tui/tool-render.js";
 import { formatSearchResults, queryDocs, searchLibraries } from "./api.js";
 import { configPath, loadConfig } from "./config.js";
 
@@ -26,6 +36,12 @@ interface ResolveParams {
 interface QueryParams {
 	libraryId: string;
 	query: string;
+}
+
+interface Context7Details {
+	isError?: boolean;
+	count?: number;
+	libraryId?: string;
 }
 
 const RESOLVE_PARAMS = Type.Object({
@@ -50,6 +66,28 @@ function toolError(message: string) {
 		details: { isError: true },
 		isError: true,
 	};
+}
+
+function renderContext7Result(
+	result: AgentToolResult<Context7Details>,
+	expanded: boolean,
+	theme: Theme,
+	title: string,
+	successSummary: (details: Context7Details | undefined) => string,
+) {
+	const details = result.details as Context7Details | undefined;
+	const isError = details?.isError === true;
+	const text = resultText(result.content, "(无输出)");
+	const body = expanded
+		? text
+		: compactText(previewLines(text, 4).text, 320);
+	return toolResult(theme, {
+		status: isError ? "error" : "success",
+		title,
+		summary: isError ? "失败" : successSummary(details),
+		body,
+		hint: expanded ? undefined : "Ctrl+O 展开完整内容",
+	});
 }
 
 export default function context7Extension(pi: ExtensionAPI) {
@@ -87,6 +125,27 @@ export default function context7Extension(pi: ExtensionAPI) {
 				return toolError(message);
 			}
 		},
+		renderCall(args: ResolveParams, theme: Theme) {
+			return toolCall(
+				theme,
+				"Context7 resolve",
+				compactText(args.libraryName, 60),
+				compactText(args.query, 120),
+			);
+		},
+		renderResult(
+			result: AgentToolResult<Context7Details>,
+			{ expanded }: ToolRenderResultOptions,
+			theme: Theme,
+		) {
+			return renderContext7Result(
+				result,
+				expanded,
+				theme,
+				"Context7 resolve",
+				(details) => formatCount(details?.count ?? 0, "result"),
+			);
+		},
 	});
 
 	pi.registerTool({
@@ -122,6 +181,27 @@ export default function context7Extension(pi: ExtensionAPI) {
 				const message = error instanceof Error ? error.message : String(error);
 				return toolError(message);
 			}
+		},
+		renderCall(args: QueryParams, theme: Theme) {
+			return toolCall(
+				theme,
+				"Context7 query",
+				compactText(args.libraryId, 70),
+				compactText(args.query, 120),
+			);
+		},
+		renderResult(
+			result: AgentToolResult<Context7Details>,
+			{ expanded }: ToolRenderResultOptions,
+			theme: Theme,
+		) {
+			return renderContext7Result(
+				result,
+				expanded,
+				theme,
+				"Context7 query",
+				(details) => details?.libraryId ?? "未知 libraryId",
+			);
 		},
 	});
 

@@ -1,9 +1,13 @@
-import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
+import type {
+	ExtensionAPI,
+	ExtensionContext,
+} from "@earendil-works/pi-coding-agent";
 import {
 	enterPlanFromTool,
 	enterPlanFromUser,
 	leavePlan,
 } from "./plan-lifecycle.js";
+import { modeBadge } from "../shared/tui/visual-language.js";
 import { restrictedModeToolNames } from "./policy.js";
 import {
 	getChatMode,
@@ -11,9 +15,6 @@ import {
 	setChatMode,
 	type ChatMode,
 } from "./state.js";
-
-const BUILD_COLOR = "\x1b[38;2;49;109;221m";
-const RESET_FOREGROUND = "\x1b[39m";
 
 export interface ModeSwitchOptions {
 	viaToolApproval?: boolean;
@@ -40,11 +41,7 @@ export function createModeController(
 	let toolsBeforeRestricted: string[] | undefined;
 
 	function updateStatus(ctx: ExtensionContext): void {
-		const mode = getChatMode();
-		let label = `${BUILD_COLOR}● BUILD${RESET_FOREGROUND}`;
-		if (mode === "ask") label = ctx.ui.theme.fg("success", "◆ ASK");
-		if (mode === "plan") label = ctx.ui.theme.fg("warning", "◇ PLAN");
-		ctx.ui.setStatus("chat-mode", label);
+		ctx.ui.setStatus("chat-mode", modeBadge(ctx.ui.theme, getChatMode()));
 	}
 
 	function restoreBuildTools(): void {
@@ -69,10 +66,10 @@ export function createModeController(
 	}
 
 	function notifyMode(mode: ChatMode, ctx: ExtensionContext): void {
-		let message = "已启用 Build：已恢复完整工具权限。";
-		if (mode === "ask") message = "已启用 Ask：项目写入仅限 .pi/。";
+		let message = "Mode: BUILD — 已恢复完整工具权限。";
+		if (mode === "ask") message = "Mode: ASK — 项目写入仅限 .pi/。";
 		if (mode === "plan") {
-			message = `已启用 Plan：仅可写入 ${activePlanPath() ?? "活动 Plan"}。`;
+			message = `Mode: PLAN — 仅可写入 ${activePlanPath() ?? "活动 Plan"}。`;
 		}
 		ctx.ui.notify(message, "info");
 	}

@@ -10,9 +10,9 @@ import {
 	Markdown,
 	matchesKey,
 	Text,
-	truncateToWidth,
 	type TUI,
 } from "@earendil-works/pi-tui";
+import { fitLine } from "../shared/tui/visual-language.js";
 import {
 	acquireMouseTracking,
 	mouseWheelDirection,
@@ -62,10 +62,8 @@ class PlanReviewDialog implements Component {
 		this.theme = options.theme;
 		this.planPath = options.planPath;
 		this.close = options.close;
-		this.contentBox = new Box(
-			1,
-			0,
-			(text: string) => options.theme.bg("customMessageBg", text),
+		this.contentBox = new Box(1, 0, (text: string) =>
+			options.theme.bg("customMessageBg", text),
 		);
 		this.contentBox.addChild(
 			new Markdown(
@@ -103,10 +101,9 @@ class PlanReviewDialog implements Component {
 
 	render(width: number): string[] {
 		const innerWidth = Math.max(20, width - 2);
-		const background = (text: string) =>
-			this.theme.bg("customMessageBg", text);
+		const background = (text: string) => this.theme.bg("customMessageBg", text);
 		const title = new Text(
-			this.theme.fg("accent", this.theme.bold(`Plan Review · ${this.planPath}`)),
+			`${this.theme.bold(this.theme.fg("text", "PLAN REVIEW"))}  ${this.theme.fg("muted", this.planPath)}`,
 			1,
 			0,
 			background,
@@ -118,7 +115,8 @@ class PlanReviewDialog implements Component {
 			8,
 			Math.floor(this.tui.terminal.rows * PANEL_HEIGHT_RATIO),
 		);
-		this.viewportHeight = Math.max(1, panelHeight - title.length - 3);
+		// top border + separator + footer + bottom border occupy four rows.
+		this.viewportHeight = Math.max(1, panelHeight - title.length - 4);
 		this.scrollOffset = Math.min(this.scrollOffset, this.maximumOffset());
 		const visible = content.slice(
 			this.scrollOffset,
@@ -132,21 +130,25 @@ class PlanReviewDialog implements Component {
 			this.scrollOffset + this.viewportHeight,
 		);
 		const status = [
-			`${this.scrollOffset + 1}-${end} / ${this.contentHeight}`,
-			"滚轮/↑↓/PgUp/PgDn/Home/End 滚动",
-			"Enter/Esc 关闭",
+			"↑↓/wheel/PgUp/PgDn scroll",
+			"Enter/Esc close",
+			`${this.scrollOffset + 1}-${end}/${this.contentHeight}`,
 		].join(" · ");
 		const footer = new Text(this.theme.fg("dim", status), 1, 0, background)
 			.render(innerWidth)
 			.slice(0, 1);
-		const border = (text: string) => this.theme.fg("accent", text);
-		const body = [...title, ...visible, ...footer].map(
-			(line) =>
-				`${border("│")}${truncateToWidth(line, innerWidth, "", true)}${border("│")}`,
+		const border = (text: string) => this.theme.fg("border", text);
+		const body = [...title, ...visible].map(
+			(line) => `${border("│")}${fitLine(line, innerWidth)}${border("│")}`,
 		);
 		return [
 			border(`╭${"─".repeat(innerWidth)}╮`),
 			...body,
+			border(`├${"─".repeat(innerWidth)}┤`),
+			...footer.map(
+				(line: string) =>
+					`${border("│")}${fitLine(line, innerWidth)}${border("│")}`,
+			),
 			border(`╰${"─".repeat(innerWidth)}╯`),
 		];
 	}

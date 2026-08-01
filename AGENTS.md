@@ -11,6 +11,13 @@
 
 - After completing each functional change, review whether the related README files, usage instructions, configuration examples, command references, or architecture documentation need to be updated, and update them in the same change when necessary.
 
+## TUI development standard
+
+- Any new module or functional change that renders terminal UI, tool calls, widgets, overlays, editors, headers, footers, status text, or themes **must** follow [`docs/tui-development-guidelines.md`](docs/tui-development-guidelines.md).
+- Reuse the shared visual primitives in `extensions/shared/tui/`; do not define module-local status glyphs, hard-coded colors, or duplicate tool timeline renderers.
+- Before completing a TUI change, verify responsive widths, overlay height accounting, keyboard access, lifecycle cleanup, related documentation, LSP diagnostics, Pi Lens findings, and `git diff --check` as specified by the standard.
+- If a feature intentionally deviates from the standard, document the reason and compatibility impact in the module README in the same change.
+
 ## Plugin development references
 
 - When designing or implementing Pi plugin features, use the open-source [xAI Grok Build](https://github.com/xai-org/grok-build) coding-agent harness as a reference when relevant, especially for tool architecture, TUI behavior, todo/plan workflows, reminders, goal orchestration, background tasks, and verification loops. Adapt its design ideas to Pi's extension APIs and this repository's boundaries rather than copying assumptions specific to Grok Build.

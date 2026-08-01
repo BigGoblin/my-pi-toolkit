@@ -29,7 +29,7 @@ Plan 用于实施前的只读调研与方案审批：
 - 只启用登记的只读工具、Plan 生命周期工具和受路径保护的 `write` / `edit`。
 - `write` / `edit` 只能修改本 session 固定的 `plan.md`。
 - 禁止修改项目源码或其他 session 的 Plan。
-- Footer 显示 `◇ PLAN`。
+- Footer 显示主题 warning 色的 `● PLAN`。
 
 ### 固定 Plan 文件
 
@@ -61,14 +61,14 @@ Plan 用于实施前的只读调研与方案审批：
 | `enter_plan_mode` | 征得同意后进入 Plan，seed 并返回本 session 固定的 `plan.md` |
 | `exit_plan_mode` | 从磁盘读取 Plan，以带背景色的 Markdown 对话框展示全文，再显示审批选项 |
 
-TUI 中 Plan 正文和审批选择分开显示：先在带强调色边框和底色的 Markdown overlay 中展示完整方案，关闭后选择组件只显示操作。overlay 有固定视口，不会撑高终端内容；支持鼠标滚轮、↑/↓、PageUp/PageDown、Home/End 内部滚动，Enter/Esc 关闭。`/plan review` 仅重新打开该 overlay，不触发审批或切换模式。
+TUI 中 Plan 正文和审批选择分开显示：先在 Grok 风格的 `PLAN REVIEW` 单线边框 Markdown overlay 中展示完整方案，底部单独显示滚动和关闭提示；关闭后选择组件只显示操作。overlay 有固定视口，不会撑高终端内容；支持鼠标滚轮、↑/↓、PageUp/PageDown、Home/End 内部滚动，Enter/Esc 关闭。`/plan review` 仅重新打开该 overlay，不触发审批或切换模式。
 
 审批选项：
 
 - **批准并实现**：切 Build，允许立即编码。
-- **批准方案，暂不实现**：切 Build，模型等待后续实施指令。
-- **要求修改**：留在 Plan，继续修改同一个 `plan.md`。
-- **放弃计划**：切 Build，不实施；Plan 文件仍保留供同 session 重入。
+- **批准但暂不实现**：切 Build，模型等待后续实施指令。
+- **继续编辑**：留在 Plan，继续修改同一个 `plan.md`。
+- **取消计划**：切 Build，不实施；Plan 文件仍保留供同 session 重入。
 - 无 UI 模式默认“批准并实现”。
 
 ## Lifecycle
@@ -85,7 +85,7 @@ Ask 用于问答、解释、诊断和只读调研：
 - `write` / `edit` 只能修改当前项目 `.pi/**`。
 - 禁止 bash、AST 替换及未登记工具。
 - 可调用 `enter_plan_mode` 升级到规划阶段。
-- Footer 显示 `◆ ASK`。
+- Footer 显示主题 success 色的 `● ASK`。
 
 ## 安全边界
 

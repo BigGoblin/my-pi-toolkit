@@ -18,7 +18,7 @@
 | --- | --- | --- |
 | Multi Task | 对独立、非重叠文件任务运行后台并行 worker，并提供状态、收集和取消操作 | [`multi-task/README.md`](multi-task/README.md) |
 | Repo Search Subagent | 面向当前本地仓库大规模文件检索的独立只读子 Agent及过程 Overlay | [`repo-search-subagent/README.md`](repo-search-subagent/README.md) |
-| Subagent Console | 用 `/subagents` 查看和管理子 Agent、用 `Alt+A` 进入最近任务，并在 Footer 按 `subagent*N` 显示活跃数量 | `subagent-console/index.ts` |
+| Subagent Console | 用 `/subagents` 查看和管理子 Agent、用 `Alt+A` 进入最近任务；Grok 风格 picker/overlay 支持键盘与鼠标滚轮，并在 Footer 显示活跃数量 | `subagent-console/index.ts` |
 | Agent Todos | Cursor TodoWrite 风格任务清单，editor 上方完整进度 | [`agent-todos/README.md`](agent-todos/README.md) |
 | Chat Mode | 使用 `Shift+Tab` 循环 Build/Plan/Ask；Plan 仅可写 `.pi/plan.md`，含 enter/exit_plan_mode 审批 | [`chat-mode/README.md`](chat-mode/README.md) |
 | Cursor Models | Cursor 模型折叠、思考等级和 Fast 模式 | [`cursor-models/README.md`](cursor-models/README.md) |
@@ -29,3 +29,9 @@
 | Hello | 用于确认 toolkit 已加载的简单 smoke test（未注册） | `hello.ts` |
 
 子 Agent 仍通过瘦路径单独加载 `cursor-models`（以及 Repo Search 的 `gitignore-guard` 或 Multi Task 的 `path-guard`），不要改为加载 `ming-core`。
+
+## TUI 视觉层
+
+`shared/tui/visual-language.ts` 统一状态字符、模式 badge、间距与行宽处理；`tool-render.ts` 和 `tool-format.ts` 为 toolkit 工具提供运行/成功/失败时间线。该视觉层不替换 Pi 内置主对话 renderer，也不承诺主对话区鼠标点击；Plan 与 Subagent overlay 仅使用扩展层已有的 SGR 鼠标滚轮支持。
+
+新增模块或更新任何 TUI 功能时，必须遵循 [`docs/tui-development-guidelines.md`](../docs/tui-development-guidelines.md)，包括共享视觉语义、响应式宽度、overlay 高度预算、输入与资源释放、工具 renderer、文档和验证清单。

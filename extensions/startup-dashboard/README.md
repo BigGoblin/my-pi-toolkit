@@ -7,12 +7,12 @@
 ## 功能
 
 - `mpi` 首次启动时清理当前终端画面和回滚缓冲区，避免 Dashboard 上方残留 PowerShell 命令；`/reload` 和会话切换不会清屏。
-- 宽屏显示品牌区、Tips、介绍卡片以及 Context / Skills / Extensions / Themes 四栏；Skills 使用两列展示。
+- 使用 Grok Build 风格的轻量品牌行、工作区说明、资源分栏和 Ready 快捷提示，减少装饰性卡片与重边框。
 - Context、Skills、Extensions 和 Themes 始终完整展示，不使用折叠或展开快捷键。
 - 中屏自动变为两行双栏，窄屏变为紧凑单栏，避免内容超出终端宽度。
 - 四类资源均动态发现；Skills 同时覆盖 toolkit、`~/.pi/agent/skills`、`~/.agents/skills` 及当前项目的 `.pi/.agents` 技能目录，Context 使用 `./`、`../` 相对路径区分同名文件。
-- Footer 使用响应式双行布局；左侧首先显示 Build/Plan/Ask 模式，再显示项目名、当前 Git 分支和真实会话标题，右侧显示 `provider/model`、思考强度、Cursor 模型的实时 Fast 状态，以及活跃子 Agent 数量（如 `subagent*2`）；没有运行中的子 Agent 时该段自动隐藏。Build 使用 `#316DDD` 蓝色，Plan 使用主题 warning 色，Ask 使用主题成功色，窄屏会按 segment 自动换行与紧凑化。
-- Footer 汇总输入/输出 Token、缓存读写、会话花费，并显示上下文已用量、窗口、百分比和动态进度条；所有缺失字段都会连同图标与分隔符一起隐藏。
+- Footer 使用响应式双行布局；第一行显示 Build/Plan/Ask、项目、Git 分支、会话标题、`provider/model`、思考强度、Fast 状态和活跃子 Agent。模式配色全部来自当前 Theme，窄屏按 segment 自动换行和紧凑化。
+- 第二行优先显示上下文用量和进度条，再显示输入/输出 Token、缓存读写与会话花费；Context 在 70% 起使用 warning、90% 起使用 error。所有缺失字段都会连同分隔符一起隐藏。
 
 ## 使用
 
@@ -37,7 +37,7 @@
 
 ## 推荐主题
 
-Toolkit 内置 `toolkit-midnight` 主题，使用更柔和、偏暗的青紫配色以降低长时间使用的视觉刺激。在 Pi 中打开 `/settings` 并选择该主题。扩展不会强制修改用户当前主题。
+推荐在 `/settings` 选择 `grok-build-dark`，它统一了 Dashboard、消息、Markdown、工具时间线、Todo、Plan 与 Subagent 的状态颜色。原有 `toolkit-midnight` 仍保留；扩展不会强制修改用户当前主题。
 
 ## 已知差异
 

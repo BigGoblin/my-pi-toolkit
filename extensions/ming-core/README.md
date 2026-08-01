@@ -17,7 +17,7 @@
 9. `titlebar-working` — 工作中标题栏动画
 10. `startup-dashboard` — 启动面板与 Footer
 
-实现仍在各自目录；本入口只做组合注册。
+实现仍在各自目录；本入口只做组合注册。新增或更新这些模块的终端 UI 时，必须遵循 [`docs/tui-development-guidelines.md`](../../docs/tui-development-guidelines.md)，并优先复用 `extensions/shared/tui/`。
 
 `model-manager` 同时提供 `/effort`，用于唤起当前模型的思考等级选择器（`Shift+Tab` 已用于切换会话模式）。
 

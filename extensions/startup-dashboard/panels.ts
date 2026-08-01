@@ -7,10 +7,10 @@ function itemRows(
 	columns: number,
 	color: Color,
 ): string[] {
-	if (items.length === 0) return [`${color("  · ")}(none)`];
+	if (items.length === 0) return [`${color("  ○ ")}${color("none")}`];
 	if (columns === 1) {
 		return items.map(
-			(item) => `${color("  · ")}${truncateToWidth(item, width - 4, "…")}`,
+			(item) => `${color("  › ")}${truncateToWidth(item, width - 4, "…")}`,
 		);
 	}
 
@@ -23,7 +23,7 @@ function itemRows(
 			const item = items[row + column * rows];
 			cells.push(
 				item
-					? `${color(" · ")}${truncateToWidth(item, columnWidth - 3, "…")}`
+					? `${color(" › ")}${truncateToWidth(item, columnWidth - 3, "…")}`
 					: "",
 			);
 		}
@@ -34,20 +34,16 @@ function itemRows(
 
 export function panelBody(
 	title: string,
-	marker: string,
 	items: string[],
-	innerWidth: number,
+	width: number,
 	color: Color,
 	borderMuted: Color,
 	columns = 1,
 ): string[] {
 	return [
-		"",
-		`  ${color(marker)} ${color(title)}`,
-		`  ${borderMuted("─".repeat(Math.max(1, innerWidth - 4)))}`,
-		"",
-		...itemRows(items, innerWidth - 2, columns, color),
-		"",
+		color(title),
+		borderMuted("─".repeat(Math.max(1, width))),
+		...itemRows(items, width, columns, color),
 	];
 }
 

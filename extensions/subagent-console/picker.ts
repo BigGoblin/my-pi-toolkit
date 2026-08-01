@@ -6,6 +6,7 @@ import {
 	type KeybindingsManager,
 	type TUI,
 } from "@earendil-works/pi-tui";
+import { fitLine } from "../shared/tui/visual-language.js";
 
 export interface SubagentPickerItem {
 	id: string;
@@ -48,15 +49,13 @@ function movedIndex(
 }
 
 function tabHeader(scope: PickerScope, theme: Theme): string {
-	const current =
-		scope === "current"
-			? theme.fg("accent", theme.bold("[当前会话]"))
-			: theme.fg("dim", " 当前会话 ");
-	const all =
-		scope === "all"
-			? theme.fg("accent", theme.bold("[所有]"))
-			: theme.fg("dim", " 所有 ");
-	return `${current}  ${all}`;
+	const current = scope === "current"
+		? theme.fg("accent", theme.bold("CURRENT"))
+		: theme.fg("dim", "CURRENT");
+	const all = scope === "all"
+		? theme.fg("accent", theme.bold("ALL"))
+		: theme.fg("dim", "ALL");
+	return `${theme.bold(theme.fg("text", "SUBAGENTS"))}  ${current}  ${all}`;
 }
 
 function renderPicker(options: {
@@ -70,7 +69,7 @@ function renderPicker(options: {
 	width: number;
 }): string[] {
 	const innerWidth = Math.max(28, options.width - 2);
-	const pageSize = Math.max(3, Math.floor(options.tui.terminal.rows * 0.6) - 4);
+	const pageSize = Math.max(3, Math.floor(options.tui.terminal.rows * 0.6) - 7);
 	const maximumStart = Math.max(0, options.items.length - pageSize);
 	const start = Math.min(
 		maximumStart,
@@ -80,7 +79,7 @@ function renderPicker(options: {
 		.slice(start, start + pageSize)
 		.map((item, offset) => {
 			const selected = start + offset === options.selectedIndex;
-			const marker = selected ? options.theme.fg("accent", "❯ ") : "  ";
+			const marker = selected ? options.theme.fg("accent", "› ") : "  ";
 			const label = options.theme.fg(selected ? "text" : "muted", item.label);
 			return truncateToWidth(`${marker}${label}`, innerWidth, "…", true);
 		});
@@ -95,16 +94,14 @@ function renderPicker(options: {
 		);
 	while (rows.length < pageSize) rows.push(" ".repeat(innerWidth));
 	const border = (value: string) => options.theme.fg("border", value);
-	const header = truncateToWidth(options.header, innerWidth, "…", true);
-	const help = truncateToWidth(
-		options.theme.fg("dim", options.help),
-		innerWidth,
-		"…",
-		true,
-	);
+	const header = fitLine(options.header, innerWidth);
+	const help = fitLine(options.theme.fg("dim", options.help), innerWidth);
 	return [
-		`${border("╭")}${header}${border("╮")}`,
-		...rows.map((row) => `${border("│")}${row}${border("│")}`),
+		border(`╭${"─".repeat(innerWidth)}╮`),
+		`${border("│")}${header}${border("│")}`,
+		border(`├${"─".repeat(innerWidth)}┤`),
+		...rows.map((row) => `${border("│")}${fitLine(row, innerWidth)}${border("│")}`),
+		border(`├${"─".repeat(innerWidth)}┤`),
 		`${border("│")}${help}${border("│")}`,
 		border(`╰${"─".repeat(innerWidth)}╯`),
 	];

@@ -4,27 +4,19 @@ import {
 	type Component,
 	type TUI,
 } from "@earendil-works/pi-tui";
-import { countTodos, type TodoItem, type TodoStatus } from "./model.js";
+import { statusGlyph, UI_GLYPHS } from "../shared/tui/visual-language.js";
+import { countTodos, type TodoItem } from "./model.js";
 import { statusText, type TodoStore } from "./store.js";
 
 const WIDGET_KEY = "agent-todos";
 const STATUS_KEY = "agent-todos";
-/** widget 区域避免占满整屏；超出时底部提示剩余条数 */
 const MAX_ITEM_LINES = 16;
-
-const STATUS_EMOJI: Record<TodoStatus, string> = {
-	pending: "⏳",
-	in_progress: "🔄",
-	completed: "✅",
-	cancelled: "⛔",
-};
 
 export function refreshTodoUI(ctx: ExtensionContext, store: TodoStore): void {
 	if (!ctx.hasUI) return;
 	const todos = store.getTodos();
 	if (todos.length === 0) {
-		ctx.ui.setWidget(WIDGET_KEY, undefined);
-		ctx.ui.setStatus(STATUS_KEY, undefined);
+		clearTodoUI(ctx);
 		return;
 	}
 	ctx.ui.setStatus(STATUS_KEY, statusText(todos));
@@ -37,9 +29,8 @@ export function refreshTodoUI(ctx: ExtensionContext, store: TodoStore): void {
 
 export function hideTodoPanel(ctx: ExtensionContext, store: TodoStore): void {
 	if (!ctx.hasUI) return;
-	const todos = store.getTodos();
 	ctx.ui.setWidget(WIDGET_KEY, undefined);
-	ctx.ui.setStatus(STATUS_KEY, statusText(todos));
+	ctx.ui.setStatus(STATUS_KEY, statusText(store.getTodos()));
 }
 
 export function clearTodoUI(ctx: ExtensionContext): void {
@@ -64,24 +55,24 @@ class TodoPanel implements Component {
 
 	render(width: number): string[] {
 		if (this.cachedLines && this.cachedWidth === width) return this.cachedLines;
-		const th = this.theme;
 		const counts = countTodos(this.todos);
-		const lines: string[] = [];
-
-		lines.push(truncateToWidth(renderHeader(counts, th), width));
-		lines.push(truncateToWidth(renderProgressBar(counts, width, th), width));
-
+		const lines = [
+			truncateToWidth(renderHeader(counts, this.theme), width),
+			truncateToWidth(renderProgressBar(counts, width, this.theme), width),
+		];
 		const visible = this.todos.slice(0, MAX_ITEM_LINES);
-		for (let i = 0; i < visible.length; i++) {
-			lines.push(truncateToWidth(formatTodoLine(visible[i], i + 1, th), width));
+		for (const todo of visible) {
+			lines.push(truncateToWidth(formatTodoLine(todo, this.theme), width));
 		}
 		const hidden = this.todos.length - visible.length;
 		if (hidden > 0) {
 			lines.push(
-				truncateToWidth(th.fg("dim", `… 还有 ${hidden} 项未显示`), width),
+				truncateToWidth(
+					this.theme.fg("dim", `${UI_GLYPHS.more} ${hidden} more`),
+					width,
+				),
 			);
 		}
-
 		this.cachedWidth = width;
 		this.cachedLines = lines;
 		return lines;
@@ -90,59 +81,59 @@ class TodoPanel implements Component {
 
 function renderHeader(
 	counts: ReturnType<typeof countTodos>,
-	th: Theme,
+	theme: Theme,
 ): string {
-	const progress =
-		counts.active > 0
-			? `${counts.completed}/${counts.active}`
-			: `${counts.completed}/${counts.completed}`;
+	const total = counts.active || counts.completed;
 	const parts = [
-		th.bold(th.fg("accent", "📋 Todos")),
-		th.fg("muted", progress),
+		theme.bold(theme.fg("accent", "TASKS")),
+		theme.fg("muted", `${counts.completed}/${total}`),
 	];
-	if (counts.inProgress > 0) {
-		parts.push(th.fg("accent", `🔄 ${counts.inProgress}`));
-	}
-	if (counts.pending > 0) {
-		parts.push(th.fg("dim", `⏳ ${counts.pending}`));
-	}
-	if (counts.cancelled > 0) {
-		parts.push(th.fg("dim", `⛔ ${counts.cancelled}`));
-	}
-	return parts.join(th.fg("dim", "  ·  "));
+	if (counts.inProgress > 0)
+		parts.push(theme.fg("accent", `active ${counts.inProgress}`));
+	if (counts.pending > 0)
+		parts.push(theme.fg("dim", `pending ${counts.pending}`));
+	if (counts.cancelled > 0)
+		parts.push(theme.fg("dim", `cancelled ${counts.cancelled}`));
+	return parts.join(theme.fg("dim", "  ·  "));
 }
 
 function renderProgressBar(
 	counts: ReturnType<typeof countTodos>,
 	width: number,
-	th: Theme,
+	theme: Theme,
 ): string {
 	const total = Math.max(counts.active, 1);
 	const barWidth = Math.max(8, Math.min(24, width - 8));
 	const filled = Math.round((counts.completed / total) * barWidth);
-	const empty = Math.max(0, barWidth - filled);
 	const bar =
-		th.fg("success", "█".repeat(filled)) + th.fg("dim", "░".repeat(empty));
-	const pct = Math.round((counts.completed / total) * 100);
-	return `${bar} ${th.fg("muted", `${pct}%`)}`;
+		theme.fg("success", "━".repeat(filled)) +
+		theme.fg("dim", "─".repeat(Math.max(0, barWidth - filled)));
+	return `${bar} ${theme.fg("muted", `${Math.round((counts.completed / total) * 100)}%`)}`;
 }
 
-function formatTodoLine(todo: TodoItem, index: number, th: Theme): string {
-	const emoji = STATUS_EMOJI[todo.status];
-	const indexLabel = th.fg("dim", `${String(index).padStart(2, " ")}.`);
-	let content: string;
+function todoVisualStatus(
+	todo: TodoItem,
+): "active" | "success" | "error" | "pending" {
 	switch (todo.status) {
-		case "completed":
-			content = th.fg("dim", th.strikethrough(todo.content));
-			break;
-		case "cancelled":
-			content = th.fg("dim", th.strikethrough(todo.content));
-			break;
 		case "in_progress":
-			content = th.bold(th.fg("accent", todo.content));
-			break;
+			return "active";
+		case "completed":
+			return "success";
+		case "cancelled":
+			return "error";
 		default:
-			content = th.fg("text", todo.content);
+			return "pending";
 	}
-	return `${indexLabel} ${emoji}  ${content}`;
+}
+
+function todoContent(todo: TodoItem, theme: Theme): string {
+	if (todo.status === "in_progress") {
+		return theme.bold(theme.fg("accent", todo.content));
+	}
+	if (todo.status === "pending") return theme.fg("text", todo.content);
+	return theme.fg("dim", todo.content);
+}
+
+function formatTodoLine(todo: TodoItem, theme: Theme): string {
+	return `${statusGlyph(theme, todoVisualStatus(todo))} ${todoContent(todo, theme)}`;
 }
