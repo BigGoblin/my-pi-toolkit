@@ -28,7 +28,7 @@ TAPD 需求与缺陷工作流扩展。提供待办列表、会话关联、需求
 
 - `Ctrl+Shift+T`：打开 TAPD 待办。
 
-`/tapd` 的待办列表和关联会话列表统一显示在当前 TUI 上方的居中 Overlay 中，使用完整四周边框，整体高度由内容决定，内部待办列表根据终端高度限制最大可见行数；关闭后恢复主 Agent 界面。需求待办中，标题前的 `📐` 表示当前项目或关联会话目录中已经存在对应的 `design.md`。标记会在每次打开待办时根据本地文件重新计算。新建关联会话时，“会话名称”默认使用 TAPD 标题，也可以在创建前编辑；创建后该名称会显示在 `/resume` 会话列表中。
+`/tapd` 的待办、类型筛选、关联会话、select 和 confirm 页面统一显示在当前 TUI 上方的居中 Overlay 中，与 Subagent 共用单层 Header/viewport/Footer shell（宽度 `92%`、最大高度 `88%`）。主表在 `<80`、`80–119`、`>=120` 列下依次显示紧凑、普通、完整字段；长待办、会话和路径历史使用围绕当前选择的 viewport，并显示 `start-end/total`。`↑/↓`、`PageUp/PageDown`、`Home/End` 导航，`Esc` 返回、`Ctrl+C` 退出，页面 Footer 始终保留关闭提示。需求/Bug 和工作项类型使用 `[REQ]`、`[BUG]`、`[DEV]` 等稳定文本标签；`✓DES` 表示当前项目或关联会话目录中已经存在对应的 `design.md`，标记在每次打开待办时重新计算。新建关联会话时，“会话名称”默认使用 TAPD 标题，也可以在创建前编辑；创建后该名称会显示在 `/resume` 会话列表中。
 
 ## Story workflow
 
@@ -120,6 +120,6 @@ TAPD Open API 索引见 [`../../docs/tapd-api.md`](../../docs/tapd-api.md)。
 | `sessions/` | TAPD 会话关联、创建和失效清理 |
 | `documents/` | analyze、design、collaboration 与 Bug 定位文档工作流 |
 | `subtasks/` | 子需求解析、确认计划与 TAPD 同步 |
-| `todo/` | 待办模型、列表和会话选择 UI |
+| `todo/` | 待办编排与 Overlay；`tree-list.ts`、`table-view.ts`、`session-picker*.ts` 分别负责树表、响应式主表和会话/路径 viewport |
 | `review/` | 需求实现审核上下文、只读子代理、进度和报告渲染 |
 | `git/` | Git 仓库、TAPD keyword、GitLab MR、状态回写和根因备注 |

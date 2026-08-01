@@ -22,6 +22,7 @@
 - `extensions/shared/tui/visual-language.ts`
 - `extensions/shared/tui/tool-render.ts`
 - `extensions/shared/tui/tool-format.ts`
+- `extensions/shared/tui/overlay-shell.ts`（复杂 Overlay 的单层 chrome 与高度预算）
 
 需要新增视觉语义时，先扩展共享模块，再由业务模块调用；不得复制 helper 到模块目录。
 
@@ -72,7 +73,7 @@ Overlay 返回的总行数必须包含全部固定行：
 总高度 = 顶边框 + Header + 分隔线 + Viewport + 分隔线/状态行 + 底边框
 ```
 
-计算 viewport 时，必须逐项扣除固定行，不得使用未同步的魔法数字。新增或删除 Header、Footer、分隔线时必须同时更新高度预算。
+计算 viewport 时，必须逐项扣除固定行，不得使用未同步的魔法数字。新增或删除 Header、Footer、分隔线时必须同时更新高度预算。使用标准单行 Header/Footer 的复杂 Overlay 应复用 `overlay-shell.ts`；业务模块不得再套第二层 `DynamicBorder` 或手写同构边框。
 
 示例：包含顶边框、标题、分隔线、内容、Footer、底边框时：
 

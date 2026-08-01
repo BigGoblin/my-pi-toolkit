@@ -8,6 +8,7 @@ import type {
 	KeybindingsManager,
 	TUI,
 } from "@earendil-works/pi-tui";
+import { STANDARD_OVERLAY_OPTIONS } from "../../shared/tui/overlay-shell.js";
 import { showOverlayConfirm, showOverlaySelect } from "./overlay-dialogs.js";
 import { TapdOverlayFrame } from "./overlay-frame.js";
 
@@ -20,15 +21,8 @@ type OverlayFactory = (
 ) => OverlayComponent | Promise<OverlayComponent>;
 type CustomOptions = Parameters<ExtensionUIContext["custom"]>[1];
 
-const TAPD_OVERLAY_OPTIONS: NonNullable<CustomOptions> = {
-	overlay: true,
-	overlayOptions: {
-		anchor: "center",
-		width: "96%",
-		maxHeight: "94%",
-		margin: 1,
-	},
-};
+const TAPD_OVERLAY_OPTIONS: NonNullable<CustomOptions> =
+	STANDARD_OVERLAY_OPTIONS;
 
 export function withTapdListOverlays(
 	ctx: ExtensionCommandContext,
@@ -40,7 +34,12 @@ export function withTapdListOverlays(
 			keybindings,
 			done,
 		) =>
-			new TapdOverlayFrame(await factory(tui, theme, keybindings, done), theme);
+			new TapdOverlayFrame(
+				await factory(tui, theme, keybindings, done),
+				theme,
+				tui,
+				keybindings,
+			);
 		return ctx.ui.custom(framedFactory, options ?? TAPD_OVERLAY_OPTIONS);
 	}) as ExtensionUIContext["custom"];
 	const overlaySelect: ExtensionUIContext["select"] = (

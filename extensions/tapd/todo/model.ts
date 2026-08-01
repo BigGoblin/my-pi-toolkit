@@ -41,25 +41,28 @@ export function tapdUrl(item: TapdItem): string {
 		: storyUrl(item.workspaceId, item.id);
 }
 
-export function getTypeIcon(item: TapdItem): string {
-	if (item.kind === "bug") return "🐛";
+const TYPE_LABELS: Array<[RegExp, string]> = [
+	[/PR合并/i, "PR"],
+	[/文档|Doc/i, "DOC"],
+	[/搭建/, "SET"],
+	[/数据/, "DATA"],
+	[/测试/, "TEST"],
+	[/设计|UI/i, "DES"],
+	[/开发|研发/, "DEV"],
+	[/需求/, "REQ"],
+	[/缺陷|Bug/i, "BUG"],
+	[/任务/, "TASK"],
+	[/技术|架构/, "TECH"],
+	[/优化|改进/, "OPT"],
+	[/运维|部署/, "OPS"],
+	[/调研|分析/, "RCH"],
+	[/重构/, "REF"],
+];
+
+export function getTypeLabel(item: TapdItem): string {
+	if (item.kind === "bug") return "BUG";
 	const name = item.workitemTypeName ?? "";
-	if (name.includes("PR合并")) return "🔀";
-	if (name.includes("文档") || name.includes("Doc")) return "📄";
-	if (name.includes("搭建")) return "🏗️";
-	if (name.includes("数据")) return "📊";
-	if (name.includes("测试")) return "🧪";
-	if (name.includes("设计") || name.includes("UI")) return "🎨";
-	if (name.includes("开发") || name.includes("研发")) return "💻";
-	if (name.includes("需求")) return "🎯";
-	if (name.includes("缺陷") || name.includes("Bug")) return "🐛";
-	if (name.includes("任务")) return "📝";
-	if (name.includes("技术") || name.includes("架构")) return "🔧";
-	if (name.includes("优化") || name.includes("改进")) return "✨";
-	if (name.includes("运维") || name.includes("部署")) return "🚀";
-	if (name.includes("调研") || name.includes("分析")) return "🔍";
-	if (name.includes("重构")) return "♻️";
-	return "📋";
+	return TYPE_LABELS.find(([pattern]) => pattern.test(name))?.[1] ?? "ITEM";
 }
 
 export function prioritySymbol(raw: string): string {
@@ -132,7 +135,7 @@ export function collectTypes(forest: TapdItem[]): string[] {
 		}
 	};
 	walk(forest);
-	return Array.from(seen).sort();
+	return Array.from(seen).sort((left, right) => left.localeCompare(right));
 }
 
 export function flatFilter(forest: TapdItem[], typeName: string): TapdItem[] {
@@ -161,23 +164,28 @@ function flattenItems(forest: TapdItem[]): TapdItem[] {
 	return result;
 }
 
+function matchesSearch(item: TapdItem, query: string): boolean {
+	const values = [
+		oneLine(item.name),
+		item.id,
+		item.status,
+		item.priority,
+		item.severity,
+		item.owner,
+		item.workitemTypeName,
+		item.workspaceName,
+	];
+	return values.some((value) => value?.toLowerCase().includes(query));
+}
+
 export function searchFlat(forest: TapdItem[], query: string): TapdItem[] {
 	const normalized = query.trim().toLowerCase();
 	if (!normalized) return [];
-	const result = flattenItems(forest)
-		.filter((item) => {
-			return (
-				oneLine(item.name).toLowerCase().includes(normalized) ||
-				item.id.includes(normalized) ||
-				item.status.toLowerCase().includes(normalized) ||
-				item.priority.toLowerCase().includes(normalized) ||
-				(item.severity?.toLowerCase().includes(normalized) ?? false) ||
-				(item.owner?.toLowerCase().includes(normalized) ?? false) ||
-				(item.workitemTypeName?.toLowerCase().includes(normalized) ?? false) ||
-				item.workspaceName.toLowerCase().includes(normalized)
-			);
-		})
-		.map((item) => ({ ...item, depth: 0, hasChildren: false, children: [] }));
+	const result = flattenItems(forest).flatMap((item) =>
+		matchesSearch(item, normalized)
+			? [{ ...item, depth: 0, hasChildren: false, children: [] }]
+			: [],
+	);
 	result.sort(sortFn);
 	return result;
 }

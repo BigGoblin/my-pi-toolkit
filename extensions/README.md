@@ -7,7 +7,7 @@
 | 扩展 | 说明 | 文档 |
 | --- | --- | --- |
 | ming-core | 通用能力编排（模型、会话壳、子 Agent、Dashboard、Pi Lens 等） | [`ming-core/README.md`](ming-core/README.md) |
-| TAPD | TAPD 待办、需求文档工作流、Bug 定位和子需求同步 | [`tapd/README.md`](tapd/README.md) |
+| TAPD | TAPD 待办、需求文档工作流、Bug 定位和子需求同步；待办 Overlay 与 Subagent 共用响应式单层 shell | [`tapd/README.md`](tapd/README.md) |
 | Context7 | 第三方库最新文档查询工具 | [`context7/README.md`](context7/README.md) |
 
 ## ming-core 内能力模块
@@ -33,6 +33,6 @@
 
 ## TUI 视觉层
 
-`shared/tui/visual-language.ts` 统一状态字符、模式 badge、间距与行宽处理；`tool-render.ts` 和 `tool-format.ts` 为 toolkit 工具提供运行/成功/失败时间线。`built-in-tool-style` 可选择性覆盖仍由 Pi builtin 提供的工具 definition；它不替换 Pi 内置主对话 renderer，也不承诺主对话区鼠标点击。Plan 与 Subagent overlay 仅使用扩展层已有的 SGR 鼠标滚轮支持。
+`shared/tui/visual-language.ts` 统一状态字符、模式 badge、间距与行宽处理；`overlay-shell.ts` 统一复杂 Overlay 的 Header/viewport/Footer、高度预算和边框；`tool-render.ts` 和 `tool-format.ts` 为 toolkit 工具提供运行/成功/失败时间线。`built-in-tool-style` 可选择性覆盖仍由 Pi builtin 提供的工具 definition；它不替换 Pi 内置主对话 renderer，也不承诺主对话区鼠标点击。Plan 与 Subagent overlay 仅使用扩展层已有的 SGR 鼠标滚轮支持。
 
 新增模块或更新任何 TUI 功能时，必须遵循 [`docs/tui-development-guidelines.md`](../docs/tui-development-guidelines.md)，包括共享视觉语义、响应式宽度、overlay 高度预算、输入与资源释放、工具 renderer、文档和验证清单。

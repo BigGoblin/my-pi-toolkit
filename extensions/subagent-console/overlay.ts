@@ -15,7 +15,12 @@ import type {
 	LiveSubagentRun,
 	SubagentTranscriptEntry,
 } from "../shared/subagent/registry.js";
-import { fitLine } from "../shared/tui/visual-language.js";
+import {
+	overlayInnerWidth,
+	overlayViewportHeight,
+	renderOverlayShell,
+	STANDARD_OVERLAY_OPTIONS,
+} from "../shared/tui/overlay-shell.js";
 import {
 	createSubagentEntryRenderer,
 	type SubagentEntryRenderer,
@@ -34,16 +39,6 @@ export interface HistoricalSubagentView {
 type SubagentView = HistoricalSubagentView & {
 	subscribe?: LiveSubagentRun["subscribe"];
 };
-
-const SUBAGENT_OVERLAY_OPTIONS = {
-	overlay: true,
-	overlayOptions: {
-		anchor: "center",
-		width: "92%",
-		maxHeight: "88%",
-		margin: 1,
-	},
-} as const;
 
 function subagentStatusColor(status: string): "accent" | "success" | "error" {
 	if (status === "running") return "accent";
@@ -146,9 +141,8 @@ class SubagentOverlay implements Component {
 	}
 
 	render(width: number): string[] {
-		const innerWidth = Math.max(18, width - 2);
-		const panelHeight = Math.max(8, Math.floor(this.tui.terminal.rows * 0.88));
-		this.viewportHeight = Math.max(1, panelHeight - 6);
+		const innerWidth = overlayInnerWidth(width);
+		this.viewportHeight = overlayViewportHeight(this.tui.terminal.rows);
 		const renderedEntries = this.run.entries?.flatMap((entry) =>
 			this.renderEntry(entry, innerWidth, {
 				toolsExpanded: this.toolOutputExpanded,
@@ -172,12 +166,8 @@ class SubagentOverlay implements Component {
 			this.scrollOffset + this.viewportHeight,
 		);
 		while (visible.length < this.viewportHeight) visible.push("");
-		const border = (value: string) => this.theme.fg("border", value);
 		const statusColor = subagentStatusColor(this.run.status);
-		const header = fitLine(
-			`${this.theme.bold(this.theme.fg("text", "SUBAGENT"))}  ${this.theme.fg("accent", this.run.title)}  ${this.theme.fg(statusColor, this.run.status.toUpperCase())} ${this.theme.fg("muted", `· ${this.run.model}`)}`,
-			innerWidth,
-		);
+		const header = `${this.theme.bold(this.theme.fg("text", "SUBAGENT"))}  ${this.theme.fg("accent", this.run.title)}  ${this.theme.fg(statusColor, this.run.status.toUpperCase())} ${this.theme.fg("muted", `· ${this.run.model}`)}`;
 		const endLine = Math.min(
 			this.contentHeight,
 			this.scrollOffset + this.viewportHeight,
@@ -203,25 +193,15 @@ class SubagentOverlay implements Component {
 			toolAction,
 			"toggle tools",
 		);
-		const help = fitLine(
-			this.theme.fg(
-				"dim",
-				`↑↓/wheel scroll · ${thinkingHint} · ${toolsHint} · End follow · Esc close · ${position}`,
-			),
-			innerWidth,
+		const help = this.theme.fg(
+			"dim",
+			`↑↓/wheel scroll · ${thinkingHint} · ${toolsHint} · End follow · Esc close · ${position}`,
 		);
-		return [
-			border(`╭${"─".repeat(innerWidth)}╮`),
-			`${border("│")}${header}${border("│")}`,
-			border(`├${"─".repeat(innerWidth)}┤`),
-			...visible.map(
-				(line: string) =>
-					`${border("│")}${fitLine(line, innerWidth)}${border("│")}`,
-			),
-			border(`├${"─".repeat(innerWidth)}┤`),
-			`${border("│")}${help}${border("│")}`,
-			border(`╰${"─".repeat(innerWidth)}╯`),
-		];
+		return renderOverlayShell(this.theme, width, {
+			header,
+			body: visible,
+			footer: help,
+		});
 	}
 
 	invalidate(): void {}
@@ -252,7 +232,7 @@ async function showOverlay(
 				keybindings,
 				close: () => done(),
 			}),
-		SUBAGENT_OVERLAY_OPTIONS,
+		STANDARD_OVERLAY_OPTIONS,
 	);
 }
 

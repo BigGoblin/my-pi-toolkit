@@ -1,10 +1,16 @@
-import type { Theme } from "@earendil-works/pi-coding-agent";
+import { rawKeyHint, type Theme } from "@earendil-works/pi-coding-agent";
 import {
 	isFocusable,
-	truncateToWidth,
 	type Component,
 	type Focusable,
+	type KeybindingsManager,
+	type TUI,
 } from "@earendil-works/pi-tui";
+import {
+	overlayInnerWidth,
+	overlayViewportHeight,
+	renderOverlayShell,
+} from "../../shared/tui/overlay-shell.js";
 
 export class TapdOverlayFrame implements Component, Focusable {
 	focused = false;
@@ -12,6 +18,8 @@ export class TapdOverlayFrame implements Component, Focusable {
 	constructor(
 		private readonly content: Component & { dispose?(): void },
 		private readonly theme: Theme,
+		private readonly tui: TUI,
+		private readonly keybindings: KeybindingsManager,
 	) {}
 
 	handleInput(data: string): void {
@@ -20,17 +28,20 @@ export class TapdOverlayFrame implements Component, Focusable {
 
 	render(width: number): string[] {
 		if (isFocusable(this.content)) this.content.focused = this.focused;
-		const innerWidth = Math.max(20, width - 2);
-		const lines = this.content.render(innerWidth);
-		const border = (value: string) => this.theme.fg("accent", value);
-		return [
-			border(`╭${"─".repeat(innerWidth)}╮`),
-			...lines.map(
-				(line: string) =>
-					`${border("│")}${truncateToWidth(line, innerWidth, "", true)}${border("│")}`,
-			),
-			border(`╰${"─".repeat(innerWidth)}╯`),
-		];
+		const innerWidth = overlayInnerWidth(width);
+		const viewportHeight = overlayViewportHeight(this.tui.terminal.rows);
+		const body = this.content.render(innerWidth).slice(0, viewportHeight);
+		while (body.length < viewportHeight) body.push("");
+		const cancelKeys = this.keybindings.getKeys("tui.select.cancel");
+		const back = cancelKeys[0] ? rawKeyHint(cancelKeys[0], "back") : "Esc back";
+		const close = cancelKeys[1]
+			? rawKeyHint(cancelKeys[1], "close")
+			: "Ctrl+C close";
+		return renderOverlayShell(this.theme, width, {
+			header: `${this.theme.bold(this.theme.fg("text", "TAPD"))}  ${this.theme.fg("muted", "TODO & SESSIONS")}`,
+			body,
+			footer: this.theme.fg("dim", `${back} · ${close}`),
+		});
 	}
 
 	invalidate(): void {
