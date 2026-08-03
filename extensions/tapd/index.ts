@@ -7,7 +7,6 @@ import type {
 	SessionStartEvent,
 } from "@earendil-works/pi-coding-agent";
 import type { AutocompleteItem } from "@earendil-works/pi-tui";
-import { registerAskUserChoiceTool } from "../shared/ask-user-choice-tool.js";
 import { fetchUserInfo, fetchWorkspaces } from "./core/api.js";
 import { loadConfig } from "./core/config.js";
 import { cleanupStaleSessionLinks } from "./sessions/cleanup.js";
@@ -31,7 +30,6 @@ import { registerTapdReviewTool } from "./review/tool.js";
 export default function tapdExtension(pi: ExtensionAPI) {
 	const STATE_KEY = "tapd-view-state";
 	registerTapdReviewTool(pi);
-	registerAskUserChoiceTool(pi);
 
 	pi.on("session_start", (event: SessionStartEvent) => {
 		if (event.reason === "startup" || event.reason === "reload") {

@@ -64,12 +64,6 @@ function cancelledResult(
 }
 
 export function registerAskUserChoiceTool(pi: ExtensionAPI): void {
-	if (
-		pi
-			.getAllTools()
-			.some((tool: { name: string }) => tool.name === "ask_user_choice")
-	)
-		return;
 	pi.registerTool({
 		name: "ask_user_choice",
 		label: "Ask User Choice",
