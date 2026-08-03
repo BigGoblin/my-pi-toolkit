@@ -20,7 +20,7 @@
 | Repo Search Subagent | 面向当前本地仓库大规模文件检索的独立只读子 Agent及过程 Overlay | [`repo-search-subagent/README.md`](repo-search-subagent/README.md) |
 | Subagent Console | 用 `/subagents` 查看和管理子 Agent、用 `Alt+A` 进入最近任务；实时与历史详情复用主界面消息/工具样式，并在 Footer 显示活跃数量 | [`subagent-console/README.md`](subagent-console/README.md) |
 | Agent Todos | Cursor TodoWrite 风格任务清单，editor 上方完整进度 | [`agent-todos/README.md`](agent-todos/README.md) |
-| Chat Mode | 使用 `Shift+Tab` 循环 Build/Plan/Ask；Plan 仅可写 `.pi/plan.md`，含 enter/exit_plan_mode 审批 | [`chat-mode/README.md`](chat-mode/README.md) |
+| Chat Mode | 使用 `Shift+Tab` 循环 Build/Plan/Ask；Plan 支持关键决策选项确认，仅可写 session `plan.md`，含 enter/exit_plan_mode 审批 | [`chat-mode/README.md`](chat-mode/README.md) |
 | Built-in Tool Style | 通过官方 tool factory 为 Pi 七个内置工具提供可选 Grok 时间线；`/grok-tools` 配置 | [`built-in-tool-style/README.md`](built-in-tool-style/README.md) |
 | Cursor Models | Cursor 模型折叠、思考等级和 Fast 模式 | [`cursor-models/README.md`](cursor-models/README.md) |
 | Model Manager | 为新对话应用可配置的默认模型和思考等级；`/effort` 选择当前模型思考等级 | [`model-manager/README.md`](model-manager/README.md) |

@@ -15,10 +15,7 @@ import {
 	type PlanFileSeedStatus,
 	type SessionPlanFile,
 } from "./plan-file.js";
-import {
-	IMPLEMENTATION_KICKOFF,
-	planFileStructure,
-} from "./prompt.js";
+import { IMPLEMENTATION_KICKOFF, planFileStructure } from "./prompt.js";
 import type { ChatMode } from "./state.js";
 import {
 	toolCall,
@@ -146,6 +143,7 @@ export function registerPlanTools(
 		promptSnippet: "Enter plan mode and write this session's plan.md",
 		promptGuidelines: [
 			"Call enter_plan_mode when the approach is ambiguous or the user asks for a plan — do not start implementing first.",
+			"In plan mode, use ask_user_choice before writing the Plan when an unresolved decision materially affects the approach; do not ask what repository evidence already answers.",
 			"In plan mode, only edit the session Plan path returned by enter_plan_mode; finish by calling exit_plan_mode.",
 		],
 		parameters: EmptyParams,
@@ -181,7 +179,7 @@ export function registerPlanTools(
 					seedStatusLine(result),
 					"",
 					"1. Understand existing patterns and constraints",
-					"2. Resolve important ambiguities with the user",
+					"2. Resolve important ambiguities with ask_user_choice before writing the Plan",
 					"3. Design a concrete implementation and verification strategy",
 					"4. Write the complete plan to the session Plan file",
 					`5. Call ${EXIT_PLAN_TOOL} to present it for approval`,

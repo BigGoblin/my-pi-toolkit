@@ -2,6 +2,7 @@ import type {
 	ExtensionAPI,
 	ExtensionContext,
 } from "@earendil-works/pi-coding-agent";
+import { registerAskUserChoiceTool } from "../shared/ask-user-choice-tool.js";
 import { createModeController } from "./mode-controller.js";
 import { getPlanLifecycleSnapshot } from "./plan-lifecycle.js";
 import { registerPlanCommand } from "./plan-command.js";
@@ -14,6 +15,7 @@ import { registerPlanTools } from "./plan-tools.js";
 import { getChatMode } from "./state.js";
 
 export default function chatModeExtension(pi: ExtensionAPI): void {
+	registerAskUserChoiceTool(pi);
 	let planFile: SessionPlanFile | undefined;
 	let pendingImplementationKickoff = false;
 

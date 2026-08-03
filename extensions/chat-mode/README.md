@@ -26,7 +26,9 @@ BUILD → PLAN → ASK → BUILD
 
 Plan 用于实施前的只读调研与方案审批：
 
-- 只启用登记的只读工具、Plan 生命周期工具和受路径保护的 `write` / `edit`。
+- 只启用登记的只读工具、Plan 生命周期工具、`ask_user_choice` 和受路径保护的 `write` / `edit`。
+- 遇到会实质影响方案的待确认决策时，Agent 在写 Plan 前调用 `ask_user_choice`：展示 2～5 个候选方案，可标记一个推荐项，最后固定提供“其他（自定义输入）”；已有代码证据可以确认的内容不重复询问。
+- 用户取消选择时停止规划，不推测答案，也不进入 Plan 审批。
 - `write` / `edit` 只能修改本 session 固定的 `plan.md`。
 - 禁止修改项目源码或其他 session 的 Plan。
 - Footer 显示主题 warning 色的 `● PLAN`。
@@ -60,6 +62,7 @@ Plan 用于实施前的只读调研与方案审批：
 | --- | --- |
 | `enter_plan_mode` | 征得同意后进入 Plan，seed 并返回本 session 固定的 `plan.md` |
 | `exit_plan_mode` | 从磁盘读取 Plan，以带背景色的 Markdown 对话框展示全文，再显示审批选项 |
+| `ask_user_choice` | 在写 Plan 前确认关键决策；提供推荐选项和最后一项自定义输入 |
 
 TUI 中 Plan 正文和审批选择分开显示：先在 Grok 风格的 `PLAN REVIEW` 单线边框 Markdown overlay 中展示完整方案，底部单独显示滚动和关闭提示；关闭后选择组件只显示操作。overlay 有固定视口，不会撑高终端内容；支持鼠标滚轮、↑/↓、PageUp/PageDown、Home/End 内部滚动，Enter/Esc 关闭。`/plan review` 仅重新打开该 overlay，不触发审批或切换模式；即使 Agent 正在运行也可只读浏览当前已写入的 Plan。
 

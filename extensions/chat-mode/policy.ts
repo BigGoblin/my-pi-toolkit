@@ -4,6 +4,7 @@ import { ENTER_PLAN_TOOL, EXIT_PLAN_TOOL } from "./plan-file.js";
 
 const PATH_GATED_TOOLS = new Set(["write", "edit"]);
 const SAFE_TOOLS = new Set([
+	"ask_user_choice",
 	"read",
 	"grep",
 	"find",

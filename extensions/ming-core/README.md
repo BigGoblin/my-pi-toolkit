@@ -9,7 +9,7 @@
 1. `cursor-models` — Cursor 模型折叠、思考等级、Fast 模式
 2. `model-manager` — 新对话默认模型与思考等级
 3. `pi-lens` — LSP / AST / 诊断（npm `pi-lens` 转发）
-4. `chat-mode` — Build / Plan / Ask（`Shift+Tab`、`/plan`、`enter_plan_mode` / `exit_plan_mode`）
+4. `chat-mode` — Build / Plan / Ask（`Shift+Tab`、`/plan`、`enter_plan_mode` / `exit_plan_mode`、`ask_user_choice`）
 5. `built-in-tool-style` — 可选 Grok 风格 Pi 内置工具时间线（`/grok-tools`）
 6. `agent-todos` — 任务清单工具与 UI
 7. `multi-task` — 独立文件任务的后台并行 worker 编排

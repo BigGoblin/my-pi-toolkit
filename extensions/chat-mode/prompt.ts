@@ -53,6 +53,7 @@ export function planReminderText(
 			"",
 			`You are returning to the active draft at ${planPath}. Continue this plan rather than creating or editing another plan file.`,
 			"",
+			"Before writing unresolved material decisions into the Plan, use ask_user_choice to confirm them with concrete options and a recommended choice.",
 			`Your turn should only end with either clarifying questions for the user or ${EXIT_PLAN_TOOL} to present your plan to the user.`,
 		].join("\n");
 	}
@@ -68,6 +69,8 @@ export function planReminderText(
 		planFileBlock,
 		"",
 		"Build your plan by writing to or editing this file. It is the only file you are allowed to edit.",
+		"Before writing unresolved material decisions into the Plan, use ask_user_choice to confirm them with 2-5 concrete options, key trade-offs, and at most one recommended choice. Skip questions already answered by repository evidence.",
+		"If the user cancels a clarification, stop planning instead of inferring an answer or presenting the Plan for approval.",
 		"",
 		planFileStructure(planPath),
 		"",

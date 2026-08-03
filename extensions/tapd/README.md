@@ -8,7 +8,7 @@ TAPD 需求与缺陷工作流扩展。提供待办列表、会话关联、需求
 | --- | --- |
 | `/tapd` | 在居中 Overlay 中打开 TAPD 待办列表，支持需求与 Bug 视图 |
 | `/tapd analyze [补充要求]` | 生成 `understanding.md` |
-| `/tapd design [补充要求]` | 生成 `design.md` 和结构化开发子需求拆分 |
+| `/tapd design [补充要求]` | 调研后通过选项式提问确认关键决策，再生成 `design.md` 和结构化开发子需求拆分 |
 | `/tapd collaboration [补充要求]` | 生成供产品、后端和前端 Leader 评审的 `collaboration.md` |
 | `/tapd review [--base origin/dev] [补充要求]` | 启动只读子代理，根据需求和设计审核当前分支与工作区代码，并将分级报告返回主 Agent |
 | `/tapd sub-task` | 根据 `design.md` 创建或同步设计、开发子需求 |
@@ -36,12 +36,14 @@ TAPD 需求与缺陷工作流扩展。提供待办列表、会话关联、需求
 /tapd analyze
 → understanding.md
 → /tapd design
+→ 选项确认（如有关键待确认决策）
 → design.md
 → /tapd collaboration
 → collaboration.md
 → /tapd sub-task
 ```
 
+- `/tapd design` 会先读取需求理解、检查相关代码，再识别影响范围、架构、兼容性、接口契约或验收标准的关键待确认决策。存在待确认项时，Agent 使用通用的 `ask_user_choice` 逐项提问：提供 2～5 个候选方案，可标记一个推荐项，最后固定提供“其他（自定义输入）”；用户取消时停止流程且不创建或覆盖 `design.md`。没有关键待确认项时直接生成设计。
 - 开发任务拆分来源：`design.md`。
 - 设计子需求描述来源：`collaboration.md`。
 - 协作文档会包含 Design 方案 Mermaid 图，核对实际代码并列出关键函数或组件签名、出入参及相关接口信息；不再生成独立的“前后端协作点”和“评审与验收”章节。
@@ -118,7 +120,7 @@ TAPD Open API 索引见 [`../../docs/tapd-api.md`](../../docs/tapd-api.md)。
 | `index.ts` / `types.ts` | 扩展组装入口与跨领域共享类型 |
 | `core/` | 配置、HTTP 客户端、基础 TAPD API |
 | `sessions/` | TAPD 会话关联、创建和失效清理 |
-| `documents/` | analyze、design、collaboration 与 Bug 定位文档工作流 |
+| `documents/` | analyze、design、collaboration 与 Bug 定位文档工作流，以及 Design 关键决策提问工具 |
 | `subtasks/` | 子需求解析、确认计划与 TAPD 同步 |
 | `todo/` | 待办编排与 Overlay；`tree-list.ts`、`table-view.ts`、`session-picker*.ts` 分别负责树表、响应式主表和会话/路径 viewport |
 | `review/` | 需求实现审核上下文、只读子代理、进度和报告渲染 |

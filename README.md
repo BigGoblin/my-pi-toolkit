@@ -59,8 +59,8 @@ pi install git:github.com/BigGoblin/my-pi-toolkit@cursor/chat-mode-plan-8ac0
 
 | 扩展 | 简介 | 详细文档 |
 | --- | --- | --- |
-| ming-core | 通用能力编排（模型、会话壳、子 Agent、Dashboard、Pi Lens 等） | [`extensions/ming-core/README.md`](extensions/ming-core/README.md) |
-| TAPD | TAPD 待办、需求分析、技术设计、协作评审、Bug 定位和子需求同步 | [`extensions/tapd/README.md`](extensions/tapd/README.md) |
+| ming-core | 通用能力编排（模型、带选项确认的 Plan、子 Agent、Dashboard、Pi Lens 等） | [`extensions/ming-core/README.md`](extensions/ming-core/README.md) |
+| TAPD | TAPD 待办、需求分析、选项确认式技术设计、协作评审、Bug 定位和子需求同步 | [`extensions/tapd/README.md`](extensions/tapd/README.md) |
 | Context7 | 为 Agent 提供第三方库最新文档查询工具 | [`extensions/context7/README.md`](extensions/context7/README.md) |
 
 ### Themes
