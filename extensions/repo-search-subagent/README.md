@@ -1,6 +1,6 @@
 # Repo Search Subagent
 
-`repo_search` 是专门探索当前本地代码库的大规模只读子 Agent。主 Agent 判断本地仓库任务需要跨多个目录、多个文件或梳理分散调用关系时，会自动调用它；用户也可以通过 `/repo-search <检索任务>` 明确唤起。它不能联网，也不用于第三方库、外部 API、官方文档或 GitHub 项目调研；这类任务应优先使用 Context7 或可用的联网搜索工具。`@` 继续保留给文件引用，不作为子 Agent 前缀。
+`repo_search` 是专门探索当前本地代码库的大规模只读子 Agent。主 Agent 判断本地仓库任务需要跨多个目录、多个文件或梳理分散调用关系时，会自动调用它；用户也可以通过 `/repo-search <检索任务>` 明确唤起。`multi_task` 的 `kind: "research"` 任务也会直接复用同一个 runner，并作为 Batch 内的平级只读 worker 执行，而不是由通用 worker 再嵌套调用 `repo_search`。它不能联网，也不用于第三方库、外部 API、官方文档或 GitHub 项目调研；这类任务应优先使用 Context7 或可用的联网搜索工具。`@` 继续保留给文件引用，不作为子 Agent 前缀。
 
 ## 能力与安全边界
 
@@ -107,7 +107,7 @@ read, grep, find, ls
 }
 ```
 
-`presentation` 支持 `manual`、`auto`、`inline`、`split` 和 `tab`。`manual` 是默认值并提供最接近 OpenCode 的手动进入/退出体验；`inline` 使用一次性 JSON 子进程；`split` 和 `tab` 自动打开 Windows Terminal；`auto` 根据环境决定。Repo Search 的用户级或受信任项目配置可以覆盖全局值。所有模式都严格保留只读工具白名单、扩展隔离和 `.gitignore` 守卫。
+`presentation` 支持 `manual`、`auto`、`inline`、`split` 和 `tab`。`manual` 是默认值并提供最接近 OpenCode 的手动进入/退出体验；`inline` 使用一次性 JSON 子进程；`split` 和 `tab` 自动打开 Windows Terminal；`auto` 根据环境决定。Repo Search 的用户级或受信任项目配置可以覆盖全局值。所有模式都严格保留只读工具白名单、扩展隔离和 `.gitignore` 守卫。由 `multi_task` 调度时会固定走非持久 RPC/manual 路径，把进度保留在同一张 Batch 工具卡片中；此场景不采用 Repo Search 配置中的 split/tab 展示方式，但仍沿用项目/用户/当前模型的选择优先级。
 
 ## 输出限制
 

@@ -119,7 +119,10 @@ export async function runTerminalSubagent(
 	const config = loadSubagentUiConfig(options.presentation);
 	const presentation = resolvePresentation(config);
 	if (presentation === "manual")
-		return runRpcSubagent({ ...options, keepOpen: config.keepOpen });
+		return runRpcSubagent({
+			...options,
+			keepOpen: options.keepOpen ?? config.keepOpen,
+		});
 	if (presentation === "inline") return null;
 	if (process.platform !== "win32") {
 		if (config.fallback === "inline") return null;

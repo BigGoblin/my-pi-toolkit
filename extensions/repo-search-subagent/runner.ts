@@ -70,26 +70,26 @@ function truncateResult(output: string): {
 	};
 }
 
-function makeDetails(
-	task: string,
-	config: RepoSearchRunConfig,
-	output: string,
-	toolCalls: RepoSearchDetails["toolCalls"],
-	exitCode: number,
-	stderr: string,
-	truncated = false,
-	runDir?: string,
-): RepoSearchDetails {
+function makeDetails(options: {
+	task: string;
+	config: RepoSearchRunConfig;
+	output: string;
+	toolCalls: RepoSearchDetails["toolCalls"];
+	exitCode: number;
+	stderr: string;
+	truncated?: boolean;
+	runDir?: string;
+}): RepoSearchDetails {
 	return {
-		task,
-		model: config.model,
-		modelSource: config.source,
-		output,
-		toolCalls: [...toolCalls],
-		exitCode,
-		stderr,
-		truncated,
-		runDir,
+		task: options.task,
+		model: options.config.model,
+		modelSource: options.config.source,
+		output: options.output,
+		toolCalls: [...options.toolCalls],
+		exitCode: options.exitCode,
+		stderr: options.stderr,
+		truncated: options.truncated ?? false,
+		runDir: options.runDir,
 	};
 }
 
@@ -97,6 +97,7 @@ export async function runRepoSearchSubagent(options: {
 	cwd: string;
 	task: string;
 	config: RepoSearchRunConfig;
+	keepOpen?: boolean;
 	parentSessionId?: string;
 	signal?: AbortSignal;
 	onUpdate?: (details: RepoSearchDetails) => void;
@@ -111,27 +112,35 @@ export async function runRepoSearchSubagent(options: {
 		extensionPaths: [CURSOR_PROVIDER_EXTENSION, GITIGNORE_GUARD_EXTENSION],
 		disableContextFiles: true,
 		presentation: options.config.presentation,
+		keepOpen: options.keepOpen,
 		parentSessionId: options.parentSessionId,
 		signal: options.signal,
 		onUpdate: ({ toolCalls }) =>
 			options.onUpdate?.(
-				makeDetails(options.task, options.config, "", toolCalls, -1, ""),
+				makeDetails({
+					task: options.task,
+					config: options.config,
+					output: "",
+					toolCalls,
+					exitCode: -1,
+					stderr: "",
+				}),
 			),
 	});
 	if (terminal) {
 		const visible = truncateResult(terminal.output);
 		return {
 			content: visible.content,
-			details: makeDetails(
-				options.task,
-				options.config,
-				terminal.output,
-				terminal.toolCalls,
-				0,
-				"",
-				visible.truncated,
-				terminal.runDir,
-			),
+			details: makeDetails({
+				task: options.task,
+				config: options.config,
+				output: terminal.output,
+				toolCalls: terminal.toolCalls,
+				exitCode: 0,
+				stderr: "",
+				truncated: visible.truncated,
+				runDir: terminal.runDir,
+			}),
 		};
 	}
 
@@ -201,14 +210,14 @@ export async function runRepoSearchSubagent(options: {
 				}
 			}
 			options.onUpdate?.(
-				makeDetails(
-					options.task,
-					options.config,
-					finalAssistantText(messages),
+				makeDetails({
+					task: options.task,
+					config: options.config,
+					output: finalAssistantText(messages),
 					toolCalls,
-					-1,
+					exitCode: -1,
 					stderr,
-				),
+				}),
 			);
 		};
 		child.stdout.on("data", (data) => {
@@ -243,14 +252,14 @@ export async function runRepoSearchSubagent(options: {
 	const visible = truncateResult(output);
 	return {
 		content: visible.content,
-		details: makeDetails(
-			options.task,
-			options.config,
+		details: makeDetails({
+			task: options.task,
+			config: options.config,
 			output,
 			toolCalls,
 			exitCode,
 			stderr,
-			visible.truncated,
-		),
+			truncated: visible.truncated,
+		}),
 	};
 }

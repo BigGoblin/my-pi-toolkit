@@ -1,6 +1,6 @@
 # Multi Task
 
-`multi_task` 是多任务编排工具。默认的 `run` 模式会像 `repo_search` 一样保持当前工具调用打开，并在同一张工具卡片中显示聚合进度；主 Agent 不需要轮询。`start` 保留为高级后台模式，适用于主 Agent 已经有其它不依赖 worker 结果的工作。所有任务都必须彼此独立、写入路径不重叠。
+`multi_task` 是多任务编排工具。默认的 `run` 模式保持当前工具调用打开，并在同一张工具卡片中显示聚合进度；主 Agent 不需要轮询。一个 Batch 可以平级混合两类 worker：默认的 `implementation` worker 负责受限路径内的实现，`research` worker 直接复用只读 Repo Search 子 Agent。`research` 不会先启动通用 worker，因此不会形成嵌套子 Agent。`start` 保留为高级后台模式，适用于主 Agent 已经有其它不依赖 worker 结果的工作。所有任务都必须彼此独立。
 
 ## 工作流
 
@@ -21,12 +21,14 @@
   "action": "run",
   "tasks": [
     {
-      "id": "auth-errors",
-      "task": "完善认证错误映射并保持现有公共 API",
-      "paths": ["src/auth/errors.ts"]
+      "id": "auth-flow-research",
+      "kind": "research",
+      "task": "梳理认证入口、错误映射和主要调用关系，给出文件与行号证据",
+      "paths": ["src/auth", "src/api"]
     },
     {
       "id": "logger-fields",
+      "kind": "implementation",
       "task": "补充结构化日志字段",
       "paths": ["src/logger.ts"]
     }
@@ -35,7 +37,7 @@
 }
 ```
 
-`run` 会在一张工具卡片中显示每个 worker 的状态和最近工具调用，完成后直接返回报告。
+`run` 会在一张工具卡片中显示每个 worker 的类型、状态和最近工具调用，完成后直接返回报告。`kind` 可省略，默认是 `implementation`，因此旧调用保持兼容。只有纯只读、跨多文件或目录的探索任务才应使用 `research`；如果任务最终需要修改文件，即使前置步骤需要搜索，也应使用 `implementation`。
 
 ## 后台模式
 
@@ -60,40 +62,46 @@
 { "action": "cancel", "batchId": "..." }
 ```
 
-`status` 适合用户明确要求查看或排错，不是后台进度通知机制。`model` 可选；默认继承主 Agent 当前模型。单批最多 8 个任务，并发数范围为 1–6，默认 3。
+`status` 适合用户明确要求查看或排错，不是后台进度通知机制。`model` 可选，控制 implementation worker，默认继承主 Agent 当前模型。research worker 沿用 Repo Search 的模型优先级：受信任项目配置、用户配置、当前主 Agent 模型。Batch 内 research 强制使用内联 RPC/manual 执行并在聚合卡片中更新，不采用 Repo Search 的 split/tab 展示配置。单批最多 8 个任务，并发数范围为 1–6，默认 3；两类 worker 共用同一个并发上限。
 
 ## 调度边界
 
 适合：
 
-- 修改互不相交文件的独立实现任务
+- 修改互不相交文件的独立 implementation 任务
+- 跨多个文件或目录、只需证据报告的独立 research 任务
+- 同一 Batch 中平级混合互不依赖的实现与检索
 - 主 Agent 同时还有其他不依赖 worker 结果的工作
-- 每个任务都有明确目标和授权路径
+- 每个任务都有明确目标和路径范围
 
 不适合：
 
-- 多个任务修改相同文件或父子目录
+- 多个 implementation 任务修改相同文件或父子目录
+- research 范围与并发 implementation 写入范围重叠
 - 后一个任务依赖前一个任务
 - 尚未完成架构决策的重构
 - 需要共同修改公共类型、锁文件或中央导出文件
 
 `start` 会规范化路径并拒绝：
 
-- 空任务或重复任务 ID
+- 空任务、重复任务 ID 或无效 `kind`
 - 当前项目之外的路径
-- 同一批或其他运行中批次里相同、父子包含或目录重叠的路径
+- implementation/implementation 或 implementation/research 之间相同、父子包含或目录重叠的路径
 
-路径会解析到最近存在的真实父目录，因此不能借助符号链接或尚未创建的子目录逃出项目边界。主 Agent 在批次运行期间也不能通过 `edit` 或 `write` 修改 worker 已锁定的路径。
+research/research 可以重叠，因为两者都是只读；research 的 `paths` 是检索 scope，implementation 的 `paths` 是授权写入范围。跨运行中 Batch 也应用相同冲突规则，避免 research 在并发写入中读取不一致状态。路径会解析到最近存在的真实父目录，因此不能借助符号链接或尚未创建的子目录逃出项目边界。主 Agent 在批次运行期间不能通过 `edit` 或 `write` 修改 implementation worker 已锁定的路径；research 不持有写锁。
 
 ## Worker 安全边界
 
-每个 worker 使用独立 RPC 子进程、会话和上下文，固定工具为：
+每个 worker 使用独立 RPC 子进程、会话和上下文，但按类型采用不同权限：
 
 ```text
-read, grep, find, ls, edit, write, lsp_diagnostics, lens_diagnostics
+implementation: read, grep, find, ls, edit, write, lsp_diagnostics, lens_diagnostics
+research:       read, grep, find, ls
 ```
 
-worker 没有 `bash`，不能执行任意命令。子进程只显式加载瘦路径：`cursor-models`、`pi-lens` 和 `path-guard.ts`，不会加载整个 `ming-core`。Pi Lens 会在 `edit`/`write` 后提供自动格式化、lint、结构、安全和类型反馈；worker 结束前还必须对实际修改文件运行有界的 `lsp_diagnostics` 与 `lens_diagnostics(mode=all)`。守卫在每次 `edit`、`write` 前对目标进行规范化，并阻止声明范围外的写入。worker 可以读取仓库以理解上下文，但只能写入任务声明的路径。
+implementation worker 没有 `bash`，不能执行任意命令。它只显式加载瘦路径：`cursor-models`、`pi-lens` 和 `path-guard.ts`，不会加载整个 `ming-core`。Pi Lens 会在 `edit`/`write` 后提供自动格式化、lint、结构、安全和类型反馈；worker 结束前还必须对实际修改文件运行有界的 `lsp_diagnostics` 与 `lens_diagnostics(mode=all)`。守卫在每次 `edit`、`write` 前规范化目标，并阻止声明范围外的写入。
+
+research worker 由 Batch manager 直接调用 Repo Search runner，与 implementation worker 平级；它只加载 Cursor provider 和 `.gitignore` guard，不能写文件、运行 shell 或调用另一个 `repo_search`。任务声明的 `paths` 会写入搜索请求作为范围，报告应包含文件、行号和调用关系证据。
 
 这是共享工作区模式，不是 Git worktree 隔离。路径锁可以避免已声明范围之间的竞争，但主 Agent 仍应只并行派发真正独立的任务，并在收集后检查整体 diff、运行诊断与测试。
 
@@ -101,7 +109,7 @@ worker 没有 `bash`，不能执行任意命令。子进程只显式加载瘦路
 
 - `run` 等待 worker 完成；进度只在当前工具调用仍运行时通过 partial result 更新，不产生 Agent 轮询。
 - `start` 不等待 worker 完成，因此不会阻塞主 Agent 后续工作；完成 follow-up 是后台模式的通知渠道。
-- 默认最多同时运行 3 个 worker，其余保持 `queued`。
+- 默认最多同时运行 3 个 worker，两类 worker 共用并发槽，其余保持 `queued`。
 - 单个 worker 失败不会取消其他独立 worker；批次最终状态为 `failed`。
 - 主会话关闭、切换或 reload 时，该会话启动的运行中批次会被取消。
 - `run` 和 `collect` 返回主 Agent 的文本最多 50 KB 或 2000 行；完整 worker 输出仍保存在工具 `details` 中。

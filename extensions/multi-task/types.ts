@@ -5,6 +5,7 @@ export type MultiTaskAction =
 	| "collect"
 	| "cancel";
 export type BatchStatus = "running" | "completed" | "failed" | "cancelled";
+export type MultiTaskWorkerKind = "implementation" | "research";
 export type WorkerStatus =
 	| "queued"
 	| "running"
@@ -16,6 +17,11 @@ export interface MultiTaskInputTask {
 	id: string;
 	task: string;
 	paths: string[];
+	kind?: MultiTaskWorkerKind;
+}
+
+export interface NormalizedMultiTaskTask extends MultiTaskInputTask {
+	kind: MultiTaskWorkerKind;
 }
 
 export interface MultiTaskInput {
@@ -35,6 +41,8 @@ export interface MultiTaskWorker {
 	id: string;
 	task: string;
 	paths: string[];
+	kind: MultiTaskWorkerKind;
+	model: string;
 	status: WorkerStatus;
 	startedAt?: string;
 	completedAt?: string;
@@ -63,6 +71,8 @@ export interface MultiTaskWorkerView {
 	id: string;
 	task: string;
 	paths: string[];
+	kind: MultiTaskWorkerKind;
+	model: string;
 	status: WorkerStatus;
 	startedAt?: string;
 	completedAt?: string;

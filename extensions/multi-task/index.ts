@@ -1,16 +1,13 @@
-import { fileURLToPath } from "node:url";
-import { dirname, resolve } from "node:path";
-import {
-	truncateHead,
-	type AgentToolResult,
-	type ExtensionAPI,
-	type ExtensionContext,
-	type Theme,
-	type ToolRenderResultOptions,
+import type {
+	AgentToolResult,
+	ExtensionAPI,
+	ExtensionContext,
+	Theme,
+	ToolRenderResultOptions,
 } from "@earendil-works/pi-coding-agent";
-import { truncateToWidth } from "@earendil-works/pi-tui";
-import { statusGlyph } from "../shared/tui/visual-language.js";
 import { toolCall, toolResult } from "../shared/tui/tool-render.js";
+import { resolveRepoSearchConfig } from "../repo-search-subagent/config.js";
+import type { RepoSearchRunConfig } from "../repo-search-subagent/types.js";
 // @ts-expect-error -- TypeBox's .d.mts exports require a newer resolver than the workspace LSP.
 import { Type } from "typebox";
 import {
@@ -26,54 +23,20 @@ import type {
 	MultiTaskDetails,
 	MultiTaskInput,
 } from "./types.js";
-
-const EXTENSION_DIR = dirname(fileURLToPath(import.meta.url));
-const PATH_GUARD_EXTENSION = resolve(EXTENSION_DIR, "path-guard.ts");
-const PI_LENS_EXTENSION = resolve(EXTENSION_DIR, "../pi-lens/index.js");
-const CURSOR_PROVIDER_EXTENSION = resolve(
-	EXTENSION_DIR,
-	"../cursor-models/index.ts",
-);
-const WORKER_EXTENSIONS = [
-	CURSOR_PROVIDER_EXTENSION,
-	PI_LENS_EXTENSION,
-	PATH_GUARD_EXTENSION,
-];
-const MAX_RESULT_BYTES = 50 * 1024;
-const MAX_RESULT_LINES = 2000;
-
+import {
+	batchVisualStatus,
+	collectText,
+	progressDetails,
+	progressText,
+	snapshot,
+	summarize,
+	workerSummary,
+} from "./view.js";
+import { IMPLEMENTATION_WORKER_EXTENSIONS } from "./worker-extensions.js";
 type MultiTaskToolUpdate = {
 	content: Array<{ type: "text"; text: string }>;
 	details: MultiTaskDetails;
 };
-
-function snapshot(
-	batch: MultiTaskBatch,
-	includeOutput: boolean,
-): MultiTaskBatchView {
-	return {
-		id: batch.id,
-		model: batch.model,
-		status: batch.status,
-		createdAt: batch.createdAt,
-		completedAt: batch.completedAt,
-		maxConcurrency: batch.maxConcurrency,
-		workers: batch.workers.map((worker) => ({
-			id: worker.id,
-			task: worker.task,
-			paths: worker.paths,
-			status: worker.status,
-			startedAt: worker.startedAt,
-			completedAt: worker.completedAt,
-			progress: worker.progress,
-			toolCalls: worker.toolCalls,
-			...(includeOutput
-				? { output: worker.output, runDir: worker.runDir }
-				: {}),
-			error: worker.error,
-		})),
-	};
-}
 
 function requireBatch(batchId: string | undefined): MultiTaskBatch {
 	if (!batchId?.trim()) throw new Error("该操作需要 batchId");
@@ -82,117 +45,18 @@ function requireBatch(batchId: string | undefined): MultiTaskBatch {
 	return batch;
 }
 
-function summarize(batch: MultiTaskBatchView): string {
-	const counts = new Map<string, number>();
-	for (const worker of batch.workers)
-		counts.set(worker.status, (counts.get(worker.status) ?? 0) + 1);
-	const statuses = Array.from(counts.entries())
-		.map(([status, count]) => `${status}=${count}`)
-		.join(", ");
-	return `Batch ${batch.id}: ${batch.status} (${statuses})`;
-}
-
-function progressText(batch: MultiTaskBatchView): string {
-	const workers = batch.workers.map((worker) => {
-		const lastCall = worker.toolCalls.slice(-1)[0];
-		const activity = lastCall
-			? `→ ${previewToolCall(lastCall.name, lastCall.arguments)}`
-			: worker.progress ?? worker.status;
-		return `${worker.id}: ${worker.status} ${activity}`;
-	});
-	return [summarize(batch), ...workers].join("\n");
-}
-
-function workerStatusVisual(
-	status: MultiTaskBatchView["workers"][number]["status"],
-): "active" | "success" | "error" | "pending" {
-	if (status === "running") return "active";
-	if (status === "completed") return "success";
-	if (status === "queued") return "pending";
-	return "error";
-}
-
-type ClipValue = (value: unknown, width?: number) => string;
-type ToolPreviewer = (args: Record<string, unknown>, clip: ClipValue) => string;
-
-const TOOL_PREVIEWERS: Record<string, ToolPreviewer> = {
-	read: (args, clip) => `read ${clip(args.path ?? "...")}`,
-	write: (args, clip) => `write ${clip(args.path ?? "...")}`,
-	edit: (args, clip) => `edit ${clip(args.path ?? "...")}`,
-	grep: (args, clip) =>
-		`grep /${clip(args.pattern ?? "", 36)}/ in ${clip(args.path ?? ".")}`,
-	find: (args, clip) =>
-		`find ${clip(args.pattern ?? "*", 36)} in ${clip(args.path ?? ".")}`,
-	ls: (args, clip) => `ls ${clip(args.path ?? ".")}`,
-};
-
-function previewToolCall(
-	name: string,
-	args: Record<string, unknown>,
-): string {
-	const clip: ClipValue = (value, width = 56) =>
-		truncateToWidth(String(value ?? ""), width, "…");
-	return TOOL_PREVIEWERS[name]?.(args, clip) ?? clip(name, 72);
-}
-
-function progressDetails(
-	batch: MultiTaskBatchView,
-	theme: Theme,
-	expanded: boolean,
-): string[] {
-	const details: string[] = [];
-	for (const worker of batch.workers) {
-		const lastCall = worker.toolCalls.slice(-1)[0];
-		const activity = lastCall
-			? previewToolCall(lastCall.name, lastCall.arguments)
-			: worker.progress ?? worker.status;
-		details.push(
-			`${statusGlyph(theme, workerStatusVisual(worker.status))} ${truncateToWidth(`${worker.id} · ${worker.status} · ${activity}`, 120, "…")}`,
-		);
-		if (expanded) {
-			for (const call of worker.toolCalls.slice(-4, -1))
-				details.push(
-					`  └ ${truncateToWidth(`${worker.id}: ${previewToolCall(call.name, call.arguments)}`, 116, "…")}`,
-				);
-		}
-	}
-	return details;
-}
-
-function collectText(batch: MultiTaskBatchView): string {
-	const reports = batch.workers.map((worker) => {
-		const result = worker.output ?? worker.error ?? "No result yet.";
-		return `## ${worker.id} · ${worker.status}\n\n${result}`;
-	});
-	const output = `${summarize(batch)}\n\n${reports.join("\n\n")}`;
-	const truncated = truncateHead(output, {
-		maxBytes: MAX_RESULT_BYTES,
-		maxLines: MAX_RESULT_LINES,
-	});
-	return truncated.truncated
-		? `${truncated.content}\n\n[Multi Task 输出已截断；完整 worker 输出保存在工具 details 中。]`
-		: truncated.content;
-}
-
-function workerSummary(
-	count: number | undefined,
-	batchId: string | undefined,
-): string | undefined {
-	if (count === undefined) return batchId;
-	return `${count} worker${count === 1 ? "" : "s"}`;
-}
-
-function batchVisualStatus(
-	status: MultiTaskBatchView["status"],
-): "active" | "success" | "error" {
-	if (status === "running") return "active";
-	return status === "completed" ? "success" : "error";
-}
-
 function currentModel(params: MultiTaskInput, ctx: ExtensionContext): string {
 	if (params.model?.trim()) return params.model.trim();
 	if (ctx.model) return `${ctx.model.provider}/${ctx.model.id}`;
 	throw new Error("未指定 worker 模型，且主 Agent 当前没有可继承的模型");
+}
+
+function researchConfig(
+	params: MultiTaskInput,
+	ctx: ExtensionContext,
+): RepoSearchRunConfig | undefined {
+	if (!params.tasks?.some((task) => task.kind === "research")) return undefined;
+	return resolveRepoSearchConfig(ctx.cwd, ctx.isProjectTrusted(), ctx.model);
 }
 
 interface MultiTaskExecutionOptions {
@@ -222,7 +86,8 @@ async function runBatch(
 		parentSessionId: ctx.sessionManager.getSessionId(),
 		tasks: params.tasks,
 		maxConcurrency: params.maxConcurrency ?? 3,
-		extensionPaths: WORKER_EXTENSIONS,
+		extensionPaths: IMPLEMENTATION_WORKER_EXTENSIONS,
+		researchConfig: researchConfig(params, ctx),
 		signal,
 		onProgress: (current) => {
 			const view = snapshot(current, false);
@@ -248,7 +113,8 @@ function startBackgroundBatch(
 		parentSessionId: ctx.sessionManager.getSessionId(),
 		tasks: params.tasks,
 		maxConcurrency: params.maxConcurrency ?? 3,
-		extensionPaths: WORKER_EXTENSIONS,
+		extensionPaths: IMPLEMENTATION_WORKER_EXTENSIONS,
+		researchConfig: researchConfig(params, ctx),
 		onSettled: (settled) =>
 			pi.sendMessage(
 				{
@@ -312,14 +178,16 @@ function createMultiTaskTool(pi: ExtensionAPI) {
 		name: "multi_task",
 		label: "Multi Task",
 		description:
-			"Run or manage isolated worker agents for independent, non-overlapping file tasks. The default run action keeps one tool call open and streams aggregated worker progress without polling; start is the advanced fire-and-forget mode. Actions: run, start, status, collect, cancel.",
+			"Run or manage independent worker agents in one batch. Tasks default to implementation workers; kind=research runs a direct, read-only Repo Search worker at the same level. The default run action streams aggregated progress without polling; start is advanced fire-and-forget. Actions: run, start, status, collect, cancel.",
 		promptSnippet:
-			"Run independent, non-overlapping file tasks concurrently in background worker agents",
+			"Run independent implementation and read-only repository research tasks concurrently",
 		promptGuidelines: [
 			"Use multi_task run by default when independent tasks can be completed in one coordinated batch; it streams progress in the existing tool card and returns final reports without status/collect polling.",
+			"Set multi_task task.kind to research only for pure read-only exploration spanning multiple files or directories; research runs directly as a Repo Search worker, not as a nested subagent.",
+			"Keep multi_task task.kind as implementation when the task must modify files, even if it needs preliminary repository searches; implementation is the default for backward compatibility.",
 			"Use multi_task start only when the main agent has other independent work to do while workers run; do not poll status repeatedly, wait for the completion follow-up.",
 			"Do not use multi_task for tasks that modify shared files, depend on one another, or require unresolved architecture decisions.",
-			"Every multi_task worker loads Pi Lens and must run bounded diagnostics after editing; integrate worker reports and run project-level verification before declaring the work complete.",
+			"Every multi_task implementation worker loads Pi Lens and must run bounded diagnostics after editing; integrate all worker reports and run project-level verification before declaring the work complete.",
 		],
 		parameters: Type.Object({
 			action: Type.Unsafe<MultiTaskInput["action"]>({
@@ -332,7 +200,19 @@ function createMultiTaskTool(pi: ExtensionAPI) {
 					Type.Object({
 						id: Type.String(),
 						task: Type.String(),
-						paths: Type.Array(Type.String(), { minItems: 1 }),
+						paths: Type.Array(Type.String(), {
+							minItems: 1,
+							description:
+								"Authorized write paths for implementation or read scopes for research",
+						}),
+						kind: Type.Optional(
+							Type.Unsafe<"implementation" | "research">({
+								type: "string",
+								enum: ["implementation", "research"],
+								description:
+									"implementation (default) edits authorized paths; research runs a direct read-only Repo Search worker",
+							}),
+						),
 					}),
 					{ maxItems: 8 },
 				),
