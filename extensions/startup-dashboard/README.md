@@ -33,7 +33,7 @@
 /dashboard-footer # 在自定义和内置 Footer 之间切换
 ```
 
-切换状态仅在当前 Pi 进程中保存；重启或 `/reload` 后恢复自定义界面。
+切换状态仅在当前 Pi 进程中保存；重启或 `/reload` 后恢复自定义界面。Footer 与 Git 分支订阅按 session 建立，并在 `/new`、`/resume`、`/fork`、`/reload` 和退出时释放；渲染不会复用已失效的 session context。
 
 ## 推荐主题
 

@@ -3,6 +3,7 @@ import type {
 	ExtensionCommandContext,
 	ExtensionContext,
 	ReadonlyFooterDataProvider,
+	SessionInfoChangedEvent,
 	SessionStartEvent,
 	Theme,
 } from "@earendil-works/pi-coding-agent";
@@ -20,7 +21,7 @@ export default function startupDashboard(pi: ExtensionAPI) {
 	};
 	let headerEnabled = true;
 	let footerEnabled = true;
-	let footerContext: ExtensionContext | undefined;
+	let sessionTitle: string | undefined;
 	let requestFooterRender: (() => void) | undefined;
 
 	const installHeader = (
@@ -46,7 +47,6 @@ export default function startupDashboard(pi: ExtensionAPI) {
 	};
 
 	const installFooter = (ctx: ExtensionContext): void => {
-		footerContext = ctx;
 		if (!footerEnabled) {
 			ctx.ui.setFooter(undefined);
 			requestFooterRender = undefined;
@@ -54,18 +54,17 @@ export default function startupDashboard(pi: ExtensionAPI) {
 		}
 		ctx.ui.setFooter(
 			(tui: TUI, theme: Theme, footerData: ReadonlyFooterDataProvider) => {
-				requestFooterRender = () => tui.requestRender();
-				const unsubscribeBranch = footerData.onBranchChange(() =>
-					tui.requestRender(),
-				);
+				const requestRender = () => tui.requestRender();
+				requestFooterRender = requestRender;
+				const unsubscribeBranch = footerData.onBranchChange(requestRender);
 				return {
 					render: (width: number) =>
 						renderFooter(
 							width,
 							createFooterSnapshot(
-								footerContext ?? ctx,
+								ctx,
 								footerData.getGitBranch(),
-								pi.getSessionName(),
+								sessionTitle,
 								footerData.getExtensionStatuses().get("chat-mode"),
 								footerData.getExtensionStatuses().get("subagent"),
 							),
@@ -74,7 +73,9 @@ export default function startupDashboard(pi: ExtensionAPI) {
 					invalidate() {},
 					dispose: () => {
 						unsubscribeBranch();
-						requestFooterRender = undefined;
+						if (requestFooterRender === requestRender) {
+							requestFooterRender = undefined;
+						}
 					},
 				};
 			},
@@ -85,6 +86,7 @@ export default function startupDashboard(pi: ExtensionAPI) {
 		"session_start",
 		async (event: SessionStartEvent, ctx: ExtensionContext) => {
 			if (ctx.mode !== "tui") return;
+			sessionTitle = pi.getSessionName();
 			data = await discoverDashboardData(ctx.cwd);
 			installHeader(ctx, event.reason === "startup");
 			installFooter(ctx);
@@ -93,7 +95,6 @@ export default function startupDashboard(pi: ExtensionAPI) {
 
 	const refreshFooter = (ctx: ExtensionContext): void => {
 		if (ctx.mode !== "tui") return;
-		footerContext = ctx;
 		requestFooterRender?.();
 	};
 
@@ -103,8 +104,12 @@ export default function startupDashboard(pi: ExtensionAPI) {
 	pi.on("thinking_level_select", (_event: unknown, ctx: ExtensionContext) =>
 		refreshFooter(ctx),
 	);
-	pi.on("session_info_changed", (_event: unknown, ctx: ExtensionContext) =>
-		refreshFooter(ctx),
+	pi.on(
+		"session_info_changed",
+		(event: SessionInfoChangedEvent, ctx: ExtensionContext) => {
+			sessionTitle = event.name;
+			refreshFooter(ctx);
+		},
 	);
 	pi.on("message_start", (_event: unknown, ctx: ExtensionContext) =>
 		refreshFooter(ctx),
@@ -115,6 +120,13 @@ export default function startupDashboard(pi: ExtensionAPI) {
 	pi.on("session_compact", (_event: unknown, ctx: ExtensionContext) =>
 		refreshFooter(ctx),
 	);
+	pi.on("session_shutdown", (_event: unknown, ctx: ExtensionContext) => {
+		sessionTitle = undefined;
+		requestFooterRender = undefined;
+		if (ctx.mode !== "tui") return;
+		ctx.ui.setFooter(undefined);
+		ctx.ui.setHeader(undefined);
+	});
 
 	pi.registerCommand("dashboard-header", {
 		description: "Toggle the custom startup dashboard header",
