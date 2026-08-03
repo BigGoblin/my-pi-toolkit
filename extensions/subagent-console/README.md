@@ -7,7 +7,7 @@
 - `/subagents`：打开任务列表。默认显示当前主会话创建的任务，`Tab` 切换全部会话。
 - `Alt+A`：直接进入当前会话最近的活跃子 Agent；没有活跃任务时打开列表。
 - 列表：`↑/↓` 选择，`Enter` 执行默认动作，`C` 请求取消，`X` 终止活跃任务，`D` 清理已退出记录，`Esc` 关闭。
-- 详情：`↑/↓`、`PageUp/PageDown`、`Home/End` 或鼠标滚轮滚动；`app.thinking.toggle`（默认 `Ctrl+T`）折叠/恢复 thinking，`app.tools.expand`（默认 `Ctrl+O`）展开工具结果，`Esc` 返回列表。Footer 会显示当前配置的实际键位。
+- 详情：`←/→` 按列表排序循环切换上一个/下一个子 Agent，Header 显示当前位置；`↑/↓`、`PageUp/PageDown`、`Home/End` 或鼠标滚轮滚动；`app.thinking.toggle`（默认 `Ctrl+T`）折叠/恢复 thinking，`app.tools.expand`（默认 `Ctrl+O`）展开工具结果，`Esc` 返回列表。Footer 会显示当前配置的实际键位。详情切换范围沿用打开时的 `CURRENT`/`ALL` 列表范围；`Alt+A` 打开的详情只在当前会话的活跃子 Agent 间切换。
 
 ## 实时与历史详情
 
@@ -23,6 +23,6 @@ built-in 工具 renderer 遵循 `~/.pi/agent/ming-core.json` 的 `builtinToolSty
 
 Overlay 使用主题语义色和共享 `fitLine()`，宽度由终端响应式计算；固定 Header、Footer 与边框计入高度预算。键盘可完成全部操作，鼠标滚轮仅为增强。
 
-实时详情打开时订阅 run 更新并获取共享 mouse tracking；组件关闭、异常销毁或 reload 时会幂等取消订阅并释放 mouse tracking。关闭 Overlay 不会终止子 Agent。
+实时详情打开时订阅 run 更新并获取共享 mouse tracking；左右切换时会取消旧 run 订阅、按需加载新详情并订阅新的 live run，同时重置滚动和 auto-follow。组件关闭、异常销毁或 reload 时会幂等取消当前订阅并释放 mouse tracking。关闭 Overlay 不会终止子 Agent。
 
 运行记录默认位于系统临时目录的 `my-pi-toolkit-subagents/`，保留时间由 `~/.pi/agent/subagents.json` 的 `retainCompletedMinutes` 控制。

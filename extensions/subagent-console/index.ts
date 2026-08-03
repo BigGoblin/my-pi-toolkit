@@ -15,10 +15,11 @@ import {
 	type LiveSubagentRun,
 } from "../shared/subagent/registry.js";
 import { SUBAGENT_RUNS_ROOT } from "../shared/subagent/run-paths.js";
-import {
-	openHistoricalSubagentOverlay,
-	openSubagentOverlay,
-} from "./overlay.js";
+import type {
+	HistoricalSubagentView,
+	SubagentDetailItem,
+} from "./detail-navigation.js";
+import { openSubagentOverlay } from "./overlay.js";
 import { readHistoricalEntries } from "./history.js";
 import { selectSubagentAction } from "./picker.js";
 
@@ -147,6 +148,30 @@ function availableActions(run: RunSummary): string[] {
 	return ["查看详情", "清理任务记录"];
 }
 
+function historicalView(run: RunSummary): HistoricalSubagentView {
+	const entries = readHistoricalEntries(run.dir);
+	return {
+		title: run.title,
+		model: run.model,
+		cwd: run.cwd,
+		status: run.state,
+		entries,
+		markdown: entries.length === 0 ? readHistoricalMarkdown(run.dir) : undefined,
+	};
+}
+
+function detailItems(
+	runs: RunSummary[],
+	scope: "current" | "all",
+	currentSessionId: string,
+): SubagentDetailItem[] {
+	return runs.flatMap((run) =>
+		scope === "all" || run.parentSessionId === currentSessionId
+			? [{ id: run.dir, load: () => run.live ?? historicalView(run) }]
+			: [],
+	);
+}
+
 async function showSubagents(ctx: ExtensionContext): Promise<void> {
 	let pickerState: { id: string; scope: "current" | "all" } | undefined;
 	for (;;) {
@@ -170,21 +195,19 @@ async function showSubagents(ctx: ExtensionContext): Promise<void> {
 		const run = runs.find((item) => item.dir === selection.id);
 		if (!run) continue;
 		const { action } = selection;
-		if (action === "进入子 Agent" && run.live) {
-			await openSubagentOverlay(ctx, run.live);
-			continue;
-		}
-		if (action === "查看详情") {
-			const entries = readHistoricalEntries(run.dir);
-			await openHistoricalSubagentOverlay(ctx, {
-				title: run.title,
-				model: run.model,
-				cwd: run.cwd,
-				status: run.state,
-				entries,
-				markdown:
-					entries.length === 0 ? readHistoricalMarkdown(run.dir) : undefined,
-			});
+		if (
+			(action === "进入子 Agent" && run.live) ||
+			action === "查看详情"
+		) {
+			await openSubagentOverlay(
+				ctx,
+				detailItems(
+					runs,
+					selection.scope,
+					ctx.sessionManager.getSessionId(),
+				),
+				run.dir,
+			);
 			continue;
 		}
 		if (action === "请求取消") {
@@ -223,7 +246,20 @@ async function enterLatestSubagent(ctx: ExtensionContext): Promise<void> {
 		await showSubagents(ctx);
 		return;
 	}
-	await openSubagentOverlay(ctx, latest);
+	await openSubagentOverlay(
+		ctx,
+		listLiveSubagents().flatMap((run) =>
+			run.parentSessionId === sessionId
+				? [
+						{
+							id: join(SUBAGENT_RUNS_ROOT, run.id),
+							load: () => run,
+						},
+					]
+				: [],
+		),
+		join(SUBAGENT_RUNS_ROOT, latest.id),
+	);
 }
 
 export default function subagentConsole(pi: ExtensionAPI): void {

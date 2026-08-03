@@ -11,10 +11,6 @@ import {
 	type KeybindingsManager,
 	type TUI,
 } from "@earendil-works/pi-tui";
-import type {
-	LiveSubagentRun,
-	SubagentTranscriptEntry,
-} from "../shared/subagent/registry.js";
 import {
 	overlayInnerWidth,
 	overlayViewportHeight,
@@ -22,23 +18,10 @@ import {
 	STANDARD_OVERLAY_OPTIONS,
 } from "../shared/tui/overlay-shell.js";
 import {
-	createSubagentEntryRenderer,
-	type SubagentEntryRenderer,
-} from "./entry-render.js";
+	createSubagentDetailNavigator,
+	type SubagentDetailItem,
+} from "./detail-navigation.js";
 import { acquireMouseTracking, mouseWheelDirection } from "./mouse.js";
-
-export interface HistoricalSubagentView {
-	title: string;
-	model: string;
-	cwd: string;
-	status: string;
-	markdown?: string;
-	entries?: SubagentTranscriptEntry[];
-}
-
-type SubagentView = HistoricalSubagentView & {
-	subscribe?: LiveSubagentRun["subscribe"];
-};
 
 function subagentStatusColor(status: string): "accent" | "success" | "error" {
 	if (status === "running") return "accent";
@@ -57,8 +40,8 @@ function configuredHint(
 }
 
 interface SubagentOverlayOptions {
-	run: SubagentView;
-	cwd: string;
+	items: SubagentDetailItem[];
+	initialId: string;
 	tui: TUI;
 	requestRender: () => void;
 	theme: Theme;
@@ -66,155 +49,155 @@ interface SubagentOverlayOptions {
 	close: () => void;
 }
 
-class SubagentOverlay implements Component {
-	private readonly run: SubagentView;
-	private readonly tui: TUI;
-	private readonly requestRender: () => void;
-	private readonly theme: Theme;
-	private readonly keybindings: KeybindingsManager;
-	private readonly close: () => void;
-	private readonly renderEntry: SubagentEntryRenderer;
-	private readonly unsubscribe: () => void;
-	private readonly releaseMouseTracking: () => void;
-	private scrollOffset = 0;
-	private contentHeight = 0;
-	private viewportHeight = 1;
-	private autoFollow = true;
-	private toolOutputExpanded = false;
-	private thinkingHidden = true;
+function createSubagentOverlay(options: SubagentOverlayOptions): Component {
+	const navigator = createSubagentDetailNavigator(
+		options.items,
+		options.initialId,
+		options.tui,
+		options.requestRender,
+	);
+	const releaseMouseTracking = acquireMouseTracking(options.tui);
+	let scrollOffset = 0;
+	let contentHeight = 0;
+	let viewportHeight = 1;
+	let autoFollow = true;
+	let toolOutputExpanded = false;
+	let thinkingHidden = true;
 
-	constructor(options: SubagentOverlayOptions) {
-		this.run = options.run;
-		this.tui = options.tui;
-		this.requestRender = options.requestRender;
-		this.theme = options.theme;
-		this.keybindings = options.keybindings;
-		this.close = options.close;
-		this.renderEntry = createSubagentEntryRenderer(options.cwd, options.tui);
-		this.unsubscribe = this.run.subscribe?.(this.requestRender) ?? (() => {});
-		this.releaseMouseTracking = acquireMouseTracking(this.tui);
-	}
+	const scrollTo = (offset: number, follow: boolean) => {
+		const maximum = Math.max(0, contentHeight - viewportHeight);
+		scrollOffset = Math.max(0, Math.min(offset, maximum));
+		autoFollow = follow;
+		options.requestRender();
+	};
 
-	handleInput(data: string): void {
+	const switchRun = (delta: -1 | 1) => {
+		if (!navigator.switch(delta)) return;
+		scrollOffset = 0;
+		contentHeight = 0;
+		autoFollow = true;
+		options.requestRender();
+	};
+
+	const handleDisplayToggle = (data: string): boolean => {
+		if (options.keybindings.matches(data, "app.thinking.toggle"))
+			thinkingHidden = !thinkingHidden;
+		else if (options.keybindings.matches(data, "app.tools.expand"))
+			toolOutputExpanded = !toolOutputExpanded;
+		else return false;
+		options.requestRender();
+		return true;
+	};
+
+	const handleScrollKey = (data: string) => {
+		const maximum = Math.max(0, contentHeight - viewportHeight);
+		const commands = [
+			{ key: "up", offset: scrollOffset - 1, follow: false },
+			{
+				key: "down",
+				offset: scrollOffset + 1,
+				follow: scrollOffset + 1 >= maximum,
+			},
+			{ key: "pageUp", offset: scrollOffset - viewportHeight, follow: false },
+			{
+				key: "pageDown",
+				offset: scrollOffset + viewportHeight,
+				follow: scrollOffset + viewportHeight >= maximum,
+			},
+			{ key: "home", offset: 0, follow: false },
+			{ key: "end", offset: maximum, follow: true },
+		];
+		const command = commands.find(({ key }) => matchesKey(data, key));
+		if (command) scrollTo(command.offset, command.follow);
+	};
+
+	const handleInput = (data: string) => {
 		const wheelDirection = mouseWheelDirection(data);
 		if (wheelDirection) {
-			const maximum = Math.max(0, this.contentHeight - this.viewportHeight);
-			const nextOffset = this.scrollOffset + wheelDirection * 3;
-			this.scrollTo(nextOffset, wheelDirection > 0 && nextOffset >= maximum);
+			const maximum = Math.max(0, contentHeight - viewportHeight);
+			const nextOffset = scrollOffset + wheelDirection * 3;
+			scrollTo(nextOffset, wheelDirection > 0 && nextOffset >= maximum);
 			return;
 		}
-		if (this.keybindings.matches(data, "app.thinking.toggle")) {
-			this.thinkingHidden = !this.thinkingHidden;
-			this.requestRender();
-			return;
-		}
-		if (this.keybindings.matches(data, "app.tools.expand")) {
-			this.toolOutputExpanded = !this.toolOutputExpanded;
-			this.requestRender();
-			return;
-		}
+		if (handleDisplayToggle(data)) return;
 		if (matchesKey(data, "escape")) {
-			this.unsubscribe();
-			this.close();
+			navigator.dispose();
+			options.close();
 			return;
 		}
-		const maximum = Math.max(0, this.contentHeight - this.viewportHeight);
-		if (matchesKey(data, "up")) this.scrollTo(this.scrollOffset - 1, false);
-		else if (matchesKey(data, "down"))
-			this.scrollTo(this.scrollOffset + 1, this.scrollOffset + 1 >= maximum);
-		else if (matchesKey(data, "pageUp"))
-			this.scrollTo(this.scrollOffset - this.viewportHeight, false);
-		else if (matchesKey(data, "pageDown"))
-			this.scrollTo(
-				this.scrollOffset + this.viewportHeight,
-				this.scrollOffset + this.viewportHeight >= maximum,
-			);
-		else if (matchesKey(data, "home")) this.scrollTo(0, false);
-		else if (matchesKey(data, "end")) this.scrollTo(maximum, true);
-	}
+		if (matchesKey(data, "left")) return switchRun(-1);
+		if (matchesKey(data, "right")) return switchRun(1);
+		handleScrollKey(data);
+	};
 
-	private scrollTo(offset: number, autoFollow: boolean): void {
-		const maximum = Math.max(0, this.contentHeight - this.viewportHeight);
-		this.scrollOffset = Math.max(0, Math.min(offset, maximum));
-		this.autoFollow = autoFollow;
-		this.requestRender();
-	}
-
-	render(width: number): string[] {
+	const render = (width: number): string[] => {
 		const innerWidth = overlayInnerWidth(width);
-		this.viewportHeight = overlayViewportHeight(this.tui.terminal.rows);
-		const renderedEntries = this.run.entries?.flatMap((entry) =>
-			this.renderEntry(entry, innerWidth, {
-				toolsExpanded: this.toolOutputExpanded,
-				thinkingHidden: this.thinkingHidden,
+		viewportHeight = overlayViewportHeight(options.tui.terminal.rows);
+		const run = navigator.currentRun();
+		const renderEntry = navigator.renderEntry();
+		const renderedEntries = run.entries?.flatMap((entry) =>
+			renderEntry(entry, innerWidth, {
+				toolsExpanded: toolOutputExpanded,
+				thinkingHidden,
 			}),
 		);
-		const renderedMarkdown = this.run.markdown
-			? new Markdown(this.run.markdown, 0, 0, getMarkdownTheme()).render(
-					innerWidth,
-				)
+		const renderedMarkdown = run.markdown
+			? new Markdown(run.markdown, 0, 0, getMarkdownTheme()).render(innerWidth)
 			: [];
 		const content = renderedEntries?.length
 			? renderedEntries
 			: renderedMarkdown;
-		this.contentHeight = content.length;
-		const maximum = Math.max(0, content.length - this.viewportHeight);
-		if (this.autoFollow) this.scrollOffset = maximum;
-		else this.scrollOffset = Math.min(this.scrollOffset, maximum);
-		const visible = content.slice(
-			this.scrollOffset,
-			this.scrollOffset + this.viewportHeight,
-		);
-		while (visible.length < this.viewportHeight) visible.push("");
-		const statusColor = subagentStatusColor(this.run.status);
-		const header = `${this.theme.bold(this.theme.fg("text", "SUBAGENT"))}  ${this.theme.fg("accent", this.run.title)}  ${this.theme.fg(statusColor, this.run.status.toUpperCase())} ${this.theme.fg("muted", `· ${this.run.model}`)}`;
-		const endLine = Math.min(
-			this.contentHeight,
-			this.scrollOffset + this.viewportHeight,
-		);
-		const position = this.contentHeight
-			? `${this.scrollOffset + 1}-${endLine}/${this.contentHeight}`
+		contentHeight = content.length;
+		const maximum = Math.max(0, content.length - viewportHeight);
+		scrollOffset = autoFollow
+			? maximum
+			: Math.min(scrollOffset, maximum);
+		const visible = content.slice(scrollOffset, scrollOffset + viewportHeight);
+		while (visible.length < viewportHeight) visible.push("");
+		const statusColor = subagentStatusColor(run.status);
+		const header = `${options.theme.bold(options.theme.fg("text", "SUBAGENT"))} ${options.theme.fg("dim", navigator.position())}  ${options.theme.fg("accent", run.title)}  ${options.theme.fg(statusColor, run.status.toUpperCase())} ${options.theme.fg("muted", `· ${run.model}`)}`;
+		const endLine = Math.min(contentHeight, scrollOffset + viewportHeight);
+		const position = contentHeight
+			? `${scrollOffset + 1}-${endLine}/${contentHeight}`
 			: "0/0";
-		const thinkingAction = this.thinkingHidden
-			? "show thinking"
-			: "hide thinking";
-		const toolAction = this.toolOutputExpanded
-			? "collapse tools"
-			: "expand tools";
 		const thinkingHint = configuredHint(
-			this.keybindings,
+			options.keybindings,
 			"app.thinking.toggle",
-			thinkingAction,
+			thinkingHidden ? "show thinking" : "hide thinking",
 			"toggle thinking",
 		);
 		const toolsHint = configuredHint(
-			this.keybindings,
+			options.keybindings,
 			"app.tools.expand",
-			toolAction,
+			toolOutputExpanded ? "collapse tools" : "expand tools",
 			"toggle tools",
 		);
-		const help = this.theme.fg(
+		const footer = options.theme.fg(
 			"dim",
-			`↑↓/wheel scroll · ${thinkingHint} · ${toolsHint} · End follow · Esc close · ${position}`,
+			`Esc close · ←/→ switch · ↑↓/wheel scroll · ${thinkingHint} · ${toolsHint} · End follow · ${position}`,
 		);
-		return renderOverlayShell(this.theme, width, {
+		return renderOverlayShell(options.theme, width, {
 			header,
 			body: visible,
-			footer: help,
+			footer,
 		});
-	}
+	};
 
-	invalidate(): void {}
-
-	dispose(): void {
-		this.unsubscribe();
-		this.releaseMouseTracking();
-	}
+	return {
+		handleInput,
+		render,
+		invalidate: () => {},
+		dispose: () => {
+			navigator.dispose();
+			releaseMouseTracking();
+		},
+	};
 }
 
 async function showOverlay(
 	ctx: ExtensionContext,
-	run: SubagentView,
+	items: SubagentDetailItem[],
+	initialId: string,
 ): Promise<void> {
 	await ctx.ui.custom<void>(
 		(
@@ -223,9 +206,9 @@ async function showOverlay(
 			keybindings: KeybindingsManager,
 			done: (value: void) => void,
 		) =>
-			new SubagentOverlay({
-				run,
-				cwd: run.cwd,
+			createSubagentOverlay({
+				items,
+				initialId,
 				tui,
 				requestRender: () => tui.requestRender(),
 				theme,
@@ -238,14 +221,9 @@ async function showOverlay(
 
 export async function openSubagentOverlay(
 	ctx: ExtensionContext,
-	run: LiveSubagentRun,
+	items: SubagentDetailItem[],
+	initialId: string,
 ): Promise<void> {
-	await showOverlay(ctx, run);
-}
-
-export async function openHistoricalSubagentOverlay(
-	ctx: ExtensionContext,
-	run: HistoricalSubagentView,
-): Promise<void> {
-	await showOverlay(ctx, run);
+	if (items.length === 0) return;
+	await showOverlay(ctx, items, initialId);
 }
