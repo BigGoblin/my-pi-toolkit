@@ -47,12 +47,24 @@ function storyLabel(story: TapdStoryDetail): string {
 	return story.name ? `${story.name} (${story.id})` : story.id;
 }
 
+function estimatedEffort(story: TapdStoryDetail): string | undefined {
+	const effort = story.effort?.trim();
+	return effort && Number.isFinite(Number(effort)) && Number(effort) > 0
+		? effort
+		: undefined;
+}
+
+function effortSummary(effort: string | undefined): string {
+	return effort ? `，完成工时 ${effort}` : "，未同步完成工时（无有效预估工时）";
+}
+
 async function updateStoryStatus(
 	config: TapdConfig,
 	workspaceId: string,
 	story: TapdStoryDetail,
 	status: string,
-): Promise<void> {
+): Promise<string | undefined> {
+	const effort = estimatedEffort(story);
 	await updateTapdStatus(
 		config,
 		{
@@ -61,7 +73,10 @@ async function updateStoryStatus(
 			kind: "story",
 		},
 		status,
+		undefined,
+		effort ? { effort_completed: effort } : {},
 	);
+	return effort;
 }
 
 async function loadStoryContext(
@@ -123,8 +138,15 @@ async function transitionChildren(
 		reportProgress?.(
 			`正在更新我的${kindLabel}「${child.name}」为 ${status}...`,
 		);
-		await updateStoryStatus(config, object.workspaceId, child, status);
-		updates.push(`${kindLabel} ${storyLabel(child)} → ${status}`);
+		const effort = await updateStoryStatus(
+			config,
+			object.workspaceId,
+			child,
+			status,
+		);
+		updates.push(
+			`${kindLabel} ${storyLabel(child)} → ${status}${effortSummary(effort)}`,
+		);
 	}
 	return updates;
 }
@@ -148,13 +170,15 @@ export async function updateStoryForDraftMergeRequest(
 		reportProgress?.(
 			`正在更新开发子需求「${story.name}」为 ${DEVELOPMENT_COMPLETE}...`,
 		);
-		await updateStoryStatus(
+		const effort = await updateStoryStatus(
 			config,
 			object.workspaceId,
 			story,
 			DEVELOPMENT_COMPLETE,
 		);
-		return [`开发子需求 ${storyLabel(story)} → ${DEVELOPMENT_COMPLETE}`];
+		return [
+			`开发子需求 ${storyLabel(story)} → ${DEVELOPMENT_COMPLETE}${effortSummary(effort)}`,
+		];
 	}
 
 	const { children } = await loadOwnedChildren(config, object, story);
@@ -189,13 +213,15 @@ export async function updateStoryForMergeRequest(
 			reportProgress?.(
 				`正在更新开发子需求「${story.name}」为 ${DEVELOPMENT_COMPLETE}...`,
 			);
-			await updateStoryStatus(
+			const effort = await updateStoryStatus(
 				config,
 				object.workspaceId,
 				story,
 				DEVELOPMENT_COMPLETE,
 			);
-			return [`开发子需求 ${storyLabel(story)} → ${DEVELOPMENT_COMPLETE}`];
+			return [
+				`开发子需求 ${storyLabel(story)} → ${DEVELOPMENT_COMPLETE}${effortSummary(effort)}`,
+			];
 		}
 		if (story.workitem_type_id !== testType?.id)
 			return [`story/${object.objectId} 跳过（非开发或测试需求）`];
@@ -205,8 +231,15 @@ export async function updateStoryForMergeRequest(
 		if (!isOwnedBy(story.owner, user.nick))
 			return [`测试需求 ${storyLabel(story)} 跳过（处理人不是当前用户）`];
 		reportProgress?.(`正在更新测试需求「${story.name}」为 ${TEST_PASSED}...`);
-		await updateStoryStatus(config, object.workspaceId, story, TEST_PASSED);
-		return [`测试需求 ${storyLabel(story)} → ${TEST_PASSED}`];
+		const effort = await updateStoryStatus(
+			config,
+			object.workspaceId,
+			story,
+			TEST_PASSED,
+		);
+		return [
+			`测试需求 ${storyLabel(story)} → ${TEST_PASSED}${effortSummary(effort)}`,
+		];
 	}
 
 	const { nick, children } = await loadOwnedChildren(config, object, story);
@@ -215,13 +248,15 @@ export async function updateStoryForMergeRequest(
 		reportProgress?.(
 			`功能需求处理人为当前用户，正在更新为 ${DEVELOPMENT_COMPLETE}...`,
 		);
-		await updateStoryStatus(
+		const effort = await updateStoryStatus(
 			config,
 			object.workspaceId,
 			story,
 			DEVELOPMENT_COMPLETE,
 		);
-		updates.push(`功能需求 ${storyLabel(story)} → ${DEVELOPMENT_COMPLETE}`);
+		updates.push(
+			`功能需求 ${storyLabel(story)} → ${DEVELOPMENT_COMPLETE}${effortSummary(effort)}`,
+		);
 	} else {
 		updates.push(`功能需求 ${storyLabel(story)} 跳过（处理人不是当前用户）`);
 	}

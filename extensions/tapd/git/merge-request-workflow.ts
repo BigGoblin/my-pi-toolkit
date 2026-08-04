@@ -26,7 +26,7 @@ import {
 	updateStoryForDraftMergeRequest,
 	updateStoryForMergeRequest,
 } from "./story-workflow.js";
-import { updateTapdStatus } from "./tapd-api.js";
+import { fetchTaskEstimatedEffort, updateTapdStatus } from "./tapd-api.js";
 
 interface MergeRequestOptions {
 	targetBranch?: string;
@@ -181,14 +181,25 @@ export async function runMergeRequest(
 			continue;
 		}
 		if (item.kind === "task") {
-			itemProgress(`正在更新状态为 ${transition.status}...`);
+			itemProgress("正在读取预估工时...");
+			const effort = await fetchTaskEstimatedEffort(config, item);
+			itemProgress(
+				effort
+					? `正在更新状态为 ${transition.status}，并同步完成工时 ${effort}...`
+					: `正在更新状态为 ${transition.status}（无有效预估工时）...`,
+			);
 			await updateTapdStatus(
 				config,
 				item,
 				transition.status,
 				transition.currentOwner,
+				effort ? { effort_completed: effort } : {},
 			);
-			updates.push(`${item.kind}/${item.shortId} → ${transition.status}`);
+			updates.push(
+				effort
+					? `${item.kind}/${item.shortId} → ${transition.status}，完成工时 ${effort}`
+					: `${item.kind}/${item.shortId} → ${transition.status}，未同步完成工时（无有效预估工时）`,
+			);
 			continue;
 		}
 		const rootCauseDraft = bugDrafts.get(item.shortId);

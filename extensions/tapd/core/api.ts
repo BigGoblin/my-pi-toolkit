@@ -32,7 +32,7 @@ export async function fetchWorkspaces(
 }
 
 const STORY_DETAIL_FIELDS =
-	"id,name,description,status,v_status,priority,priority_label,owner,developer,workspace_id,parent_id,workitem_type_id,iteration_id,category_id,release_id,module,version,source,feature,label,cc,begin,due";
+	"id,name,description,status,v_status,priority,priority_label,owner,developer,workspace_id,parent_id,workitem_type_id,iteration_id,category_id,release_id,module,version,source,feature,label,cc,begin,due,effort";
 
 export interface TapdStoryDetail {
 	id: string;
@@ -57,6 +57,7 @@ export interface TapdStoryDetail {
 	cc?: string;
 	begin?: string;
 	due?: string;
+	effort?: string;
 }
 
 export async function fetchStoryDetail(

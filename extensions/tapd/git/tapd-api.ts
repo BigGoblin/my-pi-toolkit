@@ -39,6 +39,27 @@ export async function fetchCommitKeyword(
 	return response.data;
 }
 
+export async function fetchTaskEstimatedEffort(
+	config: TapdConfig,
+	object: LinkedTapdObject,
+): Promise<string | undefined> {
+	const response = await tapdGet<
+		TapdDataResponse<{ Task: { effort?: string } }[]>
+	>(
+		apiUrl(config, "/tasks", {
+			workspace_id: object.workspaceId,
+			id: longTapdObjectId(object.workspaceId, object.objectId),
+			fields: "id,effort",
+			limit: "1",
+		}),
+		config,
+	);
+	const effort = response?.data?.[0]?.Task?.effort?.trim();
+	return effort && Number.isFinite(Number(effort)) && Number(effort) > 0
+		? effort
+		: undefined;
+}
+
 export async function updateTapdStatus(
 	config: TapdConfig,
 	object: LinkedTapdObject,
