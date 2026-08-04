@@ -16,7 +16,8 @@
 8. `repo-search-subagent` — 只读 Repo Search 子 Agent
 9. `subagent-console` — `/subagents` 与 `Alt+A`，完整实时/历史消息和工具时间线
 10. `titlebar-working` — 工作中标题栏动画
-11. `startup-dashboard` — 启动面板与 Footer
+11. `task-duration` — 在最终回复下方持久显示首次 `agent_start` 到最终 `agent_settled` 的任务耗时，不进入 LLM 上下文
+12. `startup-dashboard` — 启动面板与 Footer
 
 实现仍在各自目录；本入口只做组合注册。新增或更新这些模块的终端 UI 时，必须遵循 [`docs/tui-development-guidelines.md`](../../docs/tui-development-guidelines.md)，并优先复用 `extensions/shared/tui/`。
 

@@ -15,6 +15,7 @@ import piLens from "../pi-lens/index.js";
 import repoSearchSubagent from "../repo-search-subagent/index.js";
 import startupDashboard from "../startup-dashboard/index.js";
 import subagentConsole from "../subagent-console/index.js";
+import taskDuration from "../task-duration/index.js";
 import titlebarWorking from "../titlebar-working/index.js";
 
 export default async function mingCore(pi: ExtensionAPI): Promise<void> {
@@ -28,5 +29,6 @@ export default async function mingCore(pi: ExtensionAPI): Promise<void> {
 	repoSearchSubagent(pi);
 	subagentConsole(pi);
 	titlebarWorking(pi);
+	taskDuration(pi);
 	startupDashboard(pi);
 }
