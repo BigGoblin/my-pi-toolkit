@@ -4,12 +4,10 @@ import type {
 	ExtensionAPI,
 	ExtensionCommandContext,
 	SessionEntry,
-	SessionStartEvent,
 } from "@earendil-works/pi-coding-agent";
 import type { AutocompleteItem } from "@earendil-works/pi-tui";
 import { fetchUserInfo, fetchWorkspaces } from "./core/api.js";
 import { loadConfig } from "./core/config.js";
-import { cleanupStaleSessionLinks } from "./sessions/cleanup.js";
 import {
 	ANALYZE_TRIGGER_PROMPT,
 	COLLABORATION_TRIGGER_PROMPT,
@@ -30,12 +28,6 @@ import { registerTapdReviewTool } from "./review/tool.js";
 export default function tapdExtension(pi: ExtensionAPI) {
 	const STATE_KEY = "tapd-view-state";
 	registerTapdReviewTool(pi);
-
-	pi.on("session_start", (event: SessionStartEvent) => {
-		if (event.reason === "startup" || event.reason === "reload") {
-			cleanupStaleSessionLinks();
-		}
-	});
 
 	pi.registerCommand("tapd", {
 		description: "查看 TAPD 待办；生成需求文档或审核需求实现代码",
@@ -137,16 +129,8 @@ export default function tapdExtension(pi: ExtensionAPI) {
 				return;
 			}
 			if (sub === "sub-task") {
-				await createSubtasks(ctx, config);
+				await createSubtasks(pi, ctx, config);
 				return;
-			}
-
-			const cleanup = cleanupStaleSessionLinks();
-			if (cleanup.removedSessions > 0) {
-				ctx.ui.notify(
-					`已自动清理 ${cleanup.removedSessions} 条失效 TAPD 会话关联`,
-					"info",
-				);
 			}
 
 			ctx.ui.notify("正在连接 TAPD...", "info");

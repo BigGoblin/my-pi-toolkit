@@ -5,20 +5,18 @@ import type {
 	SessionManager,
 } from "@earendil-works/pi-coding-agent";
 import { fetchBugDetail, fetchStoryDetail, htmlToText } from "../core/api.js";
-import { removeSessionLink } from "./cleanup.js";
 import { bugUrl, storyUrl } from "../todo/model.js";
+import { rememberProjectPaths } from "./storage.js";
+import { parseItemKey } from "./keys.js";
+import { getTapdDocPath } from "./docs.js";
+import {
+	TAPD_SESSION_STATE_TYPE,
+	type TapdSessionState,
+} from "./session-state.js";
 import {
 	buildBugContextPrompt,
 	buildUnderstandPrompt,
 } from "../documents/prompts.js";
-import {
-	getOrCreateLink,
-	getTapdDocPath,
-	loadLinks,
-	parseItemKey,
-	rememberProjectPaths,
-	saveLinks,
-} from "./storage.js";
 import type { CreateDraft, TapdConfig } from "../types.js";
 
 export async function createTapdSession(
@@ -45,8 +43,8 @@ export async function createTapdSession(
 		: "";
 	const itemTitle =
 		parsed.kind === "bug"
-			? (detail as any)?.title || title
-			: (detail as any)?.name || title;
+			? (detail as { title?: string } | null)?.title || itemName || title
+			: (detail as { name?: string } | null)?.name || itemName || title;
 	let understandingFile: string | undefined;
 	let sessionPrompt: string;
 	if (parsed.kind === "bug") {
@@ -76,56 +74,39 @@ export async function createTapdSession(
 		});
 	}
 
-	const links = loadLinks();
-	const rec2 = getOrCreateLink(links, wsId, itemId, itemName, parsed.kind);
-	const linkId =
-		Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
-	rec2.sessions.push({
-		id: linkId,
-		createdAt: new Date().toISOString(),
+	const now = new Date().toISOString();
+	const state: TapdSessionState = {
+		version: 1,
+		workspaceId: wsId,
+		itemId,
+		kind: parsed.kind,
+		itemName: itemTitle,
+		createdAt: now,
 		title,
 		projectPaths: projectPaths.length > 0 ? projectPaths : undefined,
 		understandingFile,
-	});
-	saveLinks(links);
+		updatedAt: now,
+	};
 
-	try {
-		const result = await ctx.newSession({
-			parentSession: undefined,
-			setup: async (sm: SessionManager) => {
-				sm.appendSessionInfo(title);
-				sm.appendMessage({
-					role: "user",
-					content: [{ type: "text", text: sessionPrompt }],
-					timestamp: Date.now(),
-				});
-			},
-			withSession: async (replacementCtx: ExtensionCommandContext) => {
-				const sf = replacementCtx.sessionManager.getSessionFile?.() ?? "";
-				const links3 = loadLinks();
-				const rec3 = getOrCreateLink(
-					links3,
-					wsId,
-					itemId,
-					itemName,
-					parsed.kind,
-				);
-				if (sf) {
-					const lk = rec3.sessions.find((s) => s.id === linkId);
-					if (lk) lk.sessionFile = sf;
-				}
-				saveLinks(links3);
-				replacementCtx.ui.notify(
-					parsed.kind === "bug"
-						? "Bug 会话已创建，输入 /tapd bug 获取完整缺陷信息并定位原因"
-						: "会话已创建，输入 /tapd analyze 开始需求理解",
-					"info",
-				);
-			},
-		});
-		if (result.cancelled) throw new Error("创建会话已取消");
-	} catch (error) {
-		removeSessionLink(linkId);
-		throw error;
-	}
+	const result = await ctx.newSession({
+		parentSession: undefined,
+		setup: async (sm: SessionManager) => {
+			sm.appendSessionInfo(title);
+			sm.appendCustomEntry(TAPD_SESSION_STATE_TYPE, state);
+			sm.appendMessage({
+				role: "user",
+				content: [{ type: "text", text: sessionPrompt }],
+				timestamp: Date.now(),
+			});
+		},
+		withSession: async (replacementCtx: ExtensionCommandContext) => {
+			replacementCtx.ui.notify(
+				parsed.kind === "bug"
+					? "Bug 会话已创建，输入 /tapd bug 获取完整缺陷信息并定位原因"
+					: "会话已创建，输入 /tapd analyze 开始需求理解",
+				"info",
+			);
+		},
+	});
+	if (result.cancelled) throw new Error("创建会话已取消");
 }

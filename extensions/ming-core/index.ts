@@ -13,6 +13,7 @@ import modelManager from "../model-manager/index.js";
 import multiTask from "../multi-task/index.js";
 import piLens from "../pi-lens/index.js";
 import repoSearchSubagent from "../repo-search-subagent/index.js";
+import { sessionBranchGuard } from "../session-branch-guard/index.js";
 import startupDashboard from "../startup-dashboard/index.js";
 import subagentConsole from "../subagent-console/index.js";
 import taskDuration from "../task-duration/index.js";
@@ -28,6 +29,7 @@ export default async function mingCore(pi: ExtensionAPI): Promise<void> {
 	multiTask(pi);
 	repoSearchSubagent(pi);
 	subagentConsole(pi);
+	sessionBranchGuard(pi);
 	titlebarWorking(pi);
 	taskDuration(pi);
 	startupDashboard(pi);

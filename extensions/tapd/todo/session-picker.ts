@@ -6,8 +6,9 @@ import {
 	type TUI,
 } from "@earendil-works/pi-tui";
 import { overlayViewportHeight } from "../../shared/tui/overlay-shell.js";
+import type { TapdSessionDescriptor } from "../sessions/catalog.js";
 import { loadPathHistory } from "../sessions/storage.js";
-import type { PickerAction, TapdLinkRecord } from "../types.js";
+import type { PickerAction } from "../types.js";
 import {
 	addProjectPath,
 	applyListAction,
@@ -29,7 +30,7 @@ import {
 
 export function showSessionPicker(
 	ctx: ExtensionContext,
-	record: TapdLinkRecord,
+	sessions: TapdSessionDescriptor[],
 	itemName: string,
 ): Promise<PickerAction | null> {
 	return ctx.ui.custom<PickerAction | null>(
@@ -45,7 +46,7 @@ export function showSessionPicker(
 				keybindings,
 				done,
 				ctx,
-				options: buildSessionOptions(record),
+				options: buildSessionOptions(sessions),
 				itemName,
 			}),
 	);

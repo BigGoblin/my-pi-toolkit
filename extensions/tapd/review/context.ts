@@ -2,11 +2,8 @@ import { readFile, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
-import {
-	getDesignDocPath,
-	getUnderstandingDocPath,
-	findSessionLink,
-} from "../sessions/storage.js";
+import { getDesignDocPath, getUnderstandingDocPath } from "../sessions/docs.js";
+import { readTapdSessionState } from "../sessions/session-state.js";
 import { git, readRepositoryRoot, refExists } from "../git/repository.js";
 import type { TapdReviewContext } from "./types.js";
 
@@ -37,19 +34,18 @@ export async function collectTapdReviewContext(
 	) => void,
 ): Promise<TapdReviewContext> {
 	onPhase?.("documents", "running", "正在读取需求与设计文档");
-	const current = findSessionLink(ctx.sessionManager.getSessionFile?.() ?? "");
-	if (!current)
+	const state = readTapdSessionState(ctx.sessionManager.getEntries());
+	if (!state)
 		throw new Error("当前会话没有关联 TAPD 需求，请先从待办创建或切换会话");
-	if (current.record.kind === "bug")
+	if (state.kind === "bug")
 		throw new Error("/tapd review 仅支持需求会话，不支持 Bug 会话");
 
-	const storyId = current.record.storyId;
+	const storyId = state.itemId;
 	const documentId = `story-${storyId}`;
 	const understandingFile =
-		current.session.understandingFile ??
-		getUnderstandingDocPath(ctx.cwd, documentId);
-	const designFile = current.session.understandingFile
-		? join(dirname(current.session.understandingFile), "design.md")
+		state.understandingFile ?? getUnderstandingDocPath(ctx.cwd, documentId);
+	const designFile = state.understandingFile
+		? join(dirname(state.understandingFile), "design.md")
 		: getDesignDocPath(ctx.cwd, documentId);
 	await requireDocument(understandingFile, "/tapd analyze");
 	await requireDocument(designFile, "/tapd design");
@@ -132,7 +128,7 @@ export async function collectTapdReviewContext(
 	onPhase?.("git", "done", `已收集 ${changedFiles.length} 个修改文件`);
 	return {
 		storyId,
-		storyName: current.record.name,
+		storyName: state.itemName,
 		understandingFile,
 		designFile,
 		repositoryRoot,

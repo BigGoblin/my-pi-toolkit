@@ -1,21 +1,20 @@
 import type { ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
-import { findSessionLink } from "../sessions/storage.js";
+import { readTapdSessionState } from "../sessions/session-state.js";
 import type { LinkedTapdObject, TapdGitKind, TapdKeyword } from "./types.js";
 
 export function currentTapdObject(
 	ctx: ExtensionCommandContext,
 ): LinkedTapdObject {
-	const sessionFile = ctx.sessionManager.getSessionFile();
-	const linked = findSessionLink(sessionFile ?? "");
-	if (!linked)
+	const state = readTapdSessionState(ctx.sessionManager.getEntries());
+	if (!state)
 		throw new Error(
 			"当前 Pi 会话没有关联 TAPD 事项，请先从 /tapd 创建或进入关联会话",
 		);
 	return {
-		workspaceId: linked.record.workspaceId,
-		objectId: linked.record.itemId ?? linked.record.storyId,
-		kind: linked.record.kind ?? "story",
-		name: linked.record.name,
+		workspaceId: state.workspaceId,
+		objectId: state.itemId,
+		kind: state.kind,
+		name: state.itemName,
 	};
 }
 

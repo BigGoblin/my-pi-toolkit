@@ -1,11 +1,7 @@
 import { execFile } from "node:child_process";
 import type { ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
 import { fetchAll } from "../core/workspace-api.js";
-import {
-	cleanupStaleSessionLinks,
-	scanStaleSessionLinks,
-} from "../sessions/cleanup.js";
-import { loadLinks, parseItemKey } from "../sessions/storage.js";
+import { listTapdSessions } from "../sessions/catalog.js";
 import type {
 	TableOutcome,
 	TapdConfig,
@@ -137,9 +133,6 @@ async function handleSelection(
 			if (state.kind === "story")
 				state.typeFilter = selection.typeFilter ?? null;
 			return "continue";
-		case "cleanup":
-			await cleanupLinks(ctx);
-			return "continue";
 		case "open":
 			if (selection.url) await openSelection(ctx, selection.url);
 			return "continue";
@@ -169,38 +162,14 @@ async function linkedSessionOutcome(
 ): Promise<TableOutcome | undefined> {
 	if (!selection.itemKey || !selection.itemName) return undefined;
 	const { itemKey, itemName } = selection;
-	const parsed = parseItemKey(itemKey);
-	const links = loadLinks();
-	const legacyKey = `${parsed.wsId}_${parsed.itemId}`;
-	const record = links[itemKey] ??
-		(parsed.kind === "story" ? links[legacyKey] : undefined) ?? {
-			workspaceId: parsed.wsId,
-			storyId: parsed.itemId,
-			name: itemName,
-			sessions: [],
-			kind: parsed.kind,
-			itemId: parsed.itemId,
-		};
-	const action = await showSessionPicker(ctx, record, itemName);
+	const sessions = await listTapdSessions(itemKey, (loaded, total) => {
+		if (total > 50)
+			ctx.ui.notify(`正在扫描历史会话 ${loaded}/${total}...`, "info");
+	});
+	const action = await showSessionPicker(ctx, sessions, itemName);
 	return action
 		? { kind: "session_action", action, itemKey, itemName }
 		: undefined;
-}
-
-async function cleanupLinks(ctx: ExtensionCommandContext): Promise<void> {
-	const preview = scanStaleSessionLinks();
-	if (!preview.removedSessions) {
-		ctx.ui.notify("没有发现失效的 TAPD 会话关联", "info");
-		return;
-	}
-	const confirmed = await ctx.ui.confirm(
-		"清理失效会话关联",
-		`发现 ${preview.removedSessions} 条失效会话关联，涉及清理 ${preview.removedRecords} 个空 TAPD 记录。\n\n只会清理本地关联，不会删除 TAPD 条目或项目文档。`,
-	);
-	if (confirmed) {
-		const result = cleanupStaleSessionLinks();
-		ctx.ui.notify(`已清理 ${result.removedSessions} 条失效会话关联`, "success");
-	}
 }
 
 function browserCandidates(url: string): Array<[string, string[]]> {

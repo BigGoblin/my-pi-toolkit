@@ -1,14 +1,20 @@
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import type { Input } from "@earendil-works/pi-tui";
 import { UI_GLYPHS } from "../../shared/tui/visual-language.js";
-import { deleteLinkedSession } from "../sessions/cleanup.js";
+import {
+	invalidateTapdCatalog,
+	type TapdSessionDescriptor,
+} from "../sessions/catalog.js";
+import {
+	deleteSessionFile,
+	readSessionTitle,
+} from "../sessions/session-files.js";
 import {
 	loadPathHistory,
-	readSessionTitle,
 	rememberProjectPaths,
 	removeProjectPathFromHistory,
 } from "../sessions/storage.js";
-import type { PickerAction, SessionLink, TapdLinkRecord } from "../types.js";
+import type { PickerAction } from "../types.js";
 import type { ListInputAction } from "./session-picker-input.js";
 import type {
 	SessionOption,
@@ -26,20 +32,20 @@ function resetInput(input: Input, value: string): void {
 	(input as CursorInput).cursor = value.length;
 }
 
-export function buildSessionOptions(record: TapdLinkRecord): SessionOption[] {
+export function buildSessionOptions(
+	sessions: TapdSessionDescriptor[],
+): SessionOption[] {
 	const options: SessionOption[] = [];
-	for (let index = record.sessions.length - 1; index >= 0; index -= 1) {
-		const session = record.sessions[index];
+	for (const session of sessions) {
 		const time = new Date(session.createdAt).toLocaleString("zh-CN");
-		const title = session.sessionFile
-			? (readSessionTitle(session.sessionFile) ?? session.title ?? "(无标题)")
-			: session.title || "(无标题)";
+		const title =
+			readSessionTitle(session.sessionFile) ?? session.title ?? "(无标题)";
 		const paths = session.projectPaths?.length
 			? ` | ${session.projectPaths.length} 项目`
 			: "";
 		options.push({
 			link: session,
-			label: `${title} | ${time}${paths}${session.sessionFile ? " [FILE]" : ""}`,
+			label: `${title} | ${time}${paths} [FILE]`,
 			isCreate: false,
 		});
 	}
@@ -117,12 +123,13 @@ export function removeHistoryPath(
 
 function removeSession(
 	state: SessionPickerViewState,
-	link: SessionLink,
-): ReturnType<typeof deleteLinkedSession> {
-	const result = deleteLinkedSession(link);
+	session: TapdSessionDescriptor,
+): ReturnType<typeof deleteSessionFile> {
+	const result = deleteSessionFile(session.sessionFile);
 	if (!result.ok) return result;
+	invalidateTapdCatalog();
 	const index = state.options.findIndex(
-		(option) => option.link?.id === link.id,
+		(option) => option.link?.sessionFile === session.sessionFile,
 	);
 	if (index >= 0) state.options.splice(index, 1);
 	state.selectedIdx = Math.min(
@@ -143,8 +150,8 @@ export function confirmPendingDeletion(
 		else
 			ctx.ui.notify(
 				result.method === "missing"
-					? "会话文件已不存在，关联记录已清理"
-					: "会话及关联记录已删除",
+					? "会话文件已不存在"
+					: "会话已删除（关联信息随会话消失）",
 				"info",
 			);
 	}

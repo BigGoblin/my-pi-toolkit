@@ -1,19 +1,18 @@
 import { existsSync } from "node:fs";
 import { dirname, join } from "node:path";
-import type { TapdItem, TapdLinkRecord } from "../types.js";
-import { getDesignDocPath, linkKey, loadLinks } from "../sessions/storage.js";
+import type { TapdItem } from "../types.js";
+import { getDesignDocPath } from "../sessions/docs.js";
+import { linkKey } from "../sessions/keys.js";
+import { getTapdCatalogSnapshot } from "../sessions/catalog.js";
 
-function linkedDesignPaths(
-	item: TapdItem,
-	links: Record<string, TapdLinkRecord>,
-): string[] {
-	const record =
-		links[linkKey(item.workspaceId, item.id, "story")] ??
-		links[`${item.workspaceId}_${item.id}`];
-	if (!record) return [];
-	return record.sessions.flatMap((session) =>
-		session.understandingFile
-			? [join(dirname(session.understandingFile), "design.md")]
+/** 从已构建的 catalog 快照中收集理解文档路径派生的设计文档路径。 */
+function linkedDesignPaths(item: TapdItem): string[] {
+	const snapshot = getTapdCatalogSnapshot();
+	const key = linkKey(item.workspaceId, item.id, "story");
+	const descriptors = snapshot.get(key) ?? [];
+	return descriptors.flatMap((descriptor) =>
+		descriptor.understandingFile
+			? [join(dirname(descriptor.understandingFile), "design.md")]
 			: [],
 	);
 }
@@ -22,7 +21,6 @@ function linkedDesignPaths(
 export function collectDesignedStoryKeys(
 	forest: TapdItem[],
 	cwd: string,
-	links: Record<string, TapdLinkRecord> = loadLinks(),
 ): Set<string> {
 	const designed = new Set<string>();
 	const visit = (items: TapdItem[]) => {
@@ -31,7 +29,7 @@ export function collectDesignedStoryKeys(
 				const key = linkKey(item.workspaceId, item.id, item.kind);
 				const candidates = [
 					getDesignDocPath(cwd, `story-${item.id}`),
-					...linkedDesignPaths(item, links),
+					...linkedDesignPaths(item),
 				];
 				if (candidates.some((path) => existsSync(path))) designed.add(key);
 			}

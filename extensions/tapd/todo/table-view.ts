@@ -7,7 +7,7 @@ import {
 } from "@earendil-works/pi-tui";
 import { overlayViewportHeight } from "../../shared/tui/overlay-shell.js";
 import { collectDesignedStoryKeys } from "./design-status.js";
-import { linkKey } from "../sessions/storage.js";
+import { linkKey } from "../sessions/keys.js";
 import type { TapdItem, TapdItemKind } from "../types.js";
 import { collectTypes, flatFilter, searchFlat, tapdUrl } from "./model.js";
 import { navigationTarget } from "./session-picker-input.js";

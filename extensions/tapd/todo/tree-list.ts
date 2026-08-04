@@ -5,7 +5,7 @@ import {
 	visibleWidth,
 } from "@earendil-works/pi-tui";
 import { statusGlyph, UI_GLYPHS } from "../../shared/tui/visual-language.js";
-import { linkKey } from "../sessions/storage.js";
+import { linkKey } from "../sessions/keys.js";
 import type { TapdItem } from "../types.js";
 import { navigationTarget } from "./session-picker-input.js";
 import {

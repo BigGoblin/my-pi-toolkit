@@ -58,13 +58,15 @@ TAPD 需求与缺陷工作流扩展。提供待办列表、会话关联、需求
 
 Review 默认使用持久 RPC 子 Agent，不会自动打开分屏。按 `Alt+A` 可在当前 TUI 上方打开居中的大尺寸只读 Overlay，以主 Agent 相同的消息、Markdown、思考块和工具组件查看最近子 Agent 的过程；Overlay 不提供输入框，支持鼠标滚轮以及 `↑`、`↓`、`PageUp`、`PageDown`、`Home`、`End` 滚动，并使用 `Ctrl+O` 展开或折叠工具输出。按 `Esc` 返回主 Agent且不终止审核。使用 `/subagents` 可以管理指定子 Agent：列表中按 `Enter` 进入实时过程或查看历史详情；completed/exited 历史会从子 Agent session 重建完整消息、思考块和工具时间线，并继续使用主界面组件样式；thinking 可用 `app.thinking.toggle`（默认 `Ctrl+T`）折叠，built-in 工具遵循当前 `/grok-tools` 配置。只有旧记录缺少或损坏 session 时，才回退到最终 Markdown 或 transcript 文本摘要。按 `C` 请求取消，按 `X` 强制终止活跃任务，按 `D` 清理已退出的任务记录。列表默认只显示当前主会话创建的子 Agent，按 `Tab` 可切换到所有会话记录；操作后会刷新列表。首轮审核完成后报告自动返回主 Agent。公共行为由 `~/.pi/agent/subagents.json` 配置；如需 Windows Terminal 自动分屏，可设置 `presentation: "split"` 或 `"tab"`。Review 的 Git 上下文会复制进子 Agent 任务目录，避免主工具返回后丢失审核证据。
 
-## Session link cleanup
+## Session links
 
-TAPD 会话关联保存在 `~/.pi/agent/tapd-links.json`。扩展会在会话启动和打开 `/tapd` 主界面时自动清理会话文件已不存在的关联，以及超过 10 分钟仍未完成创建的临时关联。
+TAPD 会话关联保存在 Pi session 自身的 custom entry（`tapd-session-link`）中，不再维护 `tapd-links.json`。每个 TAPD 会话保存 `workspaceId / itemId / kind / itemName / title / projectPaths / understandingFile / subtaskPlan / subtasks` 快照；子任务计划与结果每次更新都会追加新快照，恢复会话时读取最后一条。`/tree` 导航不影响会话关联。
 
-在 TAPD 主界面按 `c` 可以预览并确认清理失效关联。该操作只清理本地关联数据，不会删除 TAPD 需求、Bug、子需求或项目文档。
+事项 → 历史会话列表由 `SessionManager.listAll()` + 有界并发扫描会话 custom entries 构建内存目录（`sessions/catalog.ts`），首次打开关联会话 picker 时扫描并在进程内缓存；创建或删除会话后失效重建。大量会话时 picker 会显示扫描进度，单个损坏 JSONL 跳过，不阻断待办列表。
 
-在关联会话列表按 `Ctrl+D` 删除会话时，只有会话文件删除成功后才会移除关联记录；如果文件本来已经不存在，则只清理对应关联。
+旧版 `~/.pi/agent/tapd-links.json` 的关联已在迁移时写入各会话 custom entry，迁移完成后原文件归档为带时间戳的 `.migrated.bak`；迁移逻辑已移除，不再读取或维护该文件。
+
+在关联会话列表按 `Ctrl+D` 删除会话时，直接删除（优先 trash）session 文件；关联信息随会话文件消失，无需额外清理。`tapd-project-paths.json`（项目路径输入历史）继续保留。
 
 文档默认位于：
 
@@ -119,9 +121,9 @@ TAPD Open API 索引见 [`../../docs/tapd-api.md`](../../docs/tapd-api.md)。
 | --- | --- |
 | `index.ts` / `types.ts` | 扩展组装入口与跨领域共享类型 |
 | `core/` | 配置、HTTP 客户端、基础 TAPD API |
-| `sessions/` | TAPD 会话关联、创建和失效清理 |
+| `sessions/` | TAPD 会话 custom entry 状态、事项→会话目录（catalog）、legacy `tapd-links.json` 幂等迁移、项目路径历史与会话文件删除 |
 | `documents/` | analyze、design、collaboration 与 Bug 定位文档工作流，以及 Design 关键决策提问工具 |
-| `subtasks/` | 子需求解析、确认计划与 TAPD 同步 |
+| `subtasks/` | 子需求解析、确认计划、TAPD 同步（`api-sync.ts`）与 append-only 状态更新（`state.ts`） |
 | `todo/` | 待办编排与 Overlay；`tree-list.ts`、`table-view.ts`、`session-picker*.ts` 分别负责树表、响应式主表和会话/路径 viewport |
 | `review/` | 需求实现审核上下文、只读子代理、进度和报告渲染 |
 | `git/` | Git 仓库、TAPD keyword、GitLab MR、状态回写和根因备注 |

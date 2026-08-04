@@ -50,7 +50,6 @@ export type TableAction =
 	| "search"
 	| "scope_toggle"
 	| "type_filter"
-	| "cleanup"
 	| "confirm"
 	| "open";
 
@@ -66,7 +65,6 @@ export function decodeTableAction(
 	if (data === "/") return "search";
 	if (data === "i") return "scope_toggle";
 	if (data === "t" && kind === "story") return "type_filter";
-	if (data === "c") return "cleanup";
 	if (keybindings.matches(data, "tui.select.confirm")) return "confirm";
 	if (data === "o") return "open";
 	return null;

@@ -90,27 +90,6 @@ export interface CreatedSubtask {
 	updatedAt?: string;
 }
 
-export interface SessionLink {
-	id: string;
-	createdAt: string;
-	title?: string;
-	sessionFile?: string;
-	projectPaths?: string[];
-	understandingFile?: string;
-	subtaskPlan?: SubtaskPlan;
-	subtasks?: CreatedSubtask[];
-}
-
-/** storyId 保留用于兼容历史 tapd-links.json。 */
-export interface TapdLinkRecord {
-	workspaceId: string;
-	storyId: string;
-	name: string;
-	sessions: SessionLink[];
-	kind?: TapdItemKind;
-	itemId?: string;
-}
-
 export type CreateDraft = { title: string; projectPaths: string[] };
 
 export type PickerAction =
