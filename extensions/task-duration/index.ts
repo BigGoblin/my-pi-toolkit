@@ -7,7 +7,7 @@ import type {
 	Theme,
 } from "@earendil-works/pi-coding-agent";
 import { Text } from "@earendil-works/pi-tui";
-import { secondaryLine } from "../shared/tui/visual-language.js";
+import { mutedLine } from "../shared/tui/visual-language.js";
 
 const ENTRY_TYPE = "task-duration";
 
@@ -45,7 +45,7 @@ export default function taskDuration(pi: ExtensionAPI): void {
 				? entry.data.durationMs
 				: 0;
 			return new Text(
-				secondaryLine(theme, `本次任务耗时 ${formatDuration(durationMs)}`),
+				mutedLine(theme, `本次任务耗时 ${formatDuration(durationMs)}`),
 				0,
 				0,
 			);

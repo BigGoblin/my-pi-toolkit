@@ -43,6 +43,10 @@ export function secondaryLine(theme: Theme, text: string): string {
 	return `  ${theme.fg("dim", UI_GLYPHS.branch)} ${theme.fg("muted", text)}`;
 }
 
+export function mutedLine(theme: Theme, text: string): string {
+	return theme.fg("muted", text);
+}
+
 export function timelineLine(theme: Theme, text = ""): string {
 	const content = text ? ` ${theme.fg("muted", text)}` : "";
 	return `  ${theme.fg("dim", UI_GLYPHS.line)}${content}`;
