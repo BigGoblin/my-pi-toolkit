@@ -88,10 +88,14 @@ export async function buildSubtaskDescription(
 	created: CreatedSubtask[],
 	collaborationMarkdown: string,
 ): Promise<string> {
-	if (item.kind === "design") return collaborationMarkdown;
-	const designResult = created.find((done) => done.kind === "design");
-	return await marked.parse(
-		[
+	let markdown = collaborationMarkdown;
+	if (item.kind === "development") {
+		const designResult = created.find((done) => done.kind === "design");
+		const dependencies =
+			item.dependencies.length > 0
+				? item.dependencies.map((value) => `- ${value}`)
+				: ["无"];
+		markdown = [
 			"## 开发范围",
 			...item.scope.map((value) => `- ${value}`),
 			"",
@@ -99,16 +103,14 @@ export async function buildSubtaskDescription(
 			...item.acceptanceCriteria.map((value) => `- ${value}`),
 			"",
 			"## 依赖关系",
-			...(item.dependencies.length > 0
-				? item.dependencies.map((value) => `- ${value}`)
-				: ["无"]),
+			...dependencies,
 			"",
 			"## 关联设计",
 			`- 父需求：${storyName}`,
 			`- 设计子需求：${designResult?.tapdUrl ?? "本批次创建"}`,
-		].join("\n"),
-		{ gfm: true, breaks: false },
-	);
+		].join("\n");
+	}
+	return marked.parse(markdown, { gfm: true, breaks: false });
 }
 
 /** 更新已有子需求，成功返回 true。 */

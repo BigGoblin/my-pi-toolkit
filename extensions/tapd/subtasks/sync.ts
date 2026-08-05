@@ -4,6 +4,7 @@ import type {
 	ExtensionAPI,
 	ExtensionCommandContext,
 } from "@earendil-works/pi-coding-agent";
+import { fetchStoryChildren } from "../core/api.js";
 import { getCollaborationDocPath, getDesignDocPath } from "../sessions/docs.js";
 import type { TapdConfig } from "../types.js";
 import { buildSubtaskPlan, buildSynchronizedSubtaskPlan } from "./plan.js";
@@ -78,9 +79,8 @@ export async function createSubtasks(
 		return;
 	}
 
-	const created = state.subtasks ?? [];
+	let created = state.subtasks ?? [];
 	let plan = state.subtaskPlan;
-	let synchronizeExisting = false;
 	const contentChanged =
 		plan &&
 		(plan.designContentHash !== designHash ||
@@ -97,7 +97,6 @@ export async function createSubtasks(
 				suggestions,
 			)) ?? undefined;
 		if (!plan) return;
-		synchronizeExisting = true;
 		updateSubtaskState(pi, ctx, (next) => {
 			next.subtaskPlan = plan;
 		});
@@ -120,80 +119,83 @@ export async function createSubtasks(
 			next.subtasks = created;
 		});
 	}
-	const pending = plan.items.filter(
-		(item) => !created.some((done) => done.localId === item.localId),
-	);
-	const updating = synchronizeExisting
-		? plan.items.filter((item) =>
-				created.some((done) => done.localId === item.localId),
-			)
-		: [];
-	if (pending.length === 0 && updating.length === 0) {
+	let syncContext;
+	let remoteChildren;
+	try {
+		[syncContext, remoteChildren] = await Promise.all([
+			fetchSubtaskSyncContext(config, state.workspaceId, storyId),
+			fetchStoryChildren(state.workspaceId, storyId, config),
+		]);
+	} catch (error) {
 		ctx.ui.notify(
-			`所有子需求均已创建：\n${created.map((item) => item.tapdUrl).join("\n")}`,
-			"info",
+			`获取 TAPD 远端子需求失败，已停止同步：${error instanceof Error ? error.message : String(error)}`,
+			"error",
 		);
 		return;
 	}
-
-	ctx.ui.notify(
-		updating.length > 0
-			? `正在同步 ${updating.length} 个已有子需求，并创建 ${pending.length} 个新增子需求...`
-			: `正在创建 ${pending.length} 个 TAPD 子需求...`,
-		"info",
-	);
-	const syncContext = await fetchSubtaskSyncContext(
-		config,
-		state.workspaceId,
-		storyId,
-	);
 	if (!syncContext) {
 		ctx.ui.notify("获取父需求或当前 TAPD 用户失败", "error");
 		return;
 	}
 	const { owner, types, inheritedFields } = syncContext;
-
-	const persist = (subtasks: typeof created): void => {
+	const remoteIds = new Set(remoteChildren.map((child) => child.id));
+	const activeCreated = created.filter((item) => remoteIds.has(item.tapdId));
+	const staleCount = created.length - activeCreated.length;
+	if (staleCount > 0) {
+		created = activeCreated;
 		updateSubtaskState(pi, ctx, (next) => {
-			next.subtasks = subtasks;
+			next.subtasks = created;
+		});
+		ctx.ui.notify(
+			`检测到 ${staleCount} 个远端已删除子需求，将按原计划重建`,
+			"info",
+		);
+	}
+
+	const pendingCount = plan.items.filter(
+		(item) => !created.some((done) => done.localId === item.localId),
+	).length;
+	const updatingCount = plan.items.length - pendingCount;
+	ctx.ui.notify(
+		`正在同步 ${updatingCount} 个已有子需求，并创建 ${pendingCount} 个缺失子需求...`,
+		"info",
+	);
+
+	const persist = (): void => {
+		updateSubtaskState(pi, ctx, (next) => {
+			next.subtasks = created;
 		});
 	};
 
-	for (const item of updating) {
+	for (const item of plan.items) {
 		const existing = created.find((done) => done.localId === item.localId);
-		if (!existing) continue;
 		const description = await buildSubtaskDescription(
 			item,
 			state.itemName,
 			created,
 			collaborationMarkdown,
 		);
-		const ok = await updateSubtaskOnTapd(
-			config,
-			state.workspaceId,
-			existing,
-			item,
-			description,
-			owner,
-		);
-		if (!ok) {
-			ctx.ui.notify(`${item.title} 同步失败，再次执行可重试`, "error");
-			return;
+		if (existing) {
+			const ok = await updateSubtaskOnTapd(
+				config,
+				state.workspaceId,
+				existing,
+				item,
+				description,
+				owner,
+			);
+			if (!ok) {
+				ctx.ui.notify(`${item.title} 同步失败，再次执行可重试`, "error");
+				return;
+			}
+			existing.title = item.title;
+			existing.effort = item.effort;
+			existing.updatedAt = new Date().toISOString();
+			persist();
+			ctx.ui.notify(`${item.title} 已同步：${existing.tapdUrl}`, "success");
+			continue;
 		}
-		existing.title = item.title;
-		existing.effort = item.effort;
-		existing.updatedAt = new Date().toISOString();
-		persist(created);
-		ctx.ui.notify(`${item.title} 已同步：${existing.tapdUrl}`, "success");
-	}
 
-	for (const item of pending) {
-		const description = await buildSubtaskDescription(
-			item,
-			state.itemName,
-			created,
-			collaborationMarkdown,
-		);
 		try {
 			const result = await createSubtaskOnTapd(
 				config,
@@ -206,7 +208,7 @@ export async function createSubtasks(
 				inheritedFields,
 			);
 			created.push(result);
-			persist(created);
+			persist();
 			ctx.ui.notify(`${item.title} 已创建：${result.tapdUrl}`, "success");
 		} catch (error) {
 			ctx.ui.notify(

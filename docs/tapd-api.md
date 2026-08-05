@@ -77,6 +77,12 @@
 - tag 没有任何基础版本候选时，使用选项源中真实存在的 `其他(历史缺陷)`；不能自行构造候选值。关联多个冲突迭代或其他无法验证的情况不修改合入版本。
 - 备注正文使用 `<br/>` 或段落标签，避免 TAPD 将裸换行渲染为同一段。
 
+## 子需求描述格式约定
+
+Story 创建和更新 Open API 只支持 `description`，不支持 Wiki API 中的 `markdown_description` 或 `is_rich`。`/tapd sub-task` 使用 `marked`（GFM）把 `collaboration.md` 或生成的开发子需求 Markdown 转成 HTML，再写入 `description`。
+
+`marked` 只会把 Mermaid 围栏转换为带 `language-mermaid` 类名的代码块，不会生成图，因此 TAPD 子需求详情中会以代码块显示 Mermaid。
+
 ## 鉴权与请求注意事项
 
 - 当前扩展配置：`~/.pi/agent/tapd.json`，使用 Bearer Token。
