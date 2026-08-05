@@ -48,6 +48,10 @@ export function buildReviewTask(
 	context: TapdReviewContext,
 	additionalInstructions?: string,
 ): string {
+	const range =
+		context.scope === "uncommitted"
+			? `The review range is HEAD through the current working tree on ${context.branch}. Review only staged, unstaged, and untracked changes; do not include changes that exist only in earlier commits.`
+			: `The review range is merge-base ${context.mergeBase} of ${context.baseRef} through the current working tree on ${context.branch}.`;
 	return [
 		`Review TAPD story ${context.storyId}: ${context.storyName}`,
 		"",
@@ -57,7 +61,8 @@ export function buildReviewTask(
 		`- Git review context and complete tracked patch: ${context.contextFile}`,
 		`- Repository root: ${context.repositoryRoot}`,
 		"",
-		`The review range is merge-base ${context.mergeBase} of ${context.baseRef} through the current working tree on ${context.branch}. Untracked files are listed in the Git context and must be read directly from the repository.`,
+		range,
+		"Untracked files are listed in the Git context and must be read directly from the repository.",
 		"Review all changed files, then inspect related unchanged code as needed to verify behavior and hidden bugs.",
 		additionalInstructions
 			? `\nAdditional user instructions:\n${additionalInstructions}`

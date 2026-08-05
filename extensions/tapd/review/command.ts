@@ -3,6 +3,12 @@ import type {
 	ExtensionCommandContext,
 } from "@earendil-works/pi-coding-agent";
 import { DEFAULT_GIT_WORKFLOW_POLICY } from "../git/policy.js";
+import type { TapdReviewScope } from "./types.js";
+
+const REVIEW_SCOPE_OPTIONS: Record<string, TapdReviewScope> = {
+	"仅审核未提交修改（暂存、未暂存和未跟踪）": "uncommitted",
+	"审核当前分支全部修改（包含已提交修改）": "branch",
+};
 
 function parseReviewCommandArgs(args: string[]): {
 	baseRef: string;
@@ -25,11 +31,11 @@ function parseReviewCommandArgs(args: string[]): {
 	return { baseRef, instructions: extra || undefined };
 }
 
-export function requestTapdReview(
+export async function requestTapdReview(
 	pi: ExtensionAPI,
 	ctx: ExtensionCommandContext,
 	args: string[],
-): void {
+): Promise<void> {
 	if (!ctx.isIdle()) {
 		ctx.ui.notify("Agent 正在执行，请稍后再运行 /tapd review", "warning");
 		return;
@@ -42,6 +48,15 @@ export function requestTapdReview(
 		ctx.ui.notify(message, "error");
 		return;
 	}
+	let scope: TapdReviewScope = "branch";
+	if (ctx.hasUI) {
+		const choice = await ctx.ui.select(
+			"请选择 TAPD 代码审核范围",
+			Object.keys(REVIEW_SCOPE_OPTIONS),
+		);
+		if (!choice) return;
+		scope = REVIEW_SCOPE_OPTIONS[choice as keyof typeof REVIEW_SCOPE_OPTIONS];
+	}
 	pi.sendMessage(
 		{
 			customType: "tapd-review-tool-request",
@@ -52,7 +67,7 @@ export function requestTapdReview(
 				"",
 				"工具参数：",
 				"```json",
-				JSON.stringify(params, null, 2),
+				JSON.stringify({ ...params, scope }, null, 2),
 				"```",
 			].join("\n"),
 			display: false,

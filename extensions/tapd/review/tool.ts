@@ -21,9 +21,14 @@ import type { TapdConfig } from "../types.js";
 import { collectTapdReviewContext } from "./context.js";
 import { buildReviewTask } from "./prompt.js";
 import { runReviewSubagent } from "./subagent.js";
-import type { TapdReviewMetadata, TapdReviewToolDetails } from "./types.js";
+import type {
+	TapdReviewMetadata,
+	TapdReviewScope,
+	TapdReviewToolDetails,
+} from "./types.js";
 
 interface ReviewToolParams {
+	scope?: TapdReviewScope;
 	baseRef?: string;
 	instructions?: string;
 }
@@ -63,7 +68,7 @@ export function registerTapdReviewTool(pi: ExtensionAPI): void {
 		name: "tapd_review",
 		label: "TAPD Code Review",
 		description:
-			"Use an isolated read-only reviewer subagent to compare the current TAPD story implementation with understanding.md and design.md. Reviews committed, staged, unstaged, and untracked changes and returns a severity-ranked report.",
+			"Use an isolated read-only reviewer subagent to compare the current TAPD story implementation with understanding.md and design.md. Can review only uncommitted changes or all branch and working-tree changes, and returns a severity-ranked report.",
 		promptSnippet:
 			"Review the current TAPD story implementation against its requirement and design",
 		promptGuidelines: [
@@ -71,6 +76,14 @@ export function registerTapdReviewTool(pi: ExtensionAPI): void {
 			"After tapd_review returns, summarize the highest-severity findings and wait for confirmation before modifying code.",
 		],
 		parameters: Type.Object({
+			scope: Type.Optional(
+				Type.Unsafe<TapdReviewScope>({
+					type: "string",
+					enum: ["uncommitted", "branch"],
+					description:
+						"Review uncommitted changes only, or all changes since the base branch. Defaults to branch.",
+				}),
+			),
 			baseRef: Type.Optional(
 				Type.String({
 					description: "Git base ref. Defaults to origin/dev.",
@@ -96,6 +109,7 @@ export function registerTapdReviewTool(pi: ExtensionAPI): void {
 			const config = loadConfig();
 			if (!config) throw new Error("请先配置 ~/.pi/agent/tapd.json");
 			const model = resolveReviewModel(config, ctx.model);
+			const scope = params.scope ?? "branch";
 			const baseRef =
 				params.baseRef?.trim() || DEFAULT_GIT_WORKFLOW_POLICY.baseRef;
 			const toolCalls: Array<{
@@ -123,6 +137,7 @@ export function registerTapdReviewTool(pi: ExtensionAPI): void {
 			try {
 				reviewContext = await collectTapdReviewContext(
 					ctx,
+					scope,
 					baseRef,
 					(_stage, _state, message) => emit(message),
 				);
@@ -143,8 +158,10 @@ export function registerTapdReviewTool(pi: ExtensionAPI): void {
 				});
 				const metadata: TapdReviewMetadata = {
 					storyId: reviewContext.storyId,
+					scope: reviewContext.scope,
 					baseRef: reviewContext.baseRef,
 					mergeBase: reviewContext.mergeBase,
+					comparisonRef: reviewContext.comparisonRef,
 					branch: reviewContext.branch,
 					model: result.model,
 					changedFiles: reviewContext.changedFiles,
@@ -168,8 +185,11 @@ export function registerTapdReviewTool(pi: ExtensionAPI): void {
 		},
 
 		renderCall(args: ReviewToolParams, theme: Theme) {
-			const baseRef = args.baseRef || DEFAULT_GIT_WORKFLOW_POLICY.baseRef;
-			return toolCall(theme, "tapd_review", baseRef);
+			const range =
+				args.scope === "uncommitted"
+					? "未提交修改"
+					: args.baseRef || DEFAULT_GIT_WORKFLOW_POLICY.baseRef;
+			return toolCall(theme, "tapd_review", range);
 		},
 
 		renderResult(
@@ -189,8 +209,8 @@ export function registerTapdReviewTool(pi: ExtensionAPI): void {
 				const visibleCalls = expanded
 					? details.toolCalls
 					: details.toolCalls.slice(-6);
-				const calls = visibleCalls.map((call) =>
-					`→ ${previewToolCall(call.name, call.arguments)}`
+				const calls = visibleCalls.map(
+					(call) => `→ ${previewToolCall(call.name, call.arguments)}`,
 				);
 				return toolResult(theme, {
 					status: "active",
@@ -211,9 +231,7 @@ export function registerTapdReviewTool(pi: ExtensionAPI): void {
 				return toolResult(theme, {
 					...view,
 					body: preview.text,
-					hint: preview.truncated
-						? "Ctrl+O to expand full report"
-						: undefined,
+					hint: preview.truncated ? "Ctrl+O to expand full report" : undefined,
 				});
 			}
 			const container = new Container();

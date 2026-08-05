@@ -5,7 +5,7 @@ import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { getDesignDocPath, getUnderstandingDocPath } from "../sessions/docs.js";
 import { readTapdSessionState } from "../sessions/session-state.js";
 import { git, readRepositoryRoot, refExists } from "../git/repository.js";
-import type { TapdReviewContext } from "./types.js";
+import type { TapdReviewContext, TapdReviewScope } from "./types.js";
 
 async function requireDocument(path: string, command: string): Promise<void> {
 	let content: string;
@@ -26,6 +26,7 @@ function lines(value: string): string[] {
 
 export async function collectTapdReviewContext(
 	ctx: ExtensionContext,
+	scope: TapdReviewScope,
 	baseRef: string,
 	onPhase?: (
 		phase: "documents" | "git",
@@ -53,9 +54,18 @@ export async function collectTapdReviewContext(
 
 	onPhase?.("git", "running", "正在收集 Git 修改");
 	const repositoryRoot = await readRepositoryRoot(ctx.cwd);
-	if (!(await refExists(repositoryRoot, baseRef)))
-		throw new Error(`审核基础分支不存在: ${baseRef}`);
-	const mergeBase = await git(repositoryRoot, ["merge-base", baseRef, "HEAD"]);
+	let mergeBase: string | undefined;
+	let comparisonRef: string;
+	if (scope === "branch") {
+		if (!(await refExists(repositoryRoot, baseRef)))
+			throw new Error(`审核基础分支不存在: ${baseRef}`);
+		mergeBase = await git(repositoryRoot, ["merge-base", baseRef, "HEAD"]);
+		comparisonRef = mergeBase;
+	} else {
+		if (!(await refExists(repositoryRoot, "HEAD")))
+			throw new Error("无法审核未提交修改：当前仓库还没有 HEAD 提交");
+		comparisonRef = "HEAD";
+	}
 	const [branch, status, stat, patch, trackedNames, untrackedNames] =
 		await Promise.all([
 			git(repositoryRoot, ["branch", "--show-current"]),
@@ -64,33 +74,40 @@ export async function collectTapdReviewContext(
 				"--porcelain",
 				"--untracked-files=normal",
 			]),
-			git(repositoryRoot, ["diff", "--stat", mergeBase, "--"]),
+			git(repositoryRoot, ["diff", "--stat", comparisonRef, "--"]),
 			git(repositoryRoot, [
 				"diff",
 				"--no-color",
 				"--find-renames",
-				mergeBase,
+				comparisonRef,
 				"--",
 			]),
-			git(repositoryRoot, ["diff", "--name-only", mergeBase, "--"]),
+			git(repositoryRoot, ["diff", "--name-only", comparisonRef, "--"]),
 			git(repositoryRoot, ["ls-files", "--others", "--exclude-standard"]),
 		]);
 	const untrackedFiles = lines(untrackedNames);
 	const changedFiles = Array.from(
 		new Set([...lines(trackedNames), ...untrackedFiles]),
 	);
-	if (changedFiles.length === 0)
-		throw new Error(`相对 ${baseRef} 没有可审核的代码修改`);
+	if (changedFiles.length === 0) {
+		const range =
+			scope === "uncommitted" ? "工作区没有未提交的" : `相对 ${baseRef} 没有`;
+		throw new Error(`${range}可审核代码修改`);
+	}
 
 	const tempDir = await mkdtemp(join(tmpdir(), "tapd-review-"));
 	const contextFile = join(tempDir, "review-context.md");
+	const rangeDetails =
+		scope === "branch"
+			? [`- Base ref: ${baseRef}`, `- Merge base: ${mergeBase}`]
+			: ["- Comparison ref: HEAD"];
 	const contextText = [
 		"# TAPD Review Git Context",
 		"",
 		`- Repository: ${repositoryRoot}`,
 		`- Branch: ${branch || "(detached)"}`,
-		`- Base ref: ${baseRef}`,
-		`- Merge base: ${mergeBase}`,
+		`- Review scope: ${scope}`,
+		...rangeDetails,
 		"",
 		"## Git status",
 		"```text",
@@ -133,8 +150,10 @@ export async function collectTapdReviewContext(
 		designFile,
 		repositoryRoot,
 		branch: branch || "(detached)",
-		baseRef,
+		scope,
+		baseRef: scope === "branch" ? baseRef : undefined,
 		mergeBase,
+		comparisonRef,
 		changedFiles,
 		contextFile,
 		cleanup: () => rm(tempDir, { recursive: true, force: true }),

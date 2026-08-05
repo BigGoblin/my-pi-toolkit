@@ -10,7 +10,7 @@ TAPD 需求与缺陷工作流扩展。提供待办列表、会话关联、需求
 | `/tapd analyze [补充要求]` | 生成 `understanding.md` |
 | `/tapd design [补充要求]` | 调研后通过选项式提问确认关键决策，再生成 `design.md` 和结构化开发子需求拆分 |
 | `/tapd collaboration [补充要求]` | 生成供产品、后端和前端 Leader 评审的 `collaboration.md` |
-| `/tapd review [--base origin/dev] [补充要求]` | 启动只读子代理，根据需求和设计审核当前分支与工作区代码，并将分级报告返回主 Agent |
+| `/tapd review [--base origin/dev] [补充要求]` | 选择“仅未提交”或“当前分支全部修改”后，启动只读子代理并将分级报告返回主 Agent |
 | `/tapd sub-task` | 根据 `design.md` 创建或同步设计、开发子需求 |
 | `/tapd bug` | 获取当前 Bug 完整信息并让 Agent 定位代码原因 |
 | `/tapd git-status` | 直接执行 TAPD Git 工作流，并用对话区工具风格卡片显示关联事项、分支、upstream 与工作区状态 |
@@ -52,7 +52,12 @@ TAPD 需求与缺陷工作流扩展。提供待办列表、会话关联、需求
 
 ## Code review
 
-`/tapd review` 审核当前仓库从指定基础分支的 merge-base 到工作区的全部修改，包括已提交、暂存、未暂存和未跟踪文件。命令要求当前需求已有非空的 `understanding.md` 和 `design.md`，并使用只开放 `read`、`grep`、`find`、`ls` 的隔离子代理检查代码风格、文件拆分、需求满足度、设计满足度和隐藏 Bug；存在组件改动时，还会检查组件 Props/参数、默认值、事件、状态归属、数据流、组合方式、子结构和拆分边界是否合理及兼容。
+`/tapd review` 会先显示审核范围选择器：
+
+- **仅审核未提交修改**：以 `HEAD` 为比较起点，只审核暂存、未暂存和未跟踪文件，不包含只存在于既有 commit 中的修改。
+- **审核当前分支全部修改**：审核指定基础分支的 merge-base 到工作区的全部修改，包括已提交、暂存、未暂存和未跟踪文件；`--base`（默认 `origin/dev`）仅影响此选项。
+
+按 `Esc` 取消选择不会启动 Agent 或 Review 子代理。命令要求当前需求已有非空的 `understanding.md` 和 `design.md`，并使用只开放 `read`、`grep`、`find`、`ls` 的隔离子代理检查代码风格、文件拆分、需求满足度、设计满足度和隐藏 Bug；存在组件改动时，还会检查组件 Props/参数、默认值、事件、状态归属、数据流、组合方式、子结构和拆分边界是否合理及兼容。
 
 命令会让主 Agent 调用原生 `tapd_review` 工具；执行进度、Review 子代理最近的工具调用和最终报告均显示在对话工具框中，可用 `Ctrl+O` 在运行期间展开全部已记录调用，并在完成后展开完整 Markdown 报告。审核期间按 `Esc` 或 `Ctrl+C` 会通过工具的 AbortSignal 终止子代理。报告使用 `P0 Blocker`、`P1 High`、`P2 Medium`、`P3 Suggestion` 问题等级及 `LOW`、`MEDIUM`、`HIGH`、`BLOCKED` 总体风险等级。工具结果会直接进入主 Agent 上下文，主 Agent 只总结问题，不会自动修改代码。
 

@@ -1,3 +1,5 @@
+export type TapdReviewScope = "uncommitted" | "branch";
+
 export interface TapdReviewContext {
 	storyId: string;
 	storyName: string;
@@ -5,8 +7,10 @@ export interface TapdReviewContext {
 	designFile: string;
 	repositoryRoot: string;
 	branch: string;
-	baseRef: string;
-	mergeBase: string;
+	scope: TapdReviewScope;
+	baseRef?: string;
+	mergeBase?: string;
+	comparisonRef: string;
 	changedFiles: string[];
 	contextFile: string;
 	cleanup(): Promise<void>;
@@ -20,8 +24,10 @@ export interface ReviewSubagentResult {
 
 export interface TapdReviewMetadata {
 	storyId: string;
-	baseRef: string;
-	mergeBase: string;
+	scope: TapdReviewScope;
+	baseRef?: string;
+	mergeBase?: string;
+	comparisonRef: string;
 	branch: string;
 	model: string;
 	changedFiles: string[];

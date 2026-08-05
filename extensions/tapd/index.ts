@@ -129,7 +129,7 @@ export default function tapdExtension(pi: ExtensionAPI) {
 				return;
 			}
 			if (sub === "review") {
-				requestTapdReview(pi, ctx, restArgs);
+				await requestTapdReview(pi, ctx, restArgs);
 				return;
 			}
 			if (sub === "sub-task") {
