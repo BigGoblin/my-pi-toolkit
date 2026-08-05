@@ -15,6 +15,7 @@ import {
 	buildSessionOptions,
 	confirmPendingDeletion,
 	createPickerAction,
+	submitCreate,
 	toggleProjectPath,
 } from "./session-picker-actions.js";
 import {
@@ -81,6 +82,7 @@ class SessionPicker {
 			selectedIdx: 0,
 			pendingDelete: null,
 			pendingDeletePath: null,
+			cwdChoice: null,
 			isCreating: false,
 			selectedPaths: [],
 			pathHistory: loadPathHistory(),
@@ -142,6 +144,10 @@ class SessionPicker {
 	footer(width: number): string {
 		if (this.state.pendingDelete || this.state.pendingDeletePath)
 			return "Enter 确认 · Esc/Ctrl+C 取消";
+		if (this.state.cwdChoice) {
+			if (width < 64) return "↑↓ 选择 · Enter 确认 · Esc 返回 · Ctrl+C";
+			return "↑↓/PgUp/PgDn/Home/End 选择 · Enter 确认 · Esc 返回 · Ctrl+C 退出";
+		}
 		if (this.state.isCreating) {
 			if (width < 64)
 				return "↑↓/PgUp/PgDn 切换 · Enter 确认 · Esc 返回 · Ctrl+C";
@@ -162,8 +168,38 @@ class SessionPicker {
 			this.done(null);
 			return;
 		}
+		if (this.state.cwdChoice) {
+			this.handleCwdChoiceInput(data);
+			return;
+		}
 		if (this.state.isCreating) this.handleCreateInput(data);
 		else this.handleListInput(data);
+	}
+
+	private handleCwdChoiceInput(data: string): void {
+		const choice = this.state.cwdChoice;
+		if (!choice) return;
+		const action = decodeListInput(
+			data,
+			choice.index,
+			choice.paths.length - 1,
+			this.keybindings,
+		);
+		if (action.type === "navigate") {
+			choice.index = action.target;
+			this.redraw();
+			return;
+		}
+		if (action.type === "cancel") {
+			this.state.cwdChoice = null;
+			this.redraw();
+			return;
+		}
+		if (action.type === "select") {
+			const path = choice.paths[choice.index];
+			this.state.cwdChoice = null;
+			this.done(createPickerAction(this.state, path));
+		}
 	}
 
 	private handleConfirmation(data: string): void {
@@ -212,9 +248,12 @@ class SessionPicker {
 				this.state.pendingDeletePath = this.state.pathHistory[action.index];
 				this.redraw();
 				return;
-			case "submit":
-				this.done(createPickerAction(this.state));
+			case "submit": {
+				const result = submitCreate(this.state);
+				if (result === "cwd-choice") this.redraw();
+				else this.done(result);
 				return;
+			}
 			default:
 				return;
 		}

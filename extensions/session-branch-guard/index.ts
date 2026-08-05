@@ -139,6 +139,8 @@ export function sessionBranchGuard(pi: ExtensionAPI): void {
 	);
 
 	// —— /resume 前置拦截 ——
+	// 必须用目标会话自身的 cwd 做 Git 校验：Pi resume 后会切到该目录。
+	// 若仍用切换前的 ctx.cwd，跨项目会话（如 TAPD 在其他仓库创建）会被误判为跨仓库并取消。
 	pi.on(
 		"session_before_switch",
 		async (event: SessionBeforeSwitchEvent, ctx: ExtensionContext) => {
@@ -151,27 +153,28 @@ export function sessionBranchGuard(pi: ExtensionAPI): void {
 			}
 			const binding = readBinding(target.getEntries());
 			if (!binding) return; // 无绑定：允许恢复，start 时 adopt
-			const gitContext = await readGitContext(pi, ctx.cwd);
+			const sessionCwd = target.getCwd() || ctx.cwd;
+			const gitContext = await readGitContext(pi, sessionCwd);
 			if (!gitContext.isRepo || !gitContext.repoRoot) return;
 			const mismatch = compareBinding(binding, gitContext);
 			if (mismatch === "same") return;
 			if (mismatch === "repo-differs") {
 				ctx.ui.notify(
-					`目标会话属于另一个仓库（${binding.repoRoot}），已取消恢复`,
+					`目标会话绑定仓库（${binding.repoRoot}）与会话目录（${sessionCwd}）不一致，已取消恢复`,
 					"warning",
 				);
 				return { cancel: true };
 			}
 			if (mismatch === "detached") {
 				ctx.ui.notify(
-					"当前处于 detached HEAD，请先手动切换分支后再恢复该会话",
+					"会话目录处于 detached HEAD，请先在该仓库手动切换分支后再恢复该会话",
 					"warning",
 				);
 				return { cancel: true };
 			}
 			if (!ctx.hasUI) {
 				ctx.ui.notify(
-					`目标会话绑定分支 ${binding.gitBranch}，当前 ${gitContext.branch}；无 UI 环境不自动执行 Git 变更，已取消恢复`,
+					`目标会话绑定分支 ${binding.gitBranch}，会话目录当前 ${gitContext.branch}；无 UI 环境不自动执行 Git 变更，已取消恢复`,
 					"warning",
 				);
 				return { cancel: true };

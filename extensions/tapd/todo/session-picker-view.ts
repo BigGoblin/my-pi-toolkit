@@ -14,6 +14,8 @@ export interface SessionPickerViewState {
 	selectedIdx: number;
 	pendingDelete: TapdSessionDescriptor | null;
 	pendingDeletePath: string | null;
+	/** 多选项目路径后，选择新会话工作目录。 */
+	cwdChoice: { paths: string[]; index: number } | null;
 	isCreating: boolean;
 	selectedPaths: string[];
 	pathHistory: string[];
@@ -74,6 +76,8 @@ export function renderSessionPicker(
 		lines.push(clipped(theme, `  ${state.pendingDeletePath}`, width));
 		return lines;
 	}
+	if (state.cwdChoice)
+		return [...lines, ...renderCwdChoice(state.cwdChoice, theme, width, rows)];
 	if (state.isCreating)
 		return [...lines, ...renderCreate(state, theme, width, rows)];
 	lines.push("");
@@ -91,6 +95,35 @@ export function renderSessionPicker(
 	}
 	if (state.options.length > viewport)
 		lines.push(theme.fg("dim", `${start + 1}-${end}/${state.options.length}`));
+	return lines;
+}
+
+function renderCwdChoice(
+	choice: { paths: string[]; index: number },
+	theme: Theme,
+	width: number,
+	rows: number,
+): string[] {
+	const lines = [
+		theme.bold("选择工作目录"),
+		theme.fg(
+			"muted",
+			truncateToWidth("新会话将在该目录中创建", width, UI_GLYPHS.more),
+		),
+		"",
+	];
+	const viewport = Math.max(2, Math.min(12, rows - 6));
+	const [start, end] = windowAround(choice.index, choice.paths.length, viewport);
+	for (let index = start; index < end; index++) {
+		const path = choice.paths[index];
+		const active = index === choice.index;
+		const marker = statusGlyph(theme, active ? "active" : "pending");
+		lines.push(clipped(theme, `${marker} ${path}`, width, active));
+	}
+	if (choice.paths.length > viewport)
+		lines.push(
+			theme.fg("dim", `${start + 1}-${end}/${choice.paths.length}`),
+		);
 	return lines;
 }
 

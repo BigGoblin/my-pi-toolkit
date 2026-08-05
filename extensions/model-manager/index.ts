@@ -10,6 +10,7 @@ import {
 	userConfigPath,
 	type ResolvedNewConversationConfig,
 } from "./config.js";
+import { wantsNewConversationDefaults } from "./pending-new-conversation.js";
 import { registerThinkingCommand } from "./thinking-command.js";
 
 const CONVERSATION_ENTRY_TYPES = new Set([
@@ -24,6 +25,12 @@ function isFreshConversation(
 	ctx: ExtensionContext,
 ): boolean {
 	if (event.reason === "new") return true;
+	if (
+		event.reason === "resume" &&
+		wantsNewConversationDefaults(ctx.sessionManager.getEntries())
+	) {
+		return true;
+	}
 	if (event.reason !== "startup") return false;
 	return !ctx.sessionManager
 		.getEntries()

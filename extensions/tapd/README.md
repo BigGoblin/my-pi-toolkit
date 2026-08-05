@@ -28,7 +28,7 @@ TAPD 需求与缺陷工作流扩展。提供待办列表、会话关联、需求
 
 - `Ctrl+Shift+T`：打开 TAPD 待办。
 
-`/tapd` 的待办、类型筛选、关联会话、select 和 confirm 页面统一显示在当前 TUI 上方的居中 Overlay 中，与 Subagent 共用单层 Header/viewport/Footer shell（宽度 `92%`、最大高度 `88%`）。主表在 `<80`、`80–119`、`>=120` 列下依次显示紧凑、普通、完整字段；长待办、会话和路径历史使用围绕当前选择的 viewport，并显示 `start-end/total`。`↑/↓`、`PageUp/PageDown`、`Home/End` 导航；主表的操作提示（导航 · Enter 关联 · `/` 搜索 · Tab 切换 · `i` 迭代 · `t` 类型 · `o` 打开 · Esc/Ctrl+C 退出，窄屏自动缩减）统一显示在 Overlay 最底部 Footer 一行，不重复出现在面板内；会话 picker、select/confirm 对话框的操作提示同样显示在底部 Footer；`i` 键在“当前迭代/所有迭代”待办范围间切换。需求/Bug 和工作项类型使用 `[REQ]`、`[BUG]`、`[DEV]` 等稳定文本标签；`✓DES` 表示当前项目或关联会话目录中已经存在对应的 `design.md`，标记在每次打开待办时重新计算。新建关联会话时，“会话名称”默认使用 TAPD 标题，也可以在创建前编辑；创建后该名称会显示在 `/resume` 会话列表中。
+`/tapd` 的待办、类型筛选、关联会话、select 和 confirm 页面统一显示在当前 TUI 上方的居中 Overlay 中，与 Subagent 共用单层 Header/viewport/Footer shell（宽度 `92%`、最大高度 `88%`）。主表在 `<80`、`80–119`、`>=120` 列下依次显示紧凑、普通、完整字段；长待办、会话和路径历史使用围绕当前选择的 viewport，并显示 `start-end/total`。`↑/↓`、`PageUp/PageDown`、`Home/End` 导航；主表的操作提示（导航 · Enter 关联 · `/` 搜索 · Tab 切换 · `i` 迭代 · `t` 类型 · `o` 打开 · Esc/Ctrl+C 退出，窄屏自动缩减）统一显示在 Overlay 最底部 Footer 一行，不重复出现在面板内；会话 picker、select/confirm 对话框的操作提示同样显示在底部 Footer；`i` 键在“当前迭代/所有迭代”待办范围间切换。需求/Bug 和工作项类型使用 `[REQ]`、`[BUG]`、`[DEV]` 等稳定文本标签；`✓DES` 表示当前项目或关联会话目录中已经存在对应的 `design.md`，标记在每次打开待办时重新计算。新建关联会话时，“会话名称”默认使用 TAPD 标题，也可以在创建前编辑；创建后该名称会显示在 `/resume` 会话列表中。选中一个项目路径时，新会话直接在该目录中创建；多选路径时会追加一步工作目录选择；未选路径或所选路径等于当前目录时，行为与原先一致。切到未信任目录时 Pi 会弹出项目信任确认。跨目录创建的会话会写入 `model-manager-new-conversation` 标记 entry，让 model-manager 按新对话规则应用默认模型（普通 `/resume` 不受影响）。
 
 ## Story workflow
 
@@ -134,7 +134,7 @@ TAPD Open API 索引见 [`../../docs/tapd-api.md`](../../docs/tapd-api.md)。
 | --- | --- |
 | `index.ts` / `types.ts` | 扩展组装入口与跨领域共享类型 |
 | `core/` | 配置、HTTP 客户端、基础 TAPD API |
-| `sessions/` | TAPD 会话 custom entry 状态、事项→会话目录（catalog）、legacy `tapd-links.json` 幂等迁移、项目路径历史与会话文件删除 |
+| `sessions/` | TAPD 会话 custom entry 状态、事项→会话目录（catalog）、按目标目录创建/切换会话（`spawn.ts`）、项目路径历史与会话文件删除 |
 | `documents/` | analyze、design、collaboration 与 Bug 定位文档工作流，以及 Design 关键决策提问工具 |
 | `subtasks/` | 子需求解析、确认计划、TAPD 同步（`api-sync.ts`）与 append-only 状态更新（`state.ts`） |
 | `todo/` | 待办编排与 Overlay；`tree-list.ts`、`table-view.ts`、`session-picker*.ts` 分别负责树表、响应式主表和会话/路径 viewport |

@@ -90,7 +90,12 @@ export interface CreatedSubtask {
 	updatedAt?: string;
 }
 
-export type CreateDraft = { title: string; projectPaths: string[] };
+export type CreateDraft = {
+	title: string;
+	projectPaths: string[];
+	/** 新会话工作目录；未指定时使用当前会话 cwd。 */
+	workingDirectory?: string;
+};
 
 export type PickerAction =
 	| { type: "create"; draft: CreateDraft }

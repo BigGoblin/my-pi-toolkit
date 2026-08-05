@@ -63,6 +63,7 @@ export function beginCreate(
 	state.isCreating = true;
 	state.pendingDelete = null;
 	state.pendingDeletePath = null;
+	state.cwdChoice = null;
 	const currentPath = currentWorkingDirectory.trim();
 	if (currentPath) rememberProjectPaths([currentPath]);
 	state.pathHistory = loadPathHistory();
@@ -87,12 +88,44 @@ export function addProjectPath(
 
 export function createPickerAction(
 	state: SessionPickerViewState,
+	workingDirectory?: string,
 ): PickerAction {
 	const title = state.nameInput.getValue().trim() || state.itemName;
 	const pending = state.pathInput.getValue().trim();
 	const projectPaths = [...state.selectedPaths];
 	if (pending && !projectPaths.includes(pending)) projectPaths.push(pending);
-	return { type: "create", draft: { title, projectPaths } };
+	return {
+		type: "create",
+		draft: {
+			title,
+			projectPaths,
+			workingDirectory,
+		},
+	};
+}
+
+/** 多选路径时进入工作目录选择；否则直接返回 create action。 */
+export function submitCreate(
+	state: SessionPickerViewState,
+): PickerAction | "cwd-choice" {
+	const pending = state.pathInput.getValue().trim();
+	const projectPaths = [...state.selectedPaths];
+	if (pending && !projectPaths.includes(pending)) projectPaths.push(pending);
+	if (projectPaths.length > 1) {
+		beginCwdChoice(state, projectPaths);
+		return "cwd-choice";
+	}
+	return createPickerAction(
+		state,
+		projectPaths.length === 1 ? projectPaths[0] : undefined,
+	);
+}
+
+export function beginCwdChoice(
+	state: SessionPickerViewState,
+	paths: string[],
+): void {
+	state.cwdChoice = { paths, index: 0 };
 }
 
 export function toggleProjectPath(

@@ -1,23 +1,34 @@
-import { mkdirSync } from "node:fs";
-import { dirname } from "node:path";
-import type {
-	ExtensionCommandContext,
-	SessionManager,
-} from "@earendil-works/pi-coding-agent";
+import { mkdirSync, statSync } from "node:fs";
+import { dirname, resolve } from "node:path";
+import type { ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
 import { fetchBugDetail, fetchStoryDetail, htmlToText } from "../core/api.js";
 import { bugUrl, storyUrl } from "../todo/model.js";
 import { rememberProjectPaths } from "./storage.js";
 import { parseItemKey } from "./keys.js";
 import { getTapdDocPath } from "./docs.js";
-import {
-	TAPD_SESSION_STATE_TYPE,
-	type TapdSessionState,
-} from "./session-state.js";
+import type { TapdSessionState } from "./session-state.js";
+import { spawnTapdSession } from "./spawn.js";
 import {
 	buildBugContextPrompt,
 	buildUnderstandPrompt,
 } from "../documents/prompts.js";
 import type { CreateDraft, TapdConfig } from "../types.js";
+
+function resolveTargetCwd(
+	workingDirectory: string | undefined,
+	fallbackCwd: string,
+): string {
+	if (!workingDirectory?.trim()) return resolve(fallbackCwd);
+	const target = resolve(workingDirectory.trim());
+	let stats;
+	try {
+		stats = statSync(target);
+	} catch {
+		throw new Error(`工作目录不存在：${target}`);
+	}
+	if (!stats.isDirectory()) throw new Error(`工作目录不是目录：${target}`);
+	return target;
+}
 
 export async function createTapdSession(
 	ctx: ExtensionCommandContext,
@@ -31,6 +42,7 @@ export async function createTapdSession(
 	const itemId = parsed.itemId;
 	const { title, projectPaths } = draft;
 	rememberProjectPaths(projectPaths);
+	const targetCwd = resolveTargetCwd(draft.workingDirectory, ctx.cwd);
 
 	const url =
 		parsed.kind === "bug" ? bugUrl(wsId, itemId) : storyUrl(wsId, itemId);
@@ -59,7 +71,7 @@ export async function createTapdSession(
 		// Use the TAPD story ID as the stable directory name so renaming the
 		// requirement does not create a second document directory.
 		understandingFile = getTapdDocPath(
-			ctx.cwd,
+			targetCwd,
 			`story-${itemId}`,
 			"understanding.md",
 		);
@@ -88,25 +100,14 @@ export async function createTapdSession(
 		updatedAt: now,
 	};
 
-	const result = await ctx.newSession({
-		parentSession: undefined,
-		setup: async (sm: SessionManager) => {
-			sm.appendSessionInfo(title);
-			sm.appendCustomEntry(TAPD_SESSION_STATE_TYPE, state);
-			sm.appendMessage({
-				role: "user",
-				content: [{ type: "text", text: sessionPrompt }],
-				timestamp: Date.now(),
-			});
-		},
-		withSession: async (replacementCtx: ExtensionCommandContext) => {
-			replacementCtx.ui.notify(
-				parsed.kind === "bug"
-					? "Bug 会话已创建，输入 /tapd bug 获取完整缺陷信息并定位原因"
-					: "会话已创建，输入 /tapd analyze 开始需求理解",
-				"info",
-			);
-		},
+	await spawnTapdSession(ctx, {
+		title,
+		targetCwd,
+		state,
+		sessionPrompt,
+		notifyMessage:
+			parsed.kind === "bug"
+				? "Bug 会话已创建，输入 /tapd bug 获取完整缺陷信息并定位原因"
+				: "会话已创建，输入 /tapd analyze 开始需求理解",
 	});
-	if (result.cancelled) throw new Error("创建会话已取消");
 }
