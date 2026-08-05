@@ -10,11 +10,16 @@ import {
 	commitAll,
 	createBranch,
 	pushCurrentBranch,
-	readRepositoryRoot,
 	readRepositoryState,
 	refExists,
 } from "./repository.js";
 import { fetchCommitKeyword } from "./tapd-api.js";
+import {
+	migrateFromCurrentHead,
+	migrateViaStash,
+	migrateViaWipCommit,
+	promptBranchConflictResolution,
+} from "./branch-resolution.js";
 import type { GitCommandProgressReporter } from "./types.js";
 
 export async function describeGitStatus(
@@ -40,11 +45,16 @@ export async function runCreateBranch(
 	baseRef = DEFAULT_GIT_WORKFLOW_POLICY.baseRef,
 	reportProgress?: GitCommandProgressReporter,
 ): Promise<string> {
-	const total = 6;
+	const total = 7;
 	reportProgress?.({ step: 1, total, message: "正在读取关联 TAPD 事项" });
 	const object = currentTapdObject(ctx);
-	reportProgress?.({ step: 2, total, message: "正在定位 Git 仓库" });
-	const root = await readRepositoryRoot(ctx.cwd);
+	reportProgress?.({
+		step: 2,
+		total,
+		message: "正在定位 Git 仓库并检查工作区",
+	});
+	const repository = await readRepositoryState(ctx.cwd);
+	const root = repository.root;
 	reportProgress?.({ step: 3, total, message: `正在检查基础分支 ${baseRef}` });
 	if (!(await refExists(root, baseRef)))
 		throw new Error(`基础分支不存在: ${baseRef}`);
@@ -59,9 +69,49 @@ export async function runCreateBranch(
 	if (await refExists(root, `refs/heads/${branch}`))
 		throw new Error(`本地分支已存在: ${branch}`);
 
-	reportProgress?.({ step: 6, total, message: `正在创建分支 ${branch}` });
-	await createBranch(root, branch, baseRef);
-	return `已从 ${baseRef} 创建分支 ${branch}（未设置 upstream）`;
+	const currentBranch = repository.branch || "(detached)";
+	if (!repository.dirty) {
+		reportProgress?.({
+			step: 6,
+			total,
+			message: "工作区干净，无需迁移改动",
+		});
+		reportProgress?.({ step: 7, total, message: `正在创建分支 ${branch}` });
+		await createBranch(root, branch, baseRef);
+		return `已从 ${baseRef} 创建分支 ${branch}（未设置 upstream）`;
+	}
+
+	reportProgress?.({
+		step: 6,
+		total,
+		message: "工作区有未提交改动，等待选择迁移方式...",
+	});
+	const intent = await promptBranchConflictResolution(ctx, {
+		currentBranch,
+		targetBranch: branch,
+		baseRef,
+	});
+	if (intent === "cancel")
+		return `已取消：未创建分支 ${branch}，工作区改动保持不变`;
+	if (intent === "stash")
+		return migrateViaStash(
+			root,
+			currentBranch,
+			branch,
+			baseRef,
+			total,
+			reportProgress,
+		);
+	if (intent === "commit")
+		return migrateViaWipCommit(
+			root,
+			currentBranch,
+			branch,
+			baseRef,
+			total,
+			reportProgress,
+		);
+	return migrateFromCurrentHead(root, branch, baseRef, total, reportProgress);
 }
 
 async function commitWithHookBypassOption(

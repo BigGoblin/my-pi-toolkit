@@ -104,7 +104,13 @@ TAPD Open API 索引见 [`../../docs/tapd-api.md`](../../docs/tapd-api.md)。
 
 - `git-status`、`branch`、`commit`、`mr` 由 slash command handler 直接执行，不经过模型，也不会插入工具触发提示词。执行期间在 footer 显示当前阶段；完成或失败后在对话区追加一张使用共享工具视觉语言的结果卡片，保留提交哈希、MR URL、TAPD 流转结果或错误信息。
 - 默认从 `origin/dev` 创建 `bug/{short_id}` 或 `feature/{short_id}`，并使用 `--no-track`。
-- 工作区有未提交改动时会先弹出确认；确认后由 Git 尝试把当前改动带到从 `origin/dev` 创建的新分支。若与基础分支冲突，Git 会安全终止，不会自动 stash、丢弃改动或强制切换。
+- 工作区有未提交改动时，创建分支前会打开迁移方式选择器（标题显示当前分支、目标分支与基础分支）：
+  - **stash 后迁移（推荐）**：`git stash push --include-untracked` 保存全部改动（含未跟踪文件）→ 从 `--base` 创建目标分支 → `git stash pop` 恢复；
+  - **WIP commit 后迁移**：`git add --all` 并以 `chore: WIP before creating {目标分支}` 自动提交（正常执行 Git hooks，不自动 `--no-verify`）→ 从 `--base` 创建目标分支 → `git cherry-pick` 该 WIP commit；WIP commit 会保留在原分支；
+  - **从当前 HEAD 创建**：直接以当前 HEAD 创建目标分支并保留未提交改动，**不再基于 `--base` 指定的基础分支**；
+  - **取消**（Esc）：不执行 stash、commit 或分支创建，工作区保持不变。
+- 迁移失败不会强制回滚或丢弃改动：stash 成功但创建分支失败时改动保留在 stash，提示 stash ref 与 `git stash apply` 恢复命令；stash pop 冲突时停留在目标分支的冲突工作区，stash 条目未被删除时仍可在 `git stash list` 找到；cherry-pick 冲突时停留在标准 cherry-pick 冲突状态，提示 `git cherry-pick --continue` / `--abort`；WIP commit 成功但创建分支失败时 commit 保留在原分支，提示 commit hash。
+- 无交互界面（print/json 等）且工作区有未提交改动时直接报错，不会默认选择会改写 Git 状态的方案。
 - Bug 提交为 `fix: {KEYWORD}`；需求/任务提交为 `feat: {KEYWORD}`。KEYWORD 原样保留。
 - 没有 upstream 时首次推送使用 `git push -u origin HEAD`。
 - 提交默认使用当前操作系统 PATH 中的 `git`。仅当运行于 WSL，且 Git hook 因 Windows CRLF shebang 报出 `sh\\r: No such file or directory` 时，才自动改用 Windows `git.exe` 重试；重试成功后将仓库记录在 `~/.pi/agent/tapd-git-runtime.json`，该仓库后续在 WSL 中提交时直接使用 Windows Git。原生 Windows、Linux 和 macOS 环境始终使用各自 PATH 中的 `git`。可用 `TAPD_WINDOWS_GIT_PATH` 指定 WSL 可执行的 `git.exe` 完整路径。
@@ -119,7 +125,7 @@ TAPD Open API 索引见 [`../../docs/tapd-api.md`](../../docs/tapd-api.md)。
 - 引入 commit 经验证后，会拉取远端 tags，优先取直接指向 commit 的第一个 tag，否则取第一个包含该 commit 的 tag。
 - 合入版本从 TAPD `/bugs/get_fields_info` 的“合入版本”候选值中选择。普通版本精确匹配；`.0` 等存在多个迭代候选时，根据引入 commit 中 TAPD keyword 关联事项的迭代唯一匹配；关联事项没有迭代时会列出候选值让用户手动选择。
 - tag 在候选值中完全不存在时，按规则选择候选值中的 `其他(历史缺陷)`；若该选项也不存在则不修改合入版本。
-- 工作流不会修改 git config，不会自动 stash、hard reset 或 force-push。
+- 工作流不会修改 git config，不会 hard reset、clean、force switch 或 force-push；stash、WIP commit 与 cherry-pick 仅在用户明确选择后执行。
 
 ## Modules
 

@@ -117,6 +117,24 @@ export async function createBranch(
 	await git(cwd, ["switch", "--create", branch, "--no-track", baseRef]);
 }
 
+export async function createBranchFromHead(cwd: string, branch: string) {
+	await git(cwd, ["switch", "--create", branch, "--no-track"]);
+}
+
+export async function stashAll(cwd: string, message: string): Promise<string> {
+	await git(cwd, ["stash", "push", "--include-untracked", "-m", message]);
+	// 新建的 stash 始终是 stash@{0}；pop/apply 需要 stash 引用而非裸 hash。
+	return "stash@{0}";
+}
+
+export async function popStash(cwd: string, stashRef: string) {
+	await git(cwd, ["stash", "pop", stashRef]);
+}
+
+export async function cherryPick(cwd: string, commit: string) {
+	await git(cwd, ["cherry-pick", commit]);
+}
+
 export async function commitAll(
 	cwd: string,
 	subject: string,
