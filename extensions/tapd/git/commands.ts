@@ -187,6 +187,7 @@ export async function runTapdGitCommand(
 			result = await describeGitStatus(ctx);
 		} else if (command === "branch") {
 			result = await runCreateBranch(
+				pi,
 				ctx,
 				config,
 				optionValue(args, "--base"),

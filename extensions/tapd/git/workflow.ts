@@ -1,4 +1,7 @@
-import type { ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
+import type {
+	ExtensionAPI,
+	ExtensionCommandContext,
+} from "@earendil-works/pi-coding-agent";
 import type { TapdConfig } from "../types.js";
 import { currentTapdObject, parseKeyword } from "./context.js";
 import {
@@ -9,11 +12,13 @@ import {
 import {
 	commitAll,
 	createBranch,
+	git,
 	pushCurrentBranch,
 	readRepositoryState,
 	refExists,
 } from "./repository.js";
 import { fetchCommitKeyword } from "./tapd-api.js";
+import { syncSessionBinding } from "./session-binding.js";
 import {
 	migrateFromCurrentHead,
 	migrateViaStash,
@@ -40,12 +45,13 @@ export async function describeGitStatus(
 }
 
 export async function runCreateBranch(
+	pi: ExtensionAPI,
 	ctx: ExtensionCommandContext,
 	config: TapdConfig,
 	baseRef = DEFAULT_GIT_WORKFLOW_POLICY.baseRef,
 	reportProgress?: GitCommandProgressReporter,
 ): Promise<string> {
-	const total = 7;
+	const total = 8;
 	reportProgress?.({ step: 1, total, message: "正在读取关联 TAPD 事项" });
 	const object = currentTapdObject(ctx);
 	reportProgress?.({
@@ -70,6 +76,7 @@ export async function runCreateBranch(
 		throw new Error(`本地分支已存在: ${branch}`);
 
 	const currentBranch = repository.branch || "(detached)";
+	let result: string;
 	if (!repository.dirty) {
 		reportProgress?.({
 			step: 6,
@@ -78,40 +85,59 @@ export async function runCreateBranch(
 		});
 		reportProgress?.({ step: 7, total, message: `正在创建分支 ${branch}` });
 		await createBranch(root, branch, baseRef);
-		return `已从 ${baseRef} 创建分支 ${branch}（未设置 upstream）`;
+		result = `已从 ${baseRef} 创建分支 ${branch}（未设置 upstream）`;
+	} else {
+		reportProgress?.({
+			step: 6,
+			total,
+			message: "工作区有未提交改动，等待选择迁移方式...",
+		});
+		const intent = await promptBranchConflictResolution(ctx, {
+			currentBranch,
+			targetBranch: branch,
+			baseRef,
+		});
+		if (intent === "cancel")
+			return `已取消：未创建分支 ${branch}，工作区改动保持不变`;
+		if (intent === "stash")
+			result = await migrateViaStash(
+				root,
+				currentBranch,
+				branch,
+				baseRef,
+				total,
+				reportProgress,
+			);
+		else if (intent === "commit")
+			result = await migrateViaWipCommit(
+				root,
+				currentBranch,
+				branch,
+				baseRef,
+				total,
+				reportProgress,
+			);
+		else
+			result = await migrateFromCurrentHead(
+				root,
+				branch,
+				baseRef,
+				total,
+				reportProgress,
+			);
 	}
 
-	reportProgress?.({
-		step: 6,
-		total,
-		message: "工作区有未提交改动，等待选择迁移方式...",
-	});
-	const intent = await promptBranchConflictResolution(ctx, {
-		currentBranch,
-		targetBranch: branch,
-		baseRef,
-	});
-	if (intent === "cancel")
-		return `已取消：未创建分支 ${branch}，工作区改动保持不变`;
-	if (intent === "stash")
-		return migrateViaStash(
-			root,
-			currentBranch,
-			branch,
-			baseRef,
+	reportProgress?.({ step: 8, total, message: "正在同步会话绑定分支..." });
+	const head = await git(root, ["rev-parse", "--short", "HEAD"]);
+	if (await syncSessionBinding(pi, ctx, { repoRoot: root, branch, head })) {
+		reportProgress?.({
+			step: 8,
 			total,
-			reportProgress,
-		);
-	if (intent === "commit")
-		return migrateViaWipCommit(
-			root,
-			currentBranch,
-			branch,
-			baseRef,
-			total,
-			reportProgress,
-		);
-	return migrateFromCurrentHead(root, branch, baseRef, total, reportProgress);
+			message: `会话绑定已切换为 ${branch}`,
+		});
+		return `${result}；会话绑定已切换为 ${branch}`;
+	}
+	return result;
 }
 
 async function commitWithHookBypassOption(
