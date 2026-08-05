@@ -80,6 +80,8 @@ TUI 中 Plan 正文和审批选择分开显示：先在 Grok 风格的 `PLAN REV
 
 生命周期通过 session custom entry 保存，并按当前 session branch 恢复。
 
+TAPD 的 `/tapd analyze`、`/tapd design`、`/tapd collaboration` 会写入 `chat-mode-ensure-ask-for-docs` 标记；本扩展在 `before_agent_start` 检测到尚未被助手回复消费的该标记时，若当前不是 Ask 则切到 Ask，以便写入项目 `.pi/docs/**`（Plan 仅允许 session `plan.md`，二者冲突）。
+
 ## Ask
 
 Ask 用于问答、解释、诊断和只读调研：
@@ -87,7 +89,7 @@ Ask 用于问答、解释、诊断和只读调研：
 - 只启用登记的只读工具及受路径保护的 `write` / `edit`。
 - `write` / `edit` 只能修改当前项目 `.pi/**`。
 - 禁止 bash、AST 替换及未登记工具。
-- 可调用 `enter_plan_mode` 升级到规划阶段。
+- 可调用 `enter_plan_mode` 升级到规划阶段（TAPD 文档工作流的 prompt 会明确禁止该调用）。
 - Footer 显示主题 success 色的 `● ASK`。
 
 ## 安全边界

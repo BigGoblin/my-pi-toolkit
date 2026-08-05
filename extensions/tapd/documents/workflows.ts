@@ -2,11 +2,19 @@ import type {
 	ExtensionAPI,
 	ExtensionCommandContext,
 } from "@earendil-works/pi-coding-agent";
+import { ENSURE_ASK_FOR_DOCS_ENTRY } from "../../chat-mode/ensure-ask-for-docs.js";
 import { fetchBugDetail, htmlToText } from "../core/api.js";
 import { bugUrl } from "../todo/model.js";
 import { buildBugLocatePrompt } from "./prompts.js";
 import { readTapdSessionState } from "../sessions/session-state.js";
 import type { TapdConfig } from "../types.js";
+
+const DOCS_WORKFLOW_MODE_RULES = [
+	"",
+	"## 模式约束",
+	"不要调用 enter_plan_mode，也不要写入或编辑 session 的 plan.md。",
+	"只将文档写入上文指定的 .pi/docs 路径（及同目录约定文档）；不要修改业务代码。",
+].join("\n");
 
 export async function sendTapdWorkflowPrompt(
 	pi: ExtensionAPI,
@@ -25,14 +33,18 @@ export async function sendTapdWorkflowPrompt(
 		return;
 	}
 
+	// 请求 chat-mode 在本轮 agent 启动前切到 Ask（可写 .pi/docs，避免 Plan 拦 design.md）。
+	pi.appendEntry(ENSURE_ASK_FOR_DOCS_ENTRY, { version: 1 });
+
 	// This command is registered by the extension instance bound to the current
 	// session, so use its current pi. Never retain the ReplacedSessionContext
 	// from the newSession() callback for a later command invocation.
 	const extra = additionalInstructions?.trim();
+	const body = `${prompt}${DOCS_WORKFLOW_MODE_RULES}`;
 	pi.sendUserMessage(
 		extra
-			? `${prompt}\n\n## 用户补充要求与参考资料\n\n${extra}\n\n请将以上补充要求和 @ 引用文件一并纳入本次任务。`
-			: prompt,
+			? `${body}\n\n## 用户补充要求与参考资料\n\n${extra}\n\n请将以上补充要求和 @ 引用文件一并纳入本次任务。`
+			: body,
 	);
 }
 

@@ -44,6 +44,7 @@ TAPD 需求与缺陷工作流扩展。提供待办列表、会话关联、需求
 ```
 
 - `/tapd design` 会先读取需求理解、检查相关代码，再识别影响范围、架构、兼容性、接口契约或验收标准的关键待确认决策。存在待确认项时，Agent 使用通用的 `ask_user_choice` 逐项提问：提供 2～5 个候选方案，可标记一个推荐项，最后固定提供“其他（自定义输入）”；用户取消时停止流程且不创建或覆盖 `design.md`。没有关键待确认项时直接生成设计。
+- `/tapd analyze`、`/tapd design`、`/tapd collaboration` 启动时会写入 `chat-mode-ensure-ask-for-docs` 标记，由 chat-mode 在本轮 Agent 启动前切到 Ask（可写项目 `.pi/**`，避免 Plan 只能写 session `plan.md` 导致 `design.md` 落错位置）。prompt 同时禁止调用 `enter_plan_mode`。
 - 开发任务拆分来源：`design.md`。
 - 设计子需求描述来源：`collaboration.md`。
 - 协作文档会包含 Design 方案 Mermaid 图，核对实际代码并列出关键函数或组件签名、出入参及相关接口信息；不再生成独立的“前后端协作点”和“评审与验收”章节。

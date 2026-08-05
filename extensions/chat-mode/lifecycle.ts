@@ -27,6 +27,7 @@ import {
 	sessionPlanFile,
 	type SessionPlanFile,
 } from "./plan-file.js";
+import { wantsAskModeForDocs } from "./ensure-ask-for-docs.js";
 import { checkAskToolCall, checkPlanToolCall } from "./policy.js";
 import {
 	ASK_MODE_PROMPT,
@@ -147,7 +148,15 @@ function createSessionCompactHandler(options: ChatModeLifecycleOptions) {
 }
 
 function createBeforeAgentStartHandler(options: ChatModeLifecycleOptions) {
-	return async (event: BeforeAgentStartEvent, _ctx: ExtensionContext) => {
+	return async (event: BeforeAgentStartEvent, ctx: ExtensionContext) => {
+		// TAPD 文档流：Plan 只能写 session plan.md，与 .pi/docs 冲突，强制 Ask。
+		if (
+			wantsAskModeForDocs(ctx.sessionManager.getEntries()) &&
+			getChatMode() !== "ask"
+		) {
+			options.modeController.switchMode("ask", ctx);
+		}
+
 		const mode = getChatMode();
 		const kind = takePlanReminder(mode === "plan");
 		const plan = options.getPlan();
