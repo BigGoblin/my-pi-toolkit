@@ -16,7 +16,11 @@ export class TapdOverlayFrame implements Component, Focusable {
 	focused = false;
 
 	constructor(
-		private readonly content: Component & { dispose?(): void },
+		private readonly content: Component & {
+			dispose?(): void;
+			/** 自定义底部提示（传入 body 内宽）；不提供时回退到 keybindings 的 Esc back · Ctrl+C close。 */
+			footer?(width: number): string;
+		},
 		private readonly theme: Theme,
 		private readonly tui: TUI,
 		private readonly keybindings: KeybindingsManager,
@@ -37,10 +41,13 @@ export class TapdOverlayFrame implements Component, Focusable {
 		const close = cancelKeys[1]
 			? rawKeyHint(cancelKeys[1], "close")
 			: "Ctrl+C close";
+		const footer = this.content.footer
+			? this.content.footer(innerWidth)
+			: `${back} · ${close}`;
 		return renderOverlayShell(this.theme, width, {
 			header: `${this.theme.bold(this.theme.fg("text", "TAPD"))}  ${this.theme.fg("muted", "TODO & SESSIONS")}`,
 			body,
-			footer: this.theme.fg("dim", `${back} · ${close}`),
+			footer: this.theme.fg("dim", footer),
 		});
 	}
 

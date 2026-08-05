@@ -67,13 +67,11 @@ export function renderSessionPicker(
 				theme.bold(`确认删除「${state.pendingDelete.title || "会话"}」？`),
 			),
 		);
-		lines.push(theme.fg("dim", "Enter 确认 · Esc/Ctrl+C 取消"));
 		return lines;
 	}
 	if (state.pendingDeletePath) {
 		lines.push("", theme.fg("error", theme.bold("确认从历史中删除该路径？")));
 		lines.push(clipped(theme, `  ${state.pendingDeletePath}`, width));
-		lines.push(theme.fg("dim", "Enter 确认 · Esc/Ctrl+C 取消"));
 		return lines;
 	}
 	if (state.isCreating)
@@ -93,16 +91,6 @@ export function renderSessionPicker(
 	}
 	if (state.options.length > viewport)
 		lines.push(theme.fg("dim", `${start + 1}-${end}/${state.options.length}`));
-	lines.push(
-		theme.fg(
-			"dim",
-			truncateToWidth(
-				"↑↓/PgUp/PgDn/Home/End 选择 · Enter 打开 · Ctrl+D 删除 · Esc/Ctrl+C 返回",
-				width,
-				UI_GLYPHS.more,
-			),
-		),
-	);
 	return lines;
 }
 
@@ -170,16 +158,6 @@ function renderCreate(
 			`${submitMarker} [NEW] 创建会话`,
 			width,
 			state.focus === submitFocus,
-		),
-	);
-	lines.push(
-		theme.fg(
-			"dim",
-			truncateToWidth(
-				"↑↓/PgUp/PgDn/Home/End 切换 · Enter 确认 · Esc 返回 · Ctrl+C 退出",
-				width,
-				UI_GLYPHS.more,
-			),
 		),
 	);
 	return lines;

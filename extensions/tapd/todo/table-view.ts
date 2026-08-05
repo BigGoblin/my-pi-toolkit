@@ -104,7 +104,7 @@ class TableView {
 		this.shownCount = config.total;
 		this.tree = new TreeList(config.designed);
 		const bodyRows = overlayViewportHeight(this.tui.terminal.rows);
-		this.tree.setMaxVisible(Math.max(3, Math.min(26, bodyRows - 6)));
+		this.tree.setMaxVisible(Math.max(3, Math.min(26, bodyRows - 5)));
 		this.tree.setRoots(this.filteredForest());
 		this.tree.onCancel = () => this.done(null);
 		this.searchInput.onEscape = () => {
@@ -170,6 +170,25 @@ class TableView {
 	}
 
 	invalidate(): void {}
+
+	/** 底部 Footer 提示：与 TapdOverlayFrame 的 content.footer 约定对应。 */
+	footer(width: number): string {
+		if (this.choosingType)
+			return "↑↓/PgUp/PgDn/Home/End 选择 · Enter 应用 · Esc 返回";
+		if (this.focusSearch)
+			return "输入过滤 · ↑↓/PgUp/PgDn 导航 · Enter 关联 · Esc 清除 · Ctrl+C 退出";
+		// fitLine 从尾部截断：按宽度分档，保证 Esc/Ctrl+C 始终完整可见。
+		const typeHint = this.config.kind === "story" ? " · t 类型" : "";
+		if (width < 60)
+			return "↑↓/PgUp/PgDn 导航 · Enter 关联 · / 搜索 · Esc/Ctrl+C";
+		if (width < 68)
+			return "↑↓/PgUp/PgDn 导航 · Enter 关联 · / 搜索 · i 迭代 · Esc/Ctrl+C";
+		if (width < 86)
+			return "↑↓/PgUp/PgDn 导航 · Enter 关联 · / 搜索 · i 迭代 · o 打开 · Esc/Ctrl+C";
+		if (width < 100)
+			return `↑↓/PgUp/PgDn 导航 · Enter 关联 · / 搜索 · Tab 切换 · i 迭代${typeHint} · o 打开 · Esc/Ctrl+C`;
+		return `↑↓/PgUp/PgDn/Home/End 导航 · Enter 关联 · / 搜索 · Tab 切换 · i 迭代${typeHint} · o 打开 · Esc/Ctrl+C 退出`;
+	}
 
 	handleInput(data: string): void {
 		if (this.choosingType) return this.handleTypeInput(data);

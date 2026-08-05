@@ -8,7 +8,7 @@ import {
 import { overlayViewportHeight } from "../../shared/tui/overlay-shell.js";
 import { statusGlyph, UI_GLYPHS } from "../../shared/tui/visual-language.js";
 import type { TapdItemKind } from "../types.js";
-import { oneLine, padR } from "./model.js";
+import { padR } from "./model.js";
 import {
 	TABLE_TITLE_PREFIX_WIDTH,
 	tableColumns,
@@ -97,9 +97,6 @@ function renderTypes(options: TableRendererOptions): string[] {
 		lines.push(
 			theme.fg("dim", `${start + 1}-${end}/${config.typeOptions.length}`),
 		);
-	lines.push(
-		theme.fg("dim", "↑↓/PgUp/PgDn/Home/End 选择 · Enter 应用 · Esc 返回"),
-	);
 	return lines.map((line) => truncateToWidth(line, Math.max(1, width), ""));
 }
 
@@ -130,24 +127,6 @@ function renderTable(options: TableRendererOptions): string[] {
 		);
 	lines.push(columnHeader(theme, width, config.kind));
 	lines.push(...tree.render(width, theme));
-	if (config.kind === "bug" && width >= 80) {
-		const selected = tree.getSelectedItem();
-		if (selected)
-			lines.push(
-				theme.fg(
-					"muted",
-					truncateToWidth(
-						`当前 Bug: ${oneLine(selected.name)}`,
-						width,
-						UI_GLYPHS.more,
-					),
-				),
-			);
-	}
-	const hint = state.focusSearch
-		? "输入过滤 · ↑↓/PgUp/PgDn 导航 · Enter 关联 · Esc 清除 · Ctrl+C 退出"
-		: "↑↓/PgUp/PgDn/Home/End 导航 · Enter 关联 · Esc/Ctrl+C 退出 · / 搜索 · Tab 切换";
-	lines.push(theme.fg("dim", truncateToWidth(hint, width, UI_GLYPHS.more)));
 	return lines;
 }
 

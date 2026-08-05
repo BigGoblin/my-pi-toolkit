@@ -138,6 +138,19 @@ class SessionPicker {
 		);
 	}
 
+	/** 底部 Footer 提示：与 TapdOverlayFrame 的 content.footer 约定对应。 */
+	footer(width: number): string {
+		if (this.state.pendingDelete || this.state.pendingDeletePath)
+			return "Enter 确认 · Esc/Ctrl+C 取消";
+		if (this.state.isCreating) {
+			if (width < 64)
+				return "↑↓/PgUp/PgDn 切换 · Enter 确认 · Esc 返回 · Ctrl+C";
+			return "↑↓/PgUp/PgDn/Home/End 切换 · Enter 确认 · Esc 返回 · Ctrl+C 退出";
+		}
+		if (width < 71) return "↑↓/PgUp/PgDn 选择 · Enter 打开 · Esc/Ctrl+C";
+		return "↑↓/PgUp/PgDn/Home/End 选择 · Enter 打开 · Ctrl+D 删除 · Esc/Ctrl+C 返回";
+	}
+
 	invalidate(): void {}
 
 	handleInput(data: string): void {

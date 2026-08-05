@@ -48,14 +48,12 @@ export async function showOverlaySelect(
 			list.onCancel = () => done(undefined);
 			container.addChild(new Text(theme.bold(theme.fg("text", title)), 1, 0));
 			container.addChild(list);
-			container.addChild(
-				new Text(theme.fg("dim", "↑↓ select · Enter confirm · Esc back"), 1, 0),
-			);
 			return new TapdOverlayFrame(
 				{
 					render: (width: number) => container.render(width),
 					handleInput: (data: string) => list.handleInput(data),
 					invalidate: () => container.invalidate(),
+					footer: () => "↑↓ select · Enter confirm · Esc back",
 				},
 				theme,
 				tui,
@@ -92,7 +90,6 @@ export async function showOverlayConfirm(
 						),
 						"",
 						`${confirm}    ${cancel}`,
-						theme.fg("dim", "←→ select · Enter confirm · Esc cancel"),
 					];
 				},
 				handleInput(data: string) {
@@ -109,6 +106,7 @@ export async function showOverlayConfirm(
 						done(selected === 0 ? "confirm" : "cancel");
 				},
 				invalidate() {},
+				footer: () => "←→ select · Enter confirm · Esc cancel",
 			};
 			return new TapdOverlayFrame(content, theme, tui, keybindings);
 		},

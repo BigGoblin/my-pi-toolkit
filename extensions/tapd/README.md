@@ -28,7 +28,7 @@ TAPD 需求与缺陷工作流扩展。提供待办列表、会话关联、需求
 
 - `Ctrl+Shift+T`：打开 TAPD 待办。
 
-`/tapd` 的待办、类型筛选、关联会话、select 和 confirm 页面统一显示在当前 TUI 上方的居中 Overlay 中，与 Subagent 共用单层 Header/viewport/Footer shell（宽度 `92%`、最大高度 `88%`）。主表在 `<80`、`80–119`、`>=120` 列下依次显示紧凑、普通、完整字段；长待办、会话和路径历史使用围绕当前选择的 viewport，并显示 `start-end/total`。`↑/↓`、`PageUp/PageDown`、`Home/End` 导航，`Esc` 返回、`Ctrl+C` 退出，页面 Footer 始终保留关闭提示。需求/Bug 和工作项类型使用 `[REQ]`、`[BUG]`、`[DEV]` 等稳定文本标签；`✓DES` 表示当前项目或关联会话目录中已经存在对应的 `design.md`，标记在每次打开待办时重新计算。新建关联会话时，“会话名称”默认使用 TAPD 标题，也可以在创建前编辑；创建后该名称会显示在 `/resume` 会话列表中。
+`/tapd` 的待办、类型筛选、关联会话、select 和 confirm 页面统一显示在当前 TUI 上方的居中 Overlay 中，与 Subagent 共用单层 Header/viewport/Footer shell（宽度 `92%`、最大高度 `88%`）。主表在 `<80`、`80–119`、`>=120` 列下依次显示紧凑、普通、完整字段；长待办、会话和路径历史使用围绕当前选择的 viewport，并显示 `start-end/total`。`↑/↓`、`PageUp/PageDown`、`Home/End` 导航；主表的操作提示（导航 · Enter 关联 · `/` 搜索 · Tab 切换 · `i` 迭代 · `t` 类型 · `o` 打开 · Esc/Ctrl+C 退出，窄屏自动缩减）统一显示在 Overlay 最底部 Footer 一行，不重复出现在面板内；会话 picker、select/confirm 对话框的操作提示同样显示在底部 Footer；`i` 键在“当前迭代/所有迭代”待办范围间切换。需求/Bug 和工作项类型使用 `[REQ]`、`[BUG]`、`[DEV]` 等稳定文本标签；`✓DES` 表示当前项目或关联会话目录中已经存在对应的 `design.md`，标记在每次打开待办时重新计算。新建关联会话时，“会话名称”默认使用 TAPD 标题，也可以在创建前编辑；创建后该名称会显示在 `/resume` 会话列表中。
 
 ## Story workflow
 
