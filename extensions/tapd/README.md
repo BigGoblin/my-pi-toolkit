@@ -13,10 +13,10 @@ TAPD 需求与缺陷工作流扩展。提供待办列表、会话关联、需求
 | `/tapd review [--base origin/dev] [补充要求]` | 启动只读子代理，根据需求和设计审核当前分支与工作区代码，并将分级报告返回主 Agent |
 | `/tapd sub-task` | 根据 `design.md` 创建或同步设计、开发子需求 |
 | `/tapd bug` | 获取当前 Bug 完整信息并让 Agent 定位代码原因 |
-| `/tapd git-status` | 查看当前会话关联事项、Git 分支、upstream 与工作区状态 |
-| `/tapd branch [--base origin/dev]` | 获取 TAPD keyword，并从指定基础分支创建关联分支；关联事项、仓库检查、TAPD 请求和分支创建阶段会实时显示进度 |
-| `/tapd commit [--no-push]` | 使用 TAPD keyword 生成提交信息，提交并默认推送；仓库检查、TAPD 请求、暂存、commit 和 push 阶段会实时显示在对话中 |
-| `/tapd mr [--draft] [--target dev] [--no-delete-source-branch]` | 创建或更新 GitLab MR；`--draft` 保持 Draft 状态并流转当前用户负责的开发子需求，普通执行会将 MR 更新为 Ready 并按完整规则回写 TAPD |
+| `/tapd git-status` | 直接执行 TAPD Git 工作流，并用对话区工具风格卡片显示关联事项、分支、upstream 与工作区状态 |
+| `/tapd branch [--base origin/dev]` | 直接获取 TAPD keyword 并从指定基础分支创建关联分支；结果显示为对话区工具风格卡片 |
+| `/tapd commit [--no-push]` | 直接使用 TAPD keyword 生成提交信息，提交并默认推送；结果显示为对话区工具风格卡片 |
+| `/tapd mr [--draft] [--target dev] [--no-delete-source-branch]` | 直接创建或更新 GitLab MR 并回写 TAPD；结果显示为对话区工具风格卡片 |
 
 工作流命令支持附加自然语言和 `@文件`：
 
@@ -84,7 +84,7 @@ TAPD 会话关联保存在 Pi session 自身的 custom entry（`tapd-session-lin
   "baseUrl": "可选的 TAPD API Base URL",
   "review": {
     "model": "可选；例如 lumilegend/gpt-5.6-sol:max；默认继承主 Agent 当前模型",
-    "presentation": "可选；manual、auto、inline、split 或 tab；默认 manual"
+    "presentation": "兼容保留；Review 固定使用 manual RPC，以接入子 Agent 状态栏、Overlay 和 /subagents"
   },
   "gitlab": {
     "token": "可选；也可使用 GITLAB_PERSONAL_ACCESS_TOKEN",
@@ -97,7 +97,8 @@ TAPD Open API 索引见 [`../../docs/tapd-api.md`](../../docs/tapd-api.md)。
 
 ## Git workflow
 
-- 默认从 `origin/dev` 创建 `bug/{short_id}` 或 `feature/{short_id}`，并使用 `--no-track`；执行期间会在编辑器上方显示原地更新的阶段进度，结束后清除进度并在对话中保留结果。
+- `git-status`、`branch`、`commit`、`mr` 由 slash command handler 直接执行，不经过模型，也不会插入工具触发提示词。执行期间在 footer 显示当前阶段；完成或失败后在对话区追加一张使用共享工具视觉语言的结果卡片，保留提交哈希、MR URL、TAPD 流转结果或错误信息。
+- 默认从 `origin/dev` 创建 `bug/{short_id}` 或 `feature/{short_id}`，并使用 `--no-track`。
 - 工作区有未提交改动时会先弹出确认；确认后由 Git 尝试把当前改动带到从 `origin/dev` 创建的新分支。若与基础分支冲突，Git 会安全终止，不会自动 stash、丢弃改动或强制切换。
 - Bug 提交为 `fix: {KEYWORD}`；需求/任务提交为 `feat: {KEYWORD}`。KEYWORD 原样保留。
 - 没有 upstream 时首次推送使用 `git push -u origin HEAD`。

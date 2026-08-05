@@ -27,12 +27,13 @@ import {
 	updateStoryForMergeRequest,
 } from "./story-workflow.js";
 import { fetchTaskEstimatedEffort, updateTapdStatus } from "./tapd-api.js";
+import type { GitCommandProgressReporter } from "./types.js";
 
 interface MergeRequestOptions {
 	targetBranch?: string;
 	removeSourceBranch?: boolean;
 	draft?: boolean;
-	reportProgress?: (content: string) => void;
+	reportProgress?: GitCommandProgressReporter;
 }
 
 export async function runMergeRequest(
@@ -47,14 +48,20 @@ export async function runMergeRequest(
 		draft = false,
 		reportProgress,
 	} = options;
-	reportProgress?.("[1/5] 正在检查 Git 仓库、当前分支和 upstream...");
+	reportProgress?.({
+		step: 1,
+		total: 5,
+		message: "正在检查 Git 仓库、当前分支和 upstream...",
+	});
 	const repository = await readRepositoryState(ctx.cwd);
 	if (repository.dirty) throw new Error("创建 MR 前请先提交工作区改动");
 	if (!repository.branch || !repository.upstream)
 		throw new Error("当前分支尚未推送并设置 upstream");
-	reportProgress?.(
-		`[2/5] 正在扫描当前分支相对 origin/${targetBranch} 的提交和 TAPD keyword...`,
-	);
+	reportProgress?.({
+		step: 2,
+		total: 5,
+		message: `正在扫描当前分支相对 origin/${targetBranch} 的提交和 TAPD keyword...`,
+	});
 	const commits = await scanLinkedCommits(repository.root, targetBranch);
 	if (commits.length === 0)
 		throw new Error(`当前分支相对 origin/${targetBranch} 没有提交`);
@@ -79,9 +86,11 @@ export async function runMergeRequest(
 				bugDrafts.set(bug.shortId, savedDraft);
 				continue;
 			}
-			reportProgress?.(
-				`[Bug 分析] ${bug.shortId}: 正在生成引入 commit 候选，随后交给 Agent 分析根因...`,
-			);
+			reportProgress?.({
+				step: 2,
+				total: 5,
+				message: `Bug ${bug.shortId}: 正在生成引入 commit 候选，随后交给 Agent 分析根因...`,
+			});
 			const candidate = await selectIntroducedCommitCandidate(
 				ctx,
 				repository.root,
@@ -115,13 +124,15 @@ export async function runMergeRequest(
 	const kinds = new Set(objects.map((item) => item.kind));
 	const labelKey = kinds.size > 1 ? "mixed" : objects[0].kind;
 	const labels = DEFAULT_GIT_WORKFLOW_POLICY.labels[labelKey];
-	const title = commits[commits.length - 1]?.subject;
+	const title = commits.slice(-1)[0]?.subject;
 	if (!title) throw new Error("无法从提交记录生成 MR 标题");
-	reportProgress?.(
-		draft
-			? "[3/5] 已生成草稿 MR 预览，等待确认..."
-			: "[3/5] 已生成 MR 与 TAPD 更新预览，等待确认...",
-	);
+	reportProgress?.({
+		step: 3,
+		total: 5,
+		message: draft
+			? "已生成草稿 MR 预览，等待确认..."
+			: "已生成 MR 与 TAPD 更新预览，等待确认...",
+	});
 	const confirmed = await ctx.ui.confirm(
 		draft ? "草稿 MR 预览" : "MR 与 TAPD 更新预览",
 		[
@@ -136,7 +147,11 @@ export async function runMergeRequest(
 		].join("\n"),
 	);
 	if (!confirmed) throw new Error("用户取消 MR 工作流");
-	reportProgress?.("[4/5] 正在调用 GitLab API 创建或更新 Merge Request...");
+	reportProgress?.({
+		step: 4,
+		total: 5,
+		message: "正在调用 GitLab API 创建或更新 Merge Request...",
+	});
 	const mr = await createOrUpdateMergeRequest(
 		parseGitLabProject(repository.originUrl, config.gitlab),
 		token,
@@ -154,9 +169,12 @@ export async function runMergeRequest(
 	for (let index = 0; index < objects.length; index += 1) {
 		const item = objects[index];
 		const itemProgress = (action: string) =>
-			reportProgress?.(
-				`[5/5 · ${index + 1}/${objects.length}] ${item.kind}/${item.shortId}: ${action}`,
-			);
+			reportProgress?.({
+				step: 5,
+				total: 5,
+				message: `${item.kind}/${item.shortId}: ${action}`,
+				detail: `TAPD ${index + 1}/${objects.length}`,
+			});
 		if (draft) {
 			if (item.kind === "story") {
 				updates.push(

@@ -21,13 +21,17 @@ import {
 	locateTapdBug,
 	sendTapdWorkflowPrompt,
 } from "./documents/workflows.js";
-import { runTapdGitCommand } from "./git/commands.js";
+import {
+	registerTapdGitMessageRenderer,
+	runTapdGitCommand,
+} from "./git/commands.js";
 import { requestTapdReview } from "./review/command.js";
 import { registerTapdReviewTool } from "./review/tool.js";
 
 export default function tapdExtension(pi: ExtensionAPI) {
 	const STATE_KEY = "tapd-view-state";
 	registerTapdReviewTool(pi);
+	registerTapdGitMessageRenderer(pi);
 
 	pi.registerCommand("tapd", {
 		description: "查看 TAPD 待办；生成需求文档或审核需求实现代码",

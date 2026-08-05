@@ -118,7 +118,9 @@ export async function runReviewSubagent(options: {
 			? [CURSOR_PROVIDER_EXTENSION]
 			: [],
 		artifactFiles: options.artifactFiles,
-		presentation: options.presentation,
+		// TAPD Review must use the persistent RPC path so the shared subagent
+		// registry, footer count, overlay, and /subagents all observe the run.
+		presentation: "manual",
 		parentSessionId: options.parentSessionId,
 		signal: options.signal,
 		onUpdate: ({ toolCalls }) => {

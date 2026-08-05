@@ -42,16 +42,21 @@ export function requestTapdReview(
 		ctx.ui.notify(message, "error");
 		return;
 	}
-	pi.sendUserMessage(
-		[
-			"请立即调用 tapd_review 工具审核当前 TAPD 需求的代码修改。",
-			"不要自行替代工具完成审核，也不要在审核后自动修改代码。",
-			"工具返回后，请总结最高等级问题并等待我确认。",
-			"",
-			"工具参数：",
-			"```json",
-			JSON.stringify(params, null, 2),
-			"```",
-		].join("\n"),
+	pi.sendMessage(
+		{
+			customType: "tapd-review-tool-request",
+			content: [
+				"请立即调用 tapd_review 工具审核当前 TAPD 需求的代码修改。",
+				"不要自行替代工具完成审核，也不要在审核后自动修改代码。",
+				"工具返回后，请总结最高等级问题并等待我确认。",
+				"",
+				"工具参数：",
+				"```json",
+				JSON.stringify(params, null, 2),
+				"```",
+			].join("\n"),
+			display: false,
+		},
+		{ triggerTurn: true },
 	);
 }
