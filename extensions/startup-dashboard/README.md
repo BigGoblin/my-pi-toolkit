@@ -37,7 +37,7 @@
 
 ## 推荐主题
 
-推荐在 `/settings` 选择 `grok-build-dark`，它统一了 Dashboard、消息、Markdown、工具时间线、Todo、Plan 与 Subagent 的状态颜色。原有 `toolkit-midnight` 仍保留；扩展不会强制修改用户当前主题。
+推荐在 `/settings` 选择 `grok-build-dark`，它统一了 Dashboard、消息、Markdown、工具时间线、Todo、Plan 与 Subagent 的状态颜色。扩展不会强制修改用户当前主题。
 
 ## 已知差异
 

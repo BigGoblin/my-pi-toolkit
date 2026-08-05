@@ -66,7 +66,6 @@ pi install git:github.com/BigGoblin/my-pi-toolkit@cursor/chat-mode-plan-8ac0
 ### Themes
 
 - `grok-build-dark`：推荐的 Grok Build 风格深色主题，统一消息、Markdown、工具状态与工作流配色。
-- `toolkit-midnight`：原有的 M-PI Dashboard 低亮度深色青紫主题。
 
 可通过 `/settings` 切换主题；主题切换不影响命令、快捷键或会话数据。
 
