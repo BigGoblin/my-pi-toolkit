@@ -192,7 +192,7 @@ export async function createSubtasks(
 			existing.effort = item.effort;
 			existing.updatedAt = new Date().toISOString();
 			persist();
-			ctx.ui.notify(`${item.title} 已同步：${existing.tapdUrl}`, "success");
+			ctx.ui.notify(`${item.title} 已同步：${existing.tapdUrl}`, "info");
 			continue;
 		}
 
@@ -209,7 +209,7 @@ export async function createSubtasks(
 			);
 			created.push(result);
 			persist();
-			ctx.ui.notify(`${item.title} 已创建：${result.tapdUrl}`, "success");
+			ctx.ui.notify(`${item.title} 已创建：${result.tapdUrl}`, "info");
 		} catch (error) {
 			ctx.ui.notify(
 				`${error instanceof Error ? error.message : String(error)}。再次执行可继续补建。`,
@@ -226,6 +226,6 @@ export async function createSubtasks(
 					`${index + 1}. [${item.kind === "design" ? "设计" : "开发"}] ${item.title}\n${item.tapdUrl}`,
 			)
 			.join("\n")}`,
-		"success",
+		"info",
 	);
 }
