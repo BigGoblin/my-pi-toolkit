@@ -80,13 +80,18 @@ export async function locateTapdBug(
 	if (typeof detail.description === "string") {
 		normalizedDetail.description_text = htmlToText(detail.description);
 	}
-	pi.sendUserMessage(
-		buildBugLocatePrompt({
-			title: detail.title || state.itemName,
-			bugId: state.itemId,
-			url: bugUrl(state.workspaceId, state.itemId),
-			projectPaths: state.projectPaths ?? [],
-			detail: normalizedDetail,
-		}),
+	pi.sendMessage(
+		{
+			customType: "tapd-bug-locate",
+			content: buildBugLocatePrompt({
+				title: detail.title || state.itemName,
+				bugId: state.itemId,
+				url: bugUrl(state.workspaceId, state.itemId),
+				projectPaths: state.projectPaths ?? [],
+				detail: normalizedDetail,
+			}),
+			display: false,
+		},
+		{ triggerTurn: true },
 	);
 }

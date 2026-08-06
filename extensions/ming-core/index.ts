@@ -17,7 +17,6 @@ import { sessionBranchGuard } from "../session-branch-guard/index.js";
 import startupDashboard from "../startup-dashboard/index.js";
 import subagentConsole from "../subagent-console/index.js";
 import taskDuration from "../task-duration/index.js";
-import titlebarWorking from "../titlebar-working/index.js";
 
 export default async function mingCore(pi: ExtensionAPI): Promise<void> {
 	cursorModels(pi);
@@ -30,7 +29,6 @@ export default async function mingCore(pi: ExtensionAPI): Promise<void> {
 	repoSearchSubagent(pi);
 	subagentConsole(pi);
 	sessionBranchGuard(pi);
-	titlebarWorking(pi);
 	taskDuration(pi);
 	startupDashboard(pi);
 }

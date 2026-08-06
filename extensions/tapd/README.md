@@ -12,7 +12,8 @@ TAPD 需求与缺陷工作流扩展。提供待办列表、会话关联、需求
 | `/tapd collaboration [补充要求]` | 生成供产品、后端和前端 Leader 评审的 `collaboration.md` |
 | `/tapd review [--base origin/dev] [补充要求]` | 选择“仅未提交”或“当前分支全部修改”后，启动只读子代理并将分级报告返回主 Agent |
 | `/tapd sub-task` | 根据 `design.md` 创建或同步设计、开发子需求 |
-| `/tapd bug` | 获取当前 Bug 完整信息并让 Agent 定位代码原因 |
+| `/tapd bug` | 获取当前 Bug 完整信息并让 Agent 定位代码原因；定位提示对用户隐藏；结果只输出原因、带具体代码的因果链与置信度，不写长篇分析报告 |
+| `/tapd bug-reject` | 单页 Overlay 拒绝当前 Bug：评价原因多行预览，Enter 进 Overlay 用 Pi Editor 编辑（Enter 确认 / Ctrl+Enter 换行）；解决方法/开发人员同样 Enter 打开 Overlay；FAQ 默认否 |
 | `/tapd git-status` | 直接执行 TAPD Git 工作流，并用对话区工具风格卡片显示关联事项、分支、upstream 与工作区状态 |
 | `/tapd branch [--base origin/dev]` | 直接获取 TAPD keyword 并从指定基础分支创建关联分支；结果显示为对话区工具风格卡片 |
 | `/tapd commit [--no-push]` | 直接使用 TAPD keyword 生成提交信息，提交并默认推送；结果显示为对话区工具风格卡片 |
@@ -25,6 +26,8 @@ Git 工作流卡片在结束后落盘为 `completed` / `failed`，正文包含�
 ```text
 /tapd design @docs/api.md 重点考虑旧接口兼容
 ```
+
+`/tapd bug-reject` 在 Bug 会话中直接打开单页 Overlay（不经 Agent）：状态固定为「已拒绝」；评价原因默认取最近一次定位报告的 `## 原因`，主表多行预览，Enter 打开 Overlay 并嵌入 Pi 官方 `Editor`（Enter 确认、Ctrl+Enter 换行）；解决方法、开发人员同样按 Enter 打开 Overlay 选择/输入；是否需要写 FAQ 默认「否」（←→ 切换）；确认后处理人设为该缺陷的测试人员（`te`），开发人员默认为当前用户；评价原因同时写入「缺陷原因说明」字段，并以流转备注（`bug_remark`）追加评论。确认后按字段中文 label 解析并 `POST /bugs` 回写。
 
 ## Shortcuts
 
@@ -139,7 +142,7 @@ TAPD Open API 索引见 [`../../docs/tapd-api.md`](../../docs/tapd-api.md)。
 | `index.ts` / `types.ts` | 扩展组装入口与跨领域共享类型 |
 | `core/` | 配置、HTTP 客户端、基础 TAPD API |
 | `sessions/` | TAPD 会话 custom entry 状态、事项→会话目录（catalog）、按目标目录创建/切换会话（`spawn.ts`）、项目路径历史与会话文件删除 |
-| `documents/` | analyze、design、collaboration 与 Bug 定位文档工作流，以及 Design 关键决策提问工具 |
+| `documents/` | analyze、design、collaboration、Bug 定位与 `/tapd bug-reject` 拒绝流转，以及 Design 关键决策提问工具 |
 | `subtasks/` | 子需求解析、确认计划、TAPD 同步（`api-sync.ts`）与 append-only 状态更新（`state.ts`） |
 | `todo/` | 待办编排与 Overlay；`tree-list.ts`、`table-view.ts`、`session-picker*.ts` 分别负责树表、响应式主表和会话/路径 viewport |
 | `review/` | 需求实现审核上下文、只读子代理、进度和报告渲染 |

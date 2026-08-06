@@ -21,6 +21,7 @@ import {
 	locateTapdBug,
 	sendTapdWorkflowPrompt,
 } from "./documents/workflows.js";
+import { rejectTapdBug } from "./documents/bug-reject.js";
 import {
 	registerTapdGitMessageRenderer,
 	runTapdGitCommand,
@@ -41,6 +42,11 @@ export default function tapdExtension(pi: ExtensionAPI) {
 					value: "bug",
 					label: "bug",
 					description: "获取当前关联 Bug 的完整信息并尝试定位代码原因",
+				},
+				{
+					value: "bug-reject",
+					label: "bug-reject",
+					description: "拒绝当前关联 Bug（单页确认评价原因与解决方法）",
 				},
 				{
 					value: "analyze",
@@ -99,6 +105,10 @@ export default function tapdExtension(pi: ExtensionAPI) {
 			if (await runTapdGitCommand(pi, sub, restArgs, ctx, config)) return;
 			if (sub === "bug") {
 				await locateTapdBug(pi, ctx, config);
+				return;
+			}
+			if (sub === "bug-reject") {
+				await rejectTapdBug(pi, ctx, config);
 				return;
 			}
 			if (sub === "analyze") {
