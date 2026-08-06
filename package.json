@@ -1,7 +1,7 @@
 {
   "name": "my-pi-toolkit",
   "version": "1.0.0",
-  "description": "My pi extensions, skills, prompts, and themes",
+  "description": "Pi coding-agent package: session modes, TAPD workflows, Context7 docs, Cursor model bridge, themes, and skills",
   "author": "",
   "license": "MIT",
   "type": "module",

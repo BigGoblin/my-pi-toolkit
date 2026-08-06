@@ -1,11 +1,30 @@
 # my-pi-toolkit
 
-My personal Pi coding-agent toolkit：集中分发自定义扩展、Skills 和本地化 provider。
+面向 [Pi](https://pi.dev/) coding-agent 的扩展包：集中分发会话模式、TAPD 工作流、Context7 文档查询、Cursor 模型桥、主题与 Skills。安装后在任意项目启动 Pi 即可加载，无需按项目重复安装。
+
+## Features
+
+- **会话模式**：`Shift+Tab` 在 Build / Plan / Ask 间切换；Plan 支持选项确认式关键决策，配合任务清单与 Grok 风格工具时间线
+- **TAPD 工作流**：待办 Overlay、需求分析 / 技术设计 / 协作评审、Bug 定位、子需求同步，以及关联分支 / 提交 / GitLab MR
+- **Context7**：为 Agent 提供第三方库最新文档，减少对训练数据的依赖
+- **会话与分支门禁**：恢复会话时校验 Git 分支，降低跨分支误操作
+- **子 Agent 控制台**：`/subagents` 与 `Alt+A` 查看、管理并行任务过程
+- **启动面板与主题**：M-PI Dashboard；推荐主题 `grok-build-dark`
+
+能力由三个扩展入口编排：`ming-core`、`tapd`、`context7`。通用模块细节见 [`extensions/README.md`](extensions/README.md)。
+
+## Prerequisites
+
+- Node.js `>= 22.19`
+- 已安装 [Pi coding-agent](https://github.com/earendil-works/pi)（`pi` 可用）
+- 调用 LLM 需通过 `/login` 配置 provider；外部 API（TAPD / Context7 / GitLab）按需配置，不影响扩展加载
 
 ## Install
 
+从源码安装：
+
 ```bash
-git clone git@github.com:BigGoblin/my-pi-toolkit.git
+git clone https://github.com/BigGoblin/my-pi-toolkit.git
 cd my-pi-toolkit
 npm install
 pi install .
@@ -14,101 +33,113 @@ pi install .
 或从 git 直接安装（可钉分支 / commit）：
 
 ```bash
-pi install git:github.com/BigGoblin/my-pi-toolkit@cursor/chat-mode-plan-8ac0
+pi install git:github.com/BigGoblin/my-pi-toolkit@main
 ```
 
-`settings.json` 的 `packages` 只需配置本仓库路径，例如：
+也可在 `~/.pi/agent/settings.json` 的 `packages` 中指向本地路径：
 
 ```json
 {
-  "packages": ["E:\\my-pi-toolkit"]
+  "packages": ["~/path/to/my-pi-toolkit"]
 }
 ```
 
-不要再单独安装 `npm:@open-cursor/pi-agent`，Open Cursor 已 vendored 到本仓库。
+本仓库已 vendored Open Cursor（Cursor ↔ Pi 桥），无需再单独安装 `npm:@open-cursor/pi-agent`。`pi-lens` 已内置；在 Termux 等无原生 binary 的环境会自动跳过，不影响其它扩展。
 
-本包也已内置 `pi-lens`（可选：在 Termux 等无原生 binary 的环境会自动跳过，不影响其它扩展）。安装本包后，在任意项目启动 Pi 都会自动加载，无需在每个项目重复安装。
-
-### Termux / 安装失败（`@ast-grep/cli`）
-
-若看到 `Failed to locate @ast-grep/cli native binary`，是 `pi-lens` 的依赖在 Android 上没有对应原生包，旧版会让整次 `npm install` 失败。仓库已用 `.npmrc`（`ignore-scripts=true`）规避。
-
-若本地 clone 已卡在失败状态（`pi install` 显示 Installed 但仍缺 `marked`），强制重装依赖：
+## Quick Start
 
 ```bash
-cd ~/.pi/agent/git/github.com/BigGoblin/my-pi-toolkit
-rm -rf node_modules
-npm install --omit=dev
-ls node_modules/marked node_modules/@open-cursor/client
-pi
+cd /path/to/your-project
+pi --no-session
 ```
 
-或卸干净再装：
+首次启动若提示信任项目目录，选择 Trust。启动面板应列出三个扩展：`ming-core`、`tapd`、`context7`。
 
-```bash
-pi remove git:github.com/BigGoblin/my-pi-toolkit
-rm -rf ~/.pi/agent/git/github.com/BigGoblin/my-pi-toolkit
-pi install git:github.com/BigGoblin/my-pi-toolkit@cursor/chat-mode-plan-8ac0
-```
+常用入口：
+
+| 操作 | 说明 |
+| --- | --- |
+| `Shift+Tab` | 切换 Build / Plan / Ask |
+| `/tapd` | 打开 TAPD 待办（需配置） |
+| `/context7 <query>` | 查询第三方库文档 |
+| `/subagents` | 管理子 Agent |
+| `/settings` | 切换主题等设置 |
+| `/reload` | 修改扩展后重新加载运行时 |
+
+## Configuration
+
+扩展本身可无凭证加载；下列配置仅在使用对应能力时需要：
+
+| 能力 | 配置 |
+| --- | --- |
+| TAPD | `~/.pi/agent/tapd.json`（详见 [`extensions/tapd/README.md`](extensions/tapd/README.md)） |
+| Context7 | `~/.pi/agent/context7.json` 或环境变量 `CONTEXT7_API_KEY` |
+| GitLab（TAPD MR 等） | `tapd.json` 的 `gitlab.token` 或 `GITLAB_PERSONAL_ACCESS_TOKEN` |
+| Cursor 模型 | Pi 内 `/login`（OAuth） |
 
 ## Components
 
 ### Extensions
 
-扩展总览见 [`extensions/README.md`](extensions/README.md)。`pi.extensions` 注册 **3 个入口**：`ming-core`、`tapd`、`context7`。通用能力由 [`ming-core`](extensions/ming-core/README.md) 编排；各模块实现仍在原目录。
-
-| 扩展 | 简介 | 详细文档 |
+| 扩展 | 简介 | 文档 |
 | --- | --- | --- |
-| ming-core | 通用能力编排（模型、带选项确认的 Plan、子 Agent、Dashboard、Session Branch Guard、Pi Lens 等） | [`extensions/ming-core/README.md`](extensions/ming-core/README.md) |
-| TAPD | TAPD 待办、需求分析、选项确认式技术设计、协作评审、Bug 定位和子需求同步 | [`extensions/tapd/README.md`](extensions/tapd/README.md) |
-| Context7 | 为 Agent 提供第三方库最新文档查询工具 | [`extensions/context7/README.md`](extensions/context7/README.md) |
+| ming-core | 通用能力编排：模型、Plan、子 Agent、Dashboard、Session Branch Guard、Pi Lens 等 | [`extensions/ming-core/README.md`](extensions/ming-core/README.md) |
+| TAPD | 待办、需求分析、选项确认式技术设计、协作评审、Bug 定位与子需求同步 | [`extensions/tapd/README.md`](extensions/tapd/README.md) |
+| Context7 | 第三方库最新文档查询 | [`extensions/context7/README.md`](extensions/context7/README.md) |
+
+完整模块列表见 [`extensions/README.md`](extensions/README.md)。
 
 ### Themes
 
-- `grok-build-dark`：推荐的 Grok Build 风格深色主题，统一消息、Markdown、工具状态与工作流配色。
+- `grok-build-dark`：推荐的 Grok Build 风格深色主题（消息、Markdown、工具状态与工作流配色）
 
-可通过 `/settings` 切换主题；主题切换不影响命令、快捷键或会话数据。
+通过 `/settings` 切换；不影响命令、快捷键或会话数据。
 
 ### Skills
 
-- [`skills/context7`](skills/context7/)：指导 Agent 查询第三方库最新文档。
-- [`.pi/skills/pi-package-bundler`](.pi/skills/pi-package-bundler/)：仅在当前 toolkit 项目中可用，将指定 Pi package 集成并随本包分发。
-- `node_modules/pi-lens/skills`：Pi Lens 自带的代码导航、AST 规则和诊断 Skills。
+- [`skills/context7`](skills/context7/)：指导 Agent 查询第三方库最新文档
+- [`.pi/skills/pi-package-bundler`](.pi/skills/pi-package-bundler/)：仅在本 toolkit 仓库内可用，将指定 Pi package 集成并随分发
+- `node_modules/pi-lens/skills`：Pi Lens 自带的代码导航、AST 规则与诊断 Skills
 
-给出 npm 包名、pi.dev 页面、npm 页面或 GitHub 链接即可触发 package bundler，也可以使用：
-
-```text
-/skill:pi-package-bundler
-```
+给出 npm 包名、pi.dev 页面、npm 页面或 GitHub 链接即可触发 package bundler，也可执行 `/skill:pi-package-bundler`。
 
 ### Vendored provider
 
-[`vendor/open-cursor/`](vendor/open-cursor/) 是本地化的 Cursor ↔ Pi 桥，由 `ming-core` 内的 `cursor-models` 模块加载。
+[`vendor/open-cursor/`](vendor/open-cursor/) 是本地化的 Cursor ↔ Pi 桥，由 `ming-core` 内的 `cursor-models` 加载。协议或流式行为相关改动见该目录文档。
 
-需要修改流式 usage、checkpoint 或协议行为时，编辑：
+## Troubleshooting
 
-```text
-vendor/open-cursor/pi-agent/src/
+### Termux / `@ast-grep/cli` 安装失败
+
+若出现 `Failed to locate @ast-grep/cli native binary`：`pi-lens` 依赖在 Android 上无对应原生包。仓库已用 `.npmrc`（`ignore-scripts=true`）规避整次 `npm install` 失败。
+
+若 git 安装目录仍缺依赖（例如 `pi install` 显示已安装但缺少 `marked`），在缓存目录强制重装：
+
+```bash
+cd ~/.pi/agent/git/github.com/BigGoblin/my-pi-toolkit
+rm -rf node_modules && npm install --omit=dev
 ```
 
-### Documentation
+或卸干净后重装：
 
-- [`docs/tui-development-guidelines.md`](docs/tui-development-guidelines.md)：所有 TUI、工具展示、Widget、Overlay、Footer 和 Theme 新增/更新必须遵循的开发规范。
-- [`docs/tapd-api.md`](docs/tapd-api.md)：TAPD Open API 官方资料与接口索引。
-- [`AGENTS.md`](AGENTS.md)：仓库内 Agent 开发规范；已将 TUI 规范列为强制要求。
+```bash
+pi remove git:github.com/BigGoblin/my-pi-toolkit
+rm -rf ~/.pi/agent/git/github.com/BigGoblin/my-pi-toolkit
+pi install git:github.com/BigGoblin/my-pi-toolkit@main
+```
 
 ## Development
 
-修改扩展或 vendored provider 后，在 Pi 中重新加载运行时：
+修改扩展或 vendored provider 后，在 Pi 中执行 `/reload`。依赖变更后于仓库根目录执行 `npm install`。
 
-```text
-/reload
-```
+扩展入口与依赖版本统一维护在 [`package.json`](package.json)。
 
-拉取依赖变化后执行：
+- [`AGENTS.md`](AGENTS.md)：仓库内 Agent / 扩展开发规范
+- [`docs/tui-development-guidelines.md`](docs/tui-development-guidelines.md)：TUI、工具展示、Widget、Overlay、Footer 与 Theme 规范
+- [`docs/tapd-api.md`](docs/tapd-api.md)：TAPD Open API 资料索引
 
-```bash
-npm install
-```
+欢迎 Issue 与 PR。较大的行为或 API 变更请先开 Issue 讨论。
 
-扩展加载列表和依赖版本统一维护在 [`package.json`](package.json)。
+## License
+
+MIT
