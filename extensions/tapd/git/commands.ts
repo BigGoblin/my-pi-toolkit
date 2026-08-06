@@ -72,9 +72,11 @@ function backgroundToken(
 }
 
 function cardSummary(details: TapdGitMessageDetails | undefined): string {
-	if (details?.status === "active" && details.progress)
+	if (details?.status === "success") return "completed";
+	if (details?.status === "error") return "failed";
+	if (details?.progress)
 		return `${details.progress.step}/${details.progress.total}`;
-	return details?.status === "success" ? "completed" : "failed";
+	return "running";
 }
 
 function cardDetails(
@@ -135,22 +137,39 @@ export function registerTapdGitMessageRenderer(pi: ExtensionAPI): void {
 	);
 }
 
-function startCard(
-	pi: ExtensionAPI,
-	command: GitCommandKind,
-): TapdGitMessageDetails {
-	const details: TapdGitMessageDetails = {
+function createCard(command: GitCommandKind): TapdGitMessageDetails {
+	return {
 		command,
 		status: "active",
 		history: [],
 	};
+}
+
+function finishCard(
+	pi: ExtensionAPI,
+	card: TapdGitMessageDetails,
+	status: "success" | "error",
+	result: string,
+): void {
+	card.status = status;
+	card.result = result;
 	pi.sendMessage({
 		customType: MESSAGE_TYPE,
-		content: `TAPD ${command} workflow`,
+		content: `TAPD ${card.command} workflow`,
 		display: true,
-		details,
+		details: {
+			command: card.command,
+			status: card.status,
+			progress: card.progress,
+			history: [...(card.history ?? [])],
+			result: card.result,
+		},
 	});
-	return details;
+	pi.sendMessage({
+		customType: `${MESSAGE_TYPE}-context`,
+		content: result,
+		display: false,
+	});
 }
 
 export async function runTapdGitCommand(
@@ -168,7 +187,7 @@ export async function runTapdGitCommand(
 	if (now - (runs.get(runKey) ?? 0) < 2_000) return true;
 	runs.set(runKey, now);
 	const statusKey = `tapd-git-${command}`;
-	const card = startCard(pi, command);
+	const card = createCard(command);
 	const reportProgress = (progress: GitCommandProgress) => {
 		card.progress = progress;
 		const text = `${progress.step}/${progress.total} ${progress.message}`;
@@ -208,21 +227,14 @@ export async function runTapdGitCommand(
 				reportProgress,
 			});
 		}
-		card.status = "success";
-		card.result = result;
-		pi.sendMessage({
-			customType: `${MESSAGE_TYPE}-context`,
-			content: result,
-			display: false,
-		});
+		finishCard(pi, card, "success", result);
 	} catch (error) {
-		card.status = "error";
-		card.result = error instanceof Error ? error.message : String(error);
-		pi.sendMessage({
-			customType: `${MESSAGE_TYPE}-context`,
-			content: card.result,
-			display: false,
-		});
+		finishCard(
+			pi,
+			card,
+			"error",
+			error instanceof Error ? error.message : String(error),
+		);
 	} finally {
 		ctx.ui.setStatus(statusKey, undefined);
 	}

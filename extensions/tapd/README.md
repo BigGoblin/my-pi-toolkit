@@ -18,6 +18,8 @@ TAPD 需求与缺陷工作流扩展。提供待办列表、会话关联、需求
 | `/tapd commit [--no-push]` | 直接使用 TAPD keyword 生成提交信息，提交并默认推送；结果显示为对话区工具风格卡片 |
 | `/tapd mr [--draft] [--target dev] [--no-delete-source-branch]` | 直接创建或更新 GitLab MR 并回写 TAPD；结果显示为对话区工具风格卡片 |
 
+Git 工作流卡片在结束后落盘为 `completed` / `failed`，正文包含执行步骤与结果；运行中进度显示在 status 条。
+
 工作流命令支持附加自然语言和 `@文件`：
 
 ```text
