@@ -24,6 +24,7 @@ interface FlatItem {
 }
 
 interface Columns {
+	design: number;
 	status: number;
 	priority: number;
 	severity: number;
@@ -33,13 +34,30 @@ interface Columns {
 
 export const TABLE_TITLE_PREFIX_WIDTH = 11;
 const TYPE_COLUMN_WIDTH = 6;
+const DESIGN_COLUMN_WIDTH = 4;
 
 export function tableColumns(width: number, kind: TapdItem["kind"]): Columns {
+	const design = kind === "bug" ? 0 : DESIGN_COLUMN_WIDTH;
 	if (width < 80)
-		return { status: 8, priority: 0, severity: 0, begin: 0, due: 0 };
+		return {
+			design,
+			status: 8,
+			priority: 0,
+			severity: 0,
+			begin: 0,
+			due: 0,
+		};
 	if (width < 120)
-		return { status: 10, priority: 6, severity: 0, begin: 0, due: 10 };
+		return {
+			design,
+			status: 10,
+			priority: 6,
+			severity: 0,
+			begin: 0,
+			due: 10,
+		};
 	return {
+		design,
 		status: kind === "bug" ? 8 : 10,
 		priority: kind === "bug" ? 6 : 8,
 		severity: kind === "bug" ? 6 : 0,
@@ -159,7 +177,9 @@ export class TreeList {
 		const designed =
 			item.kind === "story" &&
 			this.designedStoryKeys.has(linkKey(item.workspaceId, item.id, item.kind));
-		const design = designed ? ` ${statusGlyph(theme, "success")}DES` : "";
+		const design = designed
+			? theme.fg("success", UI_GLYPHS.active)
+			: statusGlyph(theme, "pending");
 		const fixed = Object.values(columns).reduce(
 			(sum, value) => sum + (value ? value + 1 : 0),
 			0,
@@ -170,13 +190,16 @@ export class TreeList {
 		);
 		const prefix = `${selection} ${indent}${branch}${type} `;
 		const titleWidth = Math.max(1, width - visibleWidth(prefix) - fixed);
-		const title = `${oneLine(item.name)}${design}`;
 		let line =
 			prefix +
-			padR(truncateToWidth(title, titleWidth, UI_GLYPHS.more), titleWidth);
+			padR(
+				truncateToWidth(oneLine(item.name), titleWidth, UI_GLYPHS.more),
+				titleWidth,
+			);
 		const add = (value: string, size: number) => {
 			if (size) line += ` ${padR(truncateToWidth(value, size, ""), size)}`;
 		};
+		add(design, columns.design);
 		add(oneLine(item.status), columns.status);
 		add(prioritySymbol(item.priority), columns.priority);
 		add(oneLine(item.severity ?? "-"), columns.severity);

@@ -1,7 +1,7 @@
 import { execFile } from "node:child_process";
 import type { ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
 import { fetchAll } from "../core/workspace-api.js";
-import { listTapdSessions } from "../sessions/catalog.js";
+import { buildTapdCatalog, listTapdSessions } from "../sessions/catalog.js";
 import type {
 	TableOutcome,
 	TapdConfig,
@@ -94,6 +94,10 @@ export async function showTable(
 		});
 
 	await load("story", "current");
+	await buildTapdCatalog((loaded, total) => {
+		if (total > 50)
+			ctx.ui.notify(`正在扫描历史会话 ${loaded}/${total}...`, "info");
+	});
 	while (true) {
 		const tree = trees[state.kind];
 		const selection = await renderTable(ctx, {

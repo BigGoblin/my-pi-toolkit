@@ -141,6 +141,7 @@ function columnHeader(theme: Theme, width: number, kind: TapdItemKind): string {
 	const add = (label: string, size: number) => {
 		if (size) line += ` ${padR(label, size)}`;
 	};
+	add("设计", columns.design);
 	add("状态", columns.status);
 	add("优先", columns.priority);
 	add("严重度", columns.severity);
