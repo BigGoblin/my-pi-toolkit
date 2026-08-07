@@ -19,6 +19,7 @@ import {
 	showOverlayLineInput,
 	showOverlayMultilineEditor,
 } from "./bug-reject-editors.js";
+import { withTapdWorking } from "../working.js";
 import { extractLocateReason } from "./bug-reject-reason.js";
 
 function defaultResolutionIndex(
@@ -54,96 +55,18 @@ export async function rejectTapdBug(
 		return;
 	}
 
-	ctx.ui.notify("正在准备拒绝表单...", "info");
-	const user = await fetchUserInfo(config);
-	if (!user?.nick) {
-		ctx.ui.notify("无法获取当前 TAPD 用户，请检查令牌", "error");
-		return;
-	}
-
-	let fields;
-	try {
-		fields = await fetchBugRejectFields(config, state.workspaceId);
-	} catch (error) {
-		ctx.ui.notify(
-			error instanceof Error ? error.message : String(error),
-			"error",
-		);
-		return;
-	}
-
-	const ui = withTapdListOverlays(ctx).ui;
-	let draft: BugRejectFormState = {
-		reason: extractLocateReason(ctx.sessionManager.getEntries()),
-		resolutionIndex: defaultResolutionIndex(fields.resolutionOptions),
-		developer: user.nick,
-		needFaq: "否",
-	};
-	const title = `拒绝 Bug ${state.itemId} · ${state.itemName}`;
-
-	while (true) {
-		const result = await showBugRejectForm(
-			ui,
-			title,
-			draft,
-			fields.resolutionOptions,
-		);
-		if (!result) {
-			ctx.ui.notify("已取消拒绝", "info");
+	await withTapdWorking(ctx, "tapd-bug-reject", async (cancel) => {
+		cancel?.setMessage("Working... 正在准备拒绝表单...");
+		const user = await fetchUserInfo(config);
+		cancel?.throwIfAborted();
+		if (!user?.nick) {
+			ctx.ui.notify("无法获取当前 TAPD 用户，请检查令牌", "error");
 			return;
 		}
-		draft = result.state;
-		if (result.action === "pick-reason") {
-			const edited = await showOverlayMultilineEditor(
-				ui,
-				"评价原因",
-				draft.reason,
-			);
-			if (edited != null) draft.reason = edited;
-			continue;
-		}
-		if (result.action === "pick-resolution") {
-			const labels = fields.resolutionOptions.map((option) => option.label);
-			const picked = await ui.select("选择解决方法", labels);
-			if (picked) {
-				const index = fields.resolutionOptions.findIndex(
-					(option) => option.label === picked,
-				);
-				if (index >= 0) draft.resolutionIndex = index;
-			}
-			continue;
-		}
-		if (result.action === "pick-developer") {
-			const edited = await showOverlayLineInput(
-				ui,
-				"开发人员",
-				draft.developer,
-			);
-			if (edited != null) {
-				draft.developer = edited.trim() || draft.developer;
-			}
-			continue;
-		}
 
-		const resolution = fields.resolutionOptions[draft.resolutionIndex];
-		if (!resolution) {
-			ctx.ui.notify("请选择解决方法", "warning");
-			continue;
-		}
-		if (!draft.developer.trim()) {
-			ctx.ui.notify("开发人员不能为空", "warning");
-			continue;
-		}
-
-		ctx.ui.notify("正在更新 TAPD 缺陷为已拒绝...", "info");
+		let fields;
 		try {
-			await updateBugReject(config, state.workspaceId, state.itemId, fields, {
-				reason: draft.reason.trim(),
-				resolutionKey: resolution.key,
-				developer: draft.developer.trim(),
-				needFaq: draft.needFaq,
-				author: user.nick,
-			});
+			fields = await fetchBugRejectFields(config, state.workspaceId);
 		} catch (error) {
 			ctx.ui.notify(
 				error instanceof Error ? error.message : String(error),
@@ -151,10 +74,114 @@ export async function rejectTapdBug(
 			);
 			return;
 		}
-		ctx.ui.notify(
-			`Bug ${state.itemId} → 已拒绝 · ${resolution.label} · FAQ ${draft.needFaq} · 处理人=测试人员\n${bugUrl(state.workspaceId, state.itemId)}`,
-			"success",
-		);
-		return;
-	}
+		cancel?.throwIfAborted();
+
+		const ui = withTapdListOverlays(ctx).ui;
+		let draft: BugRejectFormState = {
+			reason: extractLocateReason(ctx.sessionManager.getEntries()),
+			resolutionIndex: defaultResolutionIndex(fields.resolutionOptions),
+			developer: user.nick,
+			needFaq: "否",
+		};
+		const title = `拒绝 Bug ${state.itemId} · ${state.itemName}`;
+
+		while (true) {
+			cancel?.throwIfAborted();
+			cancel?.suspend();
+			let result: Awaited<ReturnType<typeof showBugRejectForm>>;
+			try {
+				result = await showBugRejectForm(
+					ui,
+					title,
+					draft,
+					fields.resolutionOptions,
+				);
+			} finally {
+				cancel?.resume("Working...");
+			}
+			if (!result) {
+				ctx.ui.notify("已取消拒绝", "info");
+				return;
+			}
+			draft = result.state;
+			if (result.action === "pick-reason") {
+				cancel?.suspend();
+				try {
+					const edited = await showOverlayMultilineEditor(
+						ui,
+						"评价原因",
+						draft.reason,
+					);
+					if (edited != null) draft.reason = edited;
+				} finally {
+					cancel?.resume("Working...");
+				}
+				continue;
+			}
+			if (result.action === "pick-resolution") {
+				const labels = fields.resolutionOptions.map((option) => option.label);
+				cancel?.suspend();
+				try {
+					const picked = await ui.select("选择解决方法", labels);
+					if (picked) {
+						const index = fields.resolutionOptions.findIndex(
+							(option) => option.label === picked,
+						);
+						if (index >= 0) draft.resolutionIndex = index;
+					}
+				} finally {
+					cancel?.resume("Working...");
+				}
+				continue;
+			}
+			if (result.action === "pick-developer") {
+				cancel?.suspend();
+				try {
+					const edited = await showOverlayLineInput(
+						ui,
+						"开发人员",
+						draft.developer,
+					);
+					if (edited != null) {
+						draft.developer = edited.trim() || draft.developer;
+					}
+				} finally {
+					cancel?.resume("Working...");
+				}
+				continue;
+			}
+
+			const resolution = fields.resolutionOptions[draft.resolutionIndex];
+			if (!resolution) {
+				ctx.ui.notify("请选择解决方法", "warning");
+				continue;
+			}
+			if (!draft.developer.trim()) {
+				ctx.ui.notify("开发人员不能为空", "warning");
+				continue;
+			}
+
+			cancel?.setMessage("Working... 正在更新 TAPD 缺陷为已拒绝...");
+			try {
+				await updateBugReject(config, state.workspaceId, state.itemId, fields, {
+					reason: draft.reason.trim(),
+					resolutionKey: resolution.key,
+					developer: draft.developer.trim(),
+					needFaq: draft.needFaq,
+					author: user.nick,
+				});
+			} catch (error) {
+				ctx.ui.notify(
+					error instanceof Error ? error.message : String(error),
+					"error",
+				);
+				return;
+			}
+			ctx.ui.notify(
+				`Bug ${state.itemId} → 已拒绝 · ${resolution.label} · FAQ ${draft.needFaq} · 处理人=测试人员\n${bugUrl(state.workspaceId, state.itemId)}`,
+				"success",
+			);
+			return;
+		}
+	});
 }

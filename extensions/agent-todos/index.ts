@@ -26,8 +26,14 @@ import {
 	todoSystemPromptAppend,
 } from "./prompt.js";
 import { renderTodoCall, renderTodoResult } from "./render.js";
+import { registerAboveEditorRestack } from "../shared/tui/widget-restack.js";
 import { TodoStore } from "./store.js";
-import { clearTodoUI, hideTodoPanel, refreshTodoUI } from "./ui.js";
+import {
+	clearTodoUI,
+	hideTodoPanel,
+	refreshTodoUI,
+	restackTodoUI,
+} from "./ui.js";
 
 const TODO_STATUSES = [
 	"pending",
@@ -75,6 +81,10 @@ export default function agentTodosExtension(pi: ExtensionAPI) {
 		panelVisible = true;
 		updateUI(ctx);
 	};
+
+	registerAboveEditorRestack((ctx) => {
+		if (panelVisible) restackTodoUI(ctx as ExtensionContext, store);
+	});
 
 	pi.on("session_start", async (_event: unknown, ctx: ExtensionContext) =>
 		reconstruct(ctx),

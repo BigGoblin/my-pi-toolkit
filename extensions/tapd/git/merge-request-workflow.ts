@@ -2,13 +2,8 @@ import type {
 	ExtensionAPI,
 	ExtensionCommandContext,
 } from "@earendil-works/pi-coding-agent";
-import { fetchBugDetail } from "../core/api.js";
 import type { TapdConfig } from "../types.js";
-import {
-	collectBugEvidence,
-	scanLinkedCommits,
-	uniqueLinkedObjects,
-} from "./analysis.js";
+import { scanLinkedCommits, uniqueLinkedObjects } from "./analysis.js";
 import { selectIntroducedCommitCandidate } from "./bug-analysis.js";
 import { updateBugFromDraft } from "./bug-workflow.js";
 import {
@@ -18,9 +13,10 @@ import {
 import { DEFAULT_GIT_WORKFLOW_POLICY } from "./policy.js";
 import { git, readRepositoryState } from "./repository.js";
 import {
-	buildBugRootCausePrompt,
+	collectManualBugRootCauseDraft,
 	deleteBugRootCauseDraft,
 	loadBugRootCauseDraft,
+	type BugRootCauseDraft,
 } from "./root-cause-draft.js";
 import {
 	updateStoryForDraftMergeRequest,
@@ -28,16 +24,18 @@ import {
 } from "./story-workflow.js";
 import { fetchTaskEstimatedEffort, updateTapdStatus } from "./tapd-api.js";
 import type { GitCommandProgressReporter } from "./types.js";
+import type { GitWorkingCancel } from "./working-cancel.js";
 
 interface MergeRequestOptions {
 	targetBranch?: string;
 	removeSourceBranch?: boolean;
 	draft?: boolean;
 	reportProgress?: GitCommandProgressReporter;
+	cancel?: GitWorkingCancel;
 }
 
 export async function runMergeRequest(
-	pi: ExtensionAPI,
+	_pi: ExtensionAPI,
 	ctx: ExtensionCommandContext,
 	config: TapdConfig,
 	options: MergeRequestOptions = {},
@@ -47,7 +45,9 @@ export async function runMergeRequest(
 		removeSourceBranch = DEFAULT_GIT_WORKFLOW_POLICY.removeSourceBranch,
 		draft = false,
 		reportProgress,
+		cancel,
 	} = options;
+	cancel?.throwIfAborted();
 	reportProgress?.({
 		step: 1,
 		total: 5,
@@ -57,22 +57,21 @@ export async function runMergeRequest(
 	if (repository.dirty) throw new Error("创建 MR 前请先提交工作区改动");
 	if (!repository.branch || !repository.upstream)
 		throw new Error("当前分支尚未推送并设置 upstream");
+	cancel?.throwIfAborted();
 	reportProgress?.({
 		step: 2,
 		total: 5,
 		message: `正在扫描当前分支相对 origin/${targetBranch} 的提交和 TAPD keyword...`,
 	});
 	const commits = await scanLinkedCommits(repository.root, targetBranch);
+	cancel?.throwIfAborted();
 	if (commits.length === 0)
 		throw new Error(`当前分支相对 origin/${targetBranch} 没有提交`);
 	const objects = uniqueLinkedObjects(commits);
 	if (objects.length === 0)
 		throw new Error("提交范围内没有 TAPD keyword，无法执行关联工作流");
 
-	const bugDrafts = new Map<
-		string,
-		Awaited<ReturnType<typeof loadBugRootCauseDraft>>
-	>();
+	const bugDrafts = new Map<string, BugRootCauseDraft>();
 	const bugObjects = objects.filter((item) => item.kind === "bug");
 	if (!draft && bugObjects.length > 0) {
 		const head = await git(repository.root, ["rev-parse", "HEAD"]);
@@ -89,7 +88,7 @@ export async function runMergeRequest(
 			reportProgress?.({
 				step: 2,
 				total: 5,
-				message: `Bug ${bug.shortId}: 正在生成引入 commit 候选，随后交给 Agent 分析根因...`,
+				message: `Bug ${bug.shortId}: 正在选择引入 commit，随后请手动填写根因...`,
 			});
 			const candidate = await selectIntroducedCommitCandidate(
 				ctx,
@@ -97,21 +96,14 @@ export async function runMergeRequest(
 				targetBranch,
 				bug.shortId,
 			);
-			const detail = await fetchBugDetail(
-				bug.workspaceId,
-				bug.objectId,
-				config,
-			);
-			const prompt = await buildBugRootCausePrompt(
-				repository.root,
+			const manualDraft = await collectManualBugRootCauseDraft(
+				ctx,
 				bug.shortId,
 				head,
-				targetBranch,
-				detail,
 				candidate,
 			);
-			pi.sendUserMessage(prompt);
-			return `Bug ${bug.shortId} 已交给 Agent 分析产生原因和修复方式。分析完成后请再次执行 /tapd mr；本次尚未更新 MR 或 TAPD。`;
+			if (!manualDraft) throw new Error(`Bug ${bug.shortId}: 用户取消根因填写`);
+			bugDrafts.set(bug.shortId, manualDraft);
 		}
 	}
 
@@ -222,31 +214,21 @@ export async function runMergeRequest(
 		}
 		const rootCauseDraft = bugDrafts.get(item.shortId);
 		if (!rootCauseDraft)
-			throw new Error(
-				`Bug ${item.shortId} 缺少 Agent 根因分析草稿，请重新执行 /tapd mr`,
-			);
-		itemProgress("正在加载 Agent 根因分析并汇总 Git 证据...");
-		const evidence = await collectBugEvidence(
-			repository.root,
-			targetBranch,
-			commits,
-		);
+			throw new Error(`Bug ${item.shortId} 缺少根因备注，请重新执行 /tapd mr`);
+		itemProgress("正在根据手动填写的根因更新 TAPD...");
 		const bugUpdates = await updateBugFromDraft(
 			ctx,
 			config,
 			item,
 			rootCauseDraft,
-			evidence,
 			repository.root,
 			transition.status,
 			transition.currentOwner,
 			itemProgress,
 		);
 		updates.push(...bugUpdates);
-		if (!bugUpdates.some((update) => update.includes("用户取消"))) {
-			await deleteBugRootCauseDraft(repository.root, item.shortId);
-			itemProgress("TAPD 流转完成，已删除本地 Agent 根因草稿");
-		}
+		await deleteBugRootCauseDraft(repository.root, item.shortId);
+		itemProgress("TAPD 流转完成，已清理本地根因草稿");
 	}
 	return [
 		`MR: ${mr.web_url}`,

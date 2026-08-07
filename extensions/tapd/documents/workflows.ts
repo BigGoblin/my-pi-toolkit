@@ -8,6 +8,7 @@ import { bugUrl } from "../todo/model.js";
 import { buildBugLocatePrompt } from "./prompts.js";
 import { readTapdSessionState } from "../sessions/session-state.js";
 import type { TapdConfig } from "../types.js";
+import { withTapdWorking } from "../working.js";
 
 const DOCS_WORKFLOW_MODE_RULES = [
 	"",
@@ -70,28 +71,35 @@ export async function locateTapdBug(
 		return;
 	}
 
-	ctx.ui.notify("正在获取 TAPD 完整缺陷信息...", "info");
-	const detail = await fetchBugDetail(state.workspaceId, state.itemId, config);
-	if (!detail) {
-		ctx.ui.notify("获取 TAPD 缺陷详情失败，请检查权限或稍后重试", "error");
-		return;
-	}
-	const normalizedDetail: Record<string, unknown> = { ...detail };
-	if (typeof detail.description === "string") {
-		normalizedDetail.description_text = htmlToText(detail.description);
-	}
-	pi.sendMessage(
-		{
-			customType: "tapd-bug-locate",
-			content: buildBugLocatePrompt({
-				title: detail.title || state.itemName,
-				bugId: state.itemId,
-				url: bugUrl(state.workspaceId, state.itemId),
-				projectPaths: state.projectPaths ?? [],
-				detail: normalizedDetail,
-			}),
-			display: false,
-		},
-		{ triggerTurn: true },
-	);
+	await withTapdWorking(ctx, "tapd-bug", async (cancel) => {
+		cancel?.setMessage("Working... 正在获取 TAPD 完整缺陷信息...");
+		const detail = await fetchBugDetail(
+			state.workspaceId,
+			state.itemId,
+			config,
+		);
+		cancel?.throwIfAborted();
+		if (!detail) {
+			ctx.ui.notify("获取 TAPD 缺陷详情失败，请检查权限或稍后重试", "error");
+			return;
+		}
+		const normalizedDetail: Record<string, unknown> = { ...detail };
+		if (typeof detail.description === "string") {
+			normalizedDetail.description_text = htmlToText(detail.description);
+		}
+		pi.sendMessage(
+			{
+				customType: "tapd-bug-locate",
+				content: buildBugLocatePrompt({
+					title: detail.title || state.itemName,
+					bugId: state.itemId,
+					url: bugUrl(state.workspaceId, state.itemId),
+					projectPaths: state.projectPaths ?? [],
+					detail: normalizedDetail,
+				}),
+				display: false,
+			},
+			{ triggerTurn: true },
+		);
+	});
 }

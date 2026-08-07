@@ -1,5 +1,4 @@
-import { execFile } from "node:child_process";
-import { promisify } from "node:util";
+import { type ChildProcess, spawn } from "node:child_process";
 import {
 	prefersWindowsGit,
 	rememberWindowsGitProject,
@@ -7,49 +6,108 @@ import {
 	windowsGitExecutable,
 } from "./git-runtime.js";
 import type { GitRepositoryState } from "./types.js";
+import { abortError } from "./working-cancel.js";
 
-const execFileAsync = promisify(execFile);
+function killChildTree(child: ChildProcess): void {
+	if (!child.pid) return;
+	if (process.platform === "win32") {
+		spawn("taskkill", ["/pid", String(child.pid), "/T", "/F"], {
+			stdio: "ignore",
+			windowsHide: true,
+		});
+		return;
+	}
+	child.kill("SIGTERM");
+	setTimeout(() => {
+		try {
+			child.kill("SIGKILL");
+		} catch {
+			/* already exited */
+		}
+	}, 2_000).unref?.();
+}
 
 async function runGit(
 	executable: string,
 	cwd: string,
 	args: string[],
+	signal?: AbortSignal,
 ): Promise<string> {
+	if (signal?.aborted) throw abortError();
 	// npm-based Git hooks can change the shared Windows console title via
 	// process.title. Preserve Pi's title across the entire Git subprocess tree.
 	const terminalTitle =
 		process.platform === "win32" ? process.title : undefined;
 	try {
-		const result = await execFileAsync(executable, args, {
-			cwd,
-			encoding: "utf8",
-			maxBuffer: 10 * 1024 * 1024,
+		return await new Promise<string>((resolve, reject) => {
+			const child = spawn(executable, args, {
+				cwd,
+				windowsHide: true,
+			});
+			let stdout = "";
+			let stderr = "";
+			child.stdout?.setEncoding("utf8");
+			child.stderr?.setEncoding("utf8");
+			child.stdout?.on("data", (chunk: string) => {
+				stdout += chunk;
+			});
+			child.stderr?.on("data", (chunk: string) => {
+				stderr += chunk;
+			});
+			const onAbort = () => killChildTree(child);
+			signal?.addEventListener("abort", onAbort, { once: true });
+			child.on("error", (error) => {
+				signal?.removeEventListener("abort", onAbort);
+				reject(error);
+			});
+			child.on("close", (code) => {
+				signal?.removeEventListener("abort", onAbort);
+				if (signal?.aborted) {
+					reject(abortError());
+					return;
+				}
+				if (code === 0) {
+					resolve(stdout.trim());
+					return;
+				}
+				const detail = (stderr || stdout).trim();
+				reject(
+					new Error(
+						`Command failed: ${executable} ${args.join(" ")}${detail ? `\n${detail}` : ""}`,
+					),
+				);
+			});
 		});
-		return result.stdout.trim();
 	} finally {
 		if (terminalTitle !== undefined) process.title = terminalTitle;
 	}
 }
 
-export async function git(cwd: string, args: string[]): Promise<string> {
-	return runGit("git", cwd, args);
+export async function git(
+	cwd: string,
+	args: string[],
+	signal?: AbortSignal,
+): Promise<string> {
+	return runGit("git", cwd, args, signal);
 }
 
 async function commitWithPreferredGit(
 	root: string,
 	subject: string,
 	skipHooks: boolean,
+	signal?: AbortSignal,
 ): Promise<void> {
 	const args = ["commit", ...(skipHooks ? ["--no-verify"] : []), "-m", subject];
 	if (prefersWindowsGit(root)) {
-		await runGit(windowsGitExecutable(), root, args);
+		await runGit(windowsGitExecutable(), root, args, signal);
 		return;
 	}
 	try {
-		await git(root, args);
+		await git(root, args, signal);
 	} catch (error) {
+		if (signal?.aborted) throw error;
 		if (!shouldRetryCommitWithWindowsGit(error)) throw error;
-		await runGit(windowsGitExecutable(), root, args);
+		await runGit(windowsGitExecutable(), root, args, signal);
 		rememberWindowsGitProject(root);
 	}
 }
@@ -113,12 +171,21 @@ export async function createBranch(
 	cwd: string,
 	branch: string,
 	baseRef: string,
+	signal?: AbortSignal,
 ) {
-	await git(cwd, ["switch", "--create", branch, "--no-track", baseRef]);
+	await git(
+		cwd,
+		["switch", "--create", branch, "--no-track", baseRef],
+		signal,
+	);
 }
 
-export async function createBranchFromHead(cwd: string, branch: string) {
-	await git(cwd, ["switch", "--create", branch, "--no-track"]);
+export async function createBranchFromHead(
+	cwd: string,
+	branch: string,
+	signal?: AbortSignal,
+) {
+	await git(cwd, ["switch", "--create", branch, "--no-track"], signal);
 }
 
 export async function stashAll(cwd: string, message: string): Promise<string> {
@@ -140,14 +207,23 @@ export async function commitAll(
 	subject: string,
 	onPhase?: (phase: "stage" | "commit") => void,
 	skipHooks = false,
+	signal?: AbortSignal,
 ): Promise<string> {
 	onPhase?.("stage");
-	await git(cwd, ["add", "--all"]);
+	await git(cwd, ["add", "--all"], signal);
 	onPhase?.("commit");
-	await commitWithPreferredGit(cwd, subject, skipHooks);
-	return git(cwd, ["rev-parse", "--short", "HEAD"]);
+	await commitWithPreferredGit(cwd, subject, skipHooks, signal);
+	return git(cwd, ["rev-parse", "--short", "HEAD"], signal);
 }
 
-export async function pushCurrentBranch(cwd: string, hasUpstream: boolean) {
-	await git(cwd, hasUpstream ? ["push"] : ["push", "-u", "origin", "HEAD"]);
+export async function pushCurrentBranch(
+	cwd: string,
+	hasUpstream: boolean,
+	signal?: AbortSignal,
+) {
+	await git(
+		cwd,
+		hasUpstream ? ["push"] : ["push", "-u", "origin", "HEAD"],
+		signal,
+	);
 }

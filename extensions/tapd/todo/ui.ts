@@ -8,6 +8,8 @@ import type {
 	TapdItem,
 	TapdItemKind,
 } from "../types.js";
+import type { WorkingCancel } from "../working.js";
+import { abortError } from "../working.js";
 import { buildTree, sortTree } from "./model.js";
 import { showSessionPicker } from "./session-picker.js";
 import { renderTable, type TableSelection } from "./table-view.js";
@@ -22,25 +24,31 @@ interface LoadTreeOptions {
 	ctx: ExtensionCommandContext;
 	config: TapdConfig;
 	workspaces: { id: string; name: string }[];
-	signal: AbortSignal;
+	cancel?: WorkingCancel;
 	trees: Record<TapdItemKind, TreeState>;
 	kind: TapdItemKind;
 	scope: "current" | "all";
 }
 
 async function loadTree(options: LoadTreeOptions): Promise<void> {
-	const { ctx, config, workspaces, signal, trees, kind, scope } = options;
+	const { ctx, config, workspaces, cancel, trees, kind, scope } = options;
 	const state = trees[kind];
 	if (
 		(scope === "all" && state.allLoaded) ||
 		(scope === "current" && state.current.length > 0)
 	)
 		return;
-	ctx.ui.notify(
-		`正在获取${kind === "bug" ? "Bug" : "需求"}${scope === "current" ? "当前迭代" : "所有迭代"}待办...`,
-		"info",
+	const label = `正在获取${kind === "bug" ? "Bug" : "需求"}${scope === "current" ? "当前迭代" : "所有迭代"}待办...`;
+	cancel?.setMessage(`Working... ${label}`);
+	cancel?.throwIfAborted();
+	const result = await fetchAll(
+		workspaces,
+		config,
+		scope,
+		cancel?.signal ?? new AbortController().signal,
+		kind,
 	);
-	const result = await fetchAll(workspaces, config, scope, signal, kind);
+	cancel?.throwIfAborted();
 	const data = kind === "story" ? buildTree(result.items) : result.items;
 	sortTree(data);
 	if (scope === "current") state.current = data;
@@ -71,8 +79,8 @@ export async function showTable(
 	config: TapdConfig,
 	workspaces: { id: string; name: string }[],
 	initialCurrent: boolean,
+	cancel?: WorkingCancel,
 ): Promise<TableOutcome> {
-	const controller = new AbortController();
 	const trees: Record<TapdItemKind, TreeState> = {
 		story: { current: [], all: [], allLoaded: false },
 		bug: { current: [], all: [], allLoaded: false },
@@ -82,34 +90,52 @@ export async function showTable(
 		viewCurrent: initialCurrent,
 		typeFilter: null,
 	};
-	const load: LoadTableScope = (kind, scope) =>
-		loadTree({
-			ctx,
-			config,
-			workspaces,
-			signal: controller.signal,
-			trees,
-			kind,
-			scope,
-		});
+	const load: LoadTableScope = async (kind, scope) => {
+		cancel?.resume(
+			`Working... 正在获取${kind === "bug" ? "Bug" : "需求"}待办...`,
+		);
+		try {
+			await loadTree({
+				ctx,
+				config,
+				workspaces,
+				cancel,
+				trees,
+				kind,
+				scope,
+			});
+		} finally {
+			if (cancel?.signal.aborted) throw abortError();
+		}
+	};
 
 	await load("story", "current");
+	cancel?.setMessage("Working... 正在扫描历史会话...");
+	cancel?.throwIfAborted();
 	await buildTapdCatalog((loaded, total) => {
 		if (total > 50)
-			ctx.ui.notify(`正在扫描历史会话 ${loaded}/${total}...`, "info");
+			cancel?.setMessage(`Working... 正在扫描历史会话 ${loaded}/${total}`);
 	});
+	cancel?.throwIfAborted();
 	while (true) {
+		if (cancel?.signal.aborted) throw abortError();
 		const tree = trees[state.kind];
-		const selection = await renderTable(ctx, {
-			forest: state.viewCurrent ? tree.current : tree.all,
-			viewLabel: state.viewCurrent ? "当前迭代" : "所有迭代",
-			typeFilter: state.typeFilter,
-			kind: state.kind,
-			storyCount: trees.story.current.length,
-			bugCount: trees.bug.current.length,
-		});
+		cancel?.suspend();
+		let selection: TableSelection | null;
+		try {
+			selection = await renderTable(ctx, {
+				forest: state.viewCurrent ? tree.current : tree.all,
+				viewLabel: state.viewCurrent ? "当前迭代" : "所有迭代",
+				typeFilter: state.typeFilter,
+				kind: state.kind,
+				storyCount: trees.story.current.length,
+				bugCount: trees.bug.current.length,
+			});
+		} finally {
+			cancel?.resume("Working...");
+		}
 		if (!selection) break;
-		const result = await handleSelection(ctx, selection, state, load);
+		const result = await handleSelection(ctx, selection, state, load, cancel);
 		if (result === "continue") continue;
 		if (result) return result;
 		break;
@@ -122,6 +148,7 @@ async function handleSelection(
 	selection: TableSelection,
 	state: TableLoopState,
 	load: LoadTableScope,
+	cancel?: WorkingCancel,
 ): Promise<TableOutcome | "continue" | undefined> {
 	switch (selection.action) {
 		case "kind_toggle":
@@ -141,7 +168,9 @@ async function handleSelection(
 			if (selection.url) await openSelection(ctx, selection.url);
 			return "continue";
 		case "link_view":
-			return (await linkedSessionOutcome(ctx, selection)) ?? "continue";
+			return (
+				(await linkedSessionOutcome(ctx, selection, cancel)) ?? "continue"
+			);
 		default:
 			return undefined;
 	}
@@ -163,14 +192,26 @@ async function openSelection(
 async function linkedSessionOutcome(
 	ctx: ExtensionCommandContext,
 	selection: TableSelection,
+	cancel?: WorkingCancel,
 ): Promise<TableOutcome | undefined> {
 	if (!selection.itemKey || !selection.itemName) return undefined;
 	const { itemKey, itemName } = selection;
+	cancel?.setMessage("Working... 正在扫描关联会话...");
+	cancel?.throwIfAborted();
 	const sessions = await listTapdSessions(itemKey, (loaded, total) => {
 		if (total > 50)
-			ctx.ui.notify(`正在扫描历史会话 ${loaded}/${total}...`, "info");
+			cancel?.setMessage(
+				`Working... 正在扫描关联会话 ${loaded}/${total}`,
+			);
 	});
-	const action = await showSessionPicker(ctx, sessions, itemName);
+	cancel?.throwIfAborted();
+	cancel?.suspend();
+	let action: Awaited<ReturnType<typeof showSessionPicker>>;
+	try {
+		action = await showSessionPicker(ctx, sessions, itemName);
+	} finally {
+		cancel?.resume("Working...");
+	}
 	return action
 		? { kind: "session_action", action, itemKey, itemName }
 		: undefined;

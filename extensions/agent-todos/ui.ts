@@ -12,6 +12,14 @@ const WIDGET_KEY = "agent-todos";
 const STATUS_KEY = "agent-todos";
 const MAX_ITEM_LINES = 16;
 
+function mountTodoWidget(ctx: ExtensionContext, todos: TodoItem[]): void {
+	ctx.ui.setWidget(
+		WIDGET_KEY,
+		(_tui: TUI, theme: Theme) => new TodoPanel(todos, theme),
+		{ placement: "aboveEditor" },
+	);
+}
+
 export function refreshTodoUI(ctx: ExtensionContext, store: TodoStore): void {
 	if (!ctx.hasUI) return;
 	const todos = store.getTodos();
@@ -20,11 +28,17 @@ export function refreshTodoUI(ctx: ExtensionContext, store: TodoStore): void {
 		return;
 	}
 	ctx.ui.setStatus(STATUS_KEY, statusText(todos));
-	ctx.ui.setWidget(
-		WIDGET_KEY,
-		(_tui: TUI, theme: Theme) => new TodoPanel(todos, theme),
-		{ placement: "aboveEditor" },
-	);
+	mountTodoWidget(ctx, todos);
+}
+
+/** 先卸再挂，把 TASKS 移到 aboveEditor 栈底（排在 Working 等优先条下方）。 */
+export function restackTodoUI(ctx: ExtensionContext, store: TodoStore): void {
+	if (!ctx.hasUI) return;
+	const todos = store.getTodos();
+	if (todos.length === 0) return;
+	ctx.ui.setWidget(WIDGET_KEY, undefined);
+	ctx.ui.setStatus(STATUS_KEY, statusText(todos));
+	mountTodoWidget(ctx, todos);
 }
 
 export function hideTodoPanel(ctx: ExtensionContext, store: TodoStore): void {

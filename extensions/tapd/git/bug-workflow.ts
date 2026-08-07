@@ -3,7 +3,6 @@ import type { TapdConfig } from "../types.js";
 import {
 	fetchRemoteTags,
 	linkedObjectsForCommit,
-	parseIntroducedCommit,
 	resolveCommitTag,
 } from "./analysis.js";
 import {
@@ -19,27 +18,26 @@ import {
 } from "./tapd-api.js";
 import type { TapdKeyword } from "./types.js";
 
+function resolvedIntroducedCommit(draft: BugRootCauseDraft): string | null {
+	const value = draft.introducedCommit.trim();
+	if (!value || /^(未能定位|无法定位|unknown|none)$/i.test(value)) return null;
+	return /^[0-9a-f]{7,40}$/i.test(value) ? value : null;
+}
+
 export async function updateBugFromDraft(
 	ctx: ExtensionCommandContext,
 	config: TapdConfig,
 	item: TapdKeyword,
 	draftData: BugRootCauseDraft,
-	evidence: string,
 	repositoryRoot: string,
 	status: string,
 	currentOwner: string | undefined,
 	progress: (action: string) => void,
 ): Promise<string[]> {
 	const updates: string[] = [];
-	const draft = await ctx.ui.editor(
-		`Bug ${item.shortId} 流转备注（请确认 Agent 分析，勿编造）`,
-		[renderBugRootCauseDraft(draftData), "", "--- Git 证据 ---", evidence].join(
-			"\n",
-		),
-	);
-	if (!draft) return [`bug/${item.shortId}: 用户取消，未流转 Bug`];
+	const remark = renderBugRootCauseDraft(draftData);
+	const introducedCommit = resolvedIntroducedCommit(draftData);
 	const extraFields: Record<string, string> = {};
-	const introducedCommit = parseIntroducedCommit(draft);
 	if (introducedCommit) {
 		progress("正在校验引入 commit、获取 tags 并匹配合入版本...");
 		try {
@@ -109,9 +107,7 @@ export async function updateBugFromDraft(
 		return updates;
 	}
 	progress("正在写入 Bug 根因备注...");
-	const description = draft
-		.split("--- Git 证据 ---")[0]
-		.trim()
+	const description = remark
 		.replace(/\n{2,}/g, "<br/><br/>")
 		.replace(/\n/g, "<br/>");
 	await createBugRemark(config, item, item.author, description);

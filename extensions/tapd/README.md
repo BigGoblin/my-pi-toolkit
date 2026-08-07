@@ -19,7 +19,7 @@ TAPD 需求与缺陷工作流扩展。提供待办列表、会话关联、需求
 | `/tapd commit [--no-push]` | 直接使用 TAPD keyword 生成提交信息，提交并默认推送；结果显示为对话区工具风格卡片 |
 | `/tapd mr [--draft] [--target dev] [--no-delete-source-branch]` | 直接创建或更新 GitLab MR 并回写 TAPD；结果显示为对话区工具风格卡片 |
 
-Git 工作流卡片在结束后落盘为 `completed` / `failed`，正文包含执行步骤与结果；运行中进度显示在 status 条。
+长耗时 TAPD 操作（待办列表冷启动、`Ctrl+Shift+T`、子需求同步、`bug`/`bug-reject` 拉取与提交、创建关联会话取详情，以及 `git-status`/`branch`/`commit`/`mr`）会在 editor 上方、TASKS 之上显示 `Working...`（含 `Esc 取消`）。Overlay/confirm/select 期间暂时隐藏 Working，Esc 交给对话框。Git 工作流另在对话区保留一张 `running`→终态单卡；Esc 中止会尽量结束 `git`/hooks 进程树并将卡片标为 `cancelled`。`analyze`/`design`/`collaboration`/`review` 交给 Agent streaming，不重复挂 Working。
 
 工作流命令支持附加自然语言和 `@文件`：
 
@@ -109,7 +109,7 @@ TAPD Open API 索引见 [`../../docs/tapd-api.md`](../../docs/tapd-api.md)。
 
 ## Git workflow
 
-- `git-status`、`branch`、`commit`、`mr` 由 slash command handler 直接执行，不经过模型，也不会插入工具触发提示词。执行期间在 footer 显示当前阶段；完成或失败后在对话区追加一张使用共享工具视觉语言的结果卡片，保留提交哈希、MR URL、TAPD 流转结果或错误信息。
+- `git-status`、`branch`、`commit`、`mr` 由 slash command handler 直接执行，不经过模型，也不会插入工具触发提示词。执行一开始在对话区插入一张 `running` 工具卡片，并显示 `Working... · Esc 取消`；结束时不追加第二张展示卡，仅通过同 `runId` 重绘为终态。运行中按 Esc 会 abort 并尽量结束 `git`/`npm` hooks 进程树（Windows 使用 `taskkill /T`）。展示卡正文过长会截断，完整日志在隐藏 context 消息中。
 - 默认从 `origin/dev` 创建 `bug/{short_id}` 或 `feature/{short_id}`，并使用 `--no-track`。
 - 工作区有未提交改动时，创建分支前会打开迁移方式选择器（标题显示当前分支、目标分支与基础分支）：
   - **stash 后迁移（推荐）**：`git stash push --include-untracked` 保存全部改动（含未跟踪文件）→ 从 `--base` 创建目标分支 → `git stash pop` 恢复；
@@ -122,14 +122,14 @@ TAPD Open API 索引见 [`../../docs/tapd-api.md`](../../docs/tapd-api.md)。
 - Bug 提交为 `fix: {KEYWORD}`；需求/任务提交为 `feat: {KEYWORD}`。KEYWORD 原样保留。
 - 没有 upstream 时首次推送使用 `git push -u origin HEAD`。
 - 提交默认使用当前操作系统 PATH 中的 `git`。仅当运行于 WSL，且 Git hook 因 Windows CRLF shebang 报出 `sh\\r: No such file or directory` 时，才自动改用 Windows `git.exe` 重试；重试成功后将仓库记录在 `~/.pi/agent/tapd-git-runtime.json`，该仓库后续在 WSL 中提交时直接使用 Windows Git。原生 Windows、Linux 和 macOS 环境始终使用各自 PATH 中的 `git`。可用 `TAPD_WINDOWS_GIT_PATH` 指定 WSL 可执行的 `git.exe` 完整路径。
-- `git commit` 失败（例如 pre-commit hook 未通过）时，会显示原始错误并询问是否使用 `git commit --no-verify` 重新暂存后提交；确认后会跳过 pre-commit、commit-msg 等校验 hooks，取消则保留原失败结果。
+- `git commit` / pre-commit（如 `npm run precommit`）运行期间可按 Esc 取消；hooks 失败后会在同一张 Git 卡片上临时展示截断摘要，并打开选择器：`› 使用 --no-verify 跳过 hooks 后重试` 或 `取消`。选择跳过会重新暂存并以 `--no-verify` 提交，成功后终态卡不再保留该摘要；取消时摘要仍留在取消结果中。取消、Esc 中止或放弃提交预览时卡片为 `cancelled`（不是 `completed`）。无交互界面时直接报错，不默认跳过 hooks。
 - MR 会扫描 `merge-base..HEAD` 的全部提交，不只处理第一条 TAPD 关联。
 - `/tapd mr --draft` 会创建或更新 Draft MR。当前关联项是功能需求时，功能需求本身和测试需求保持原状态，但其下所有处理人为当前 Token 用户的直属开发子需求会更新为“开发完成”；直接关联开发子需求时也照常更新为“开发完成”。这些实际流转的开发子需求会将完成工时同步为各自的有效预估工时。TAPD 任务和 Bug 不流转，Bug 也不会触发根因分析。后续执行不带 `--draft` 的 `/tapd mr` 会把同一开放 MR 更新为 Ready：当前用户负责的功能需求和开发子需求更新为“开发完成”，当前用户负责的测试需求更新为“已通过”；其他处理人的需求不流转。
 - Bug 默认标签为 `二组`、`迭代bug(每日发布)`，状态更新为 `已解决`，负责人为 `沈瑞昀`。
 - 需求/任务默认标签为 `二组`、`迭代任务(随迭代发布)`。Ready MR 中，关联项是开发子需求或 TAPD 任务时更新为 `开发完成`；关联项是测试需求时，仅在处理人为当前 Token 用户时更新为 `已通过`；关联项是顶层功能需求时，仅更新当前用户负责的功能需求本身及其直属开发、测试需求，其中功能需求和开发子需求更新为 `开发完成`，测试需求更新为 `已通过`。每个实际流转的 TAPD 任务、功能需求、开发子需求和测试需求都会将完成工时同步为自身的有效预估工时；预估工时缺失、为零或无效时只更新状态，不写完成工时，也不阻断 MR。其他处理人的需求不会被修改，所有更新均不修改负责人。
-- 纯需求/任务的 `/tapd mr` 保持一次执行完成，不触发 Agent 根因分析。
-- 含 Bug 的 `/tapd mr` 首次执行会先分析修复 diff 和 `git blame` 候选，允许 UI 选择或手动输入 commit，然后把 TAPD Bug、修复 patch 和已确认 commit 交给 Agent。Agent 只生成结构化根因草稿并保存在仓库 `.pi/tapd-root-cause/`，本次不创建 MR、不更新 TAPD。
-- Agent 分析完成后再次执行 `/tapd mr`，扩展只接受与当前 `HEAD` 匹配的草稿，打开编辑器供用户最终确认，再创建或更新 MR 并回写 TAPD。TAPD 流转和备注写入成功后自动删除草稿；用户取消或流程失败时保留草稿以便重试。选择“未能定位”时使用 TAPD 真实候选值 `其他(历史缺陷)`。
+- 纯需求/任务的 `/tapd mr` 保持一次执行完成，不触发根因填写。
+- 含 Bug 的 Ready `/tapd mr` 在同一次执行中完成：先分析修复 diff 和 `git blame` 候选并选择/手动输入引入 commit，再打开编辑器由用户手动填写【产生原因】与【修复】，确认后直接创建或更新 MR 并回写 TAPD。不再交给 Agent 分析，也不再要求二次执行 `/tapd mr`。
+- 若仓库 `.pi/tapd-root-cause/{bugId}.json` 已有与当前 `HEAD` 匹配的草稿，会直接复用并跳过填写；TAPD 流转成功后自动删除该草稿。选择“未能定位”时使用 TAPD 真实候选值 `其他(历史缺陷)`。
 - 引入 commit 经验证后，会拉取远端 tags，优先取直接指向 commit 的第一个 tag，否则取第一个包含该 commit 的 tag。
 - 合入版本从 TAPD `/bugs/get_fields_info` 的“合入版本”候选值中选择。普通版本精确匹配；`.0` 等存在多个迭代候选时，根据引入 commit 中 TAPD keyword 关联事项的迭代唯一匹配；关联事项没有迭代时会列出候选值让用户手动选择。
 - tag 在候选值中完全不存在时，按规则选择候选值中的 `其他(历史缺陷)`；若该选项也不存在则不修改合入版本。
@@ -146,4 +146,5 @@ TAPD Open API 索引见 [`../../docs/tapd-api.md`](../../docs/tapd-api.md)。
 | `subtasks/` | 子需求解析、确认计划、TAPD 同步（`api-sync.ts`）与 append-only 状态更新（`state.ts`） |
 | `todo/` | 待办编排与 Overlay；`tree-list.ts`、`table-view.ts`、`session-picker*.ts` 分别负责树表、响应式主表和会话/路径 viewport |
 | `review/` | 需求实现审核上下文、只读子代理、进度和报告渲染 |
-| `git/` | Git 仓库、TAPD keyword、GitLab MR、状态回写和根因备注 |
+| `working.ts` | TAPD 侧 `withTapdWorking`；底层实现见 `extensions/shared/tui/working-cancel.ts` |
+| `git/` | Git 仓库、TAPD keyword、GitLab MR、状态回写和根因备注；`commands.ts` 单卡、`commit-workflow.ts` 提交推送 |

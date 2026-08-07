@@ -28,6 +28,40 @@ import {
 } from "./git/commands.js";
 import { requestTapdReview } from "./review/command.js";
 import { registerTapdReviewTool } from "./review/tool.js";
+import { withTapdWorking } from "./working.js";
+
+async function openTapdTodoList(
+	ctx: ExtensionCommandContext,
+	config: NonNullable<ReturnType<typeof loadConfig>>,
+	initialCurrent: boolean,
+): Promise<Awaited<ReturnType<typeof showTable>> | undefined> {
+	return withTapdWorking(ctx, "tapd-todo-list", async (cancel) => {
+		cancel?.setMessage("Working... 正在连接 TAPD");
+		const user = await fetchUserInfo(config);
+		cancel?.throwIfAborted();
+		if (!user) {
+			ctx.ui.notify("TAPD 连接失败，请检查令牌", "error");
+			return undefined;
+		}
+		cancel?.setMessage("Working... 正在获取工作空间");
+		const workspaces = await fetchWorkspaces(user.nick, config);
+		cancel?.throwIfAborted();
+		if (workspaces.length === 0) {
+			ctx.ui.notify("没有找到工作空间", "error");
+			return undefined;
+		}
+		cancel?.setMessage(
+			`Working... 找到 ${workspaces.length} 个工作空间，正在获取待办`,
+		);
+		return showTable(
+			withTapdListOverlays(ctx),
+			config,
+			workspaces,
+			initialCurrent,
+			cancel,
+		);
+	});
+}
 
 export default function tapdExtension(pi: ExtensionAPI) {
 	const STATE_KEY = "tapd-view-state";
@@ -147,20 +181,6 @@ export default function tapdExtension(pi: ExtensionAPI) {
 				return;
 			}
 
-			ctx.ui.notify("正在连接 TAPD...", "info");
-			const user = await fetchUserInfo(config);
-			if (!user) {
-				ctx.ui.notify("TAPD 连接失败，请检查令牌", "error");
-				return;
-			}
-
-			ctx.ui.notify(`已连接 (${user.nick})，正在获取工作空间...`, "info");
-			const workspaces = await fetchWorkspaces(user.nick, config);
-			if (workspaces.length === 0) {
-				ctx.ui.notify("没有找到工作空间", "error");
-				return;
-			}
-
 			let curOnly = true;
 			const entries = ctx.sessionManager.getEntries();
 			const stateEntry = entries
@@ -174,16 +194,8 @@ export default function tapdExtension(pi: ExtensionAPI) {
 				if (typeof data?.currentOnly === "boolean") curOnly = data.currentOnly;
 			}
 
-			ctx.ui.notify(
-				`找到 ${workspaces.length} 个工作空间，正在获取待办...`,
-				"info",
-			);
-			const outcome = await showTable(
-				withTapdListOverlays(ctx),
-				config,
-				workspaces,
-				curOnly,
-			);
+			const outcome = await openTapdTodoList(ctx, config, curOnly);
+			if (!outcome) return;
 			if (outcome.kind === "session_action") {
 				const { action, itemKey, itemName } = outcome;
 				try {
@@ -210,19 +222,13 @@ export default function tapdExtension(pi: ExtensionAPI) {
 
 	pi.registerShortcut("ctrl+shift+t", {
 		description: "打开 TAPD 待办",
-		handler: async (ctx: ExtensionCommandContext) => {
+		handler: async (ctx) => {
 			const config = loadConfig();
 			if (!config) {
 				ctx.ui.notify("请先配置 ~/.pi/agent/tapd.json", "warning");
 				return;
 			}
-			const user = await fetchUserInfo(config);
-			if (!user) {
-				ctx.ui.notify("TAPD 连接失败", "error");
-				return;
-			}
-			const workspaces = await fetchWorkspaces(user.nick, config);
-			if (workspaces.length > 0) await showTable(ctx, config, workspaces, true);
+			await openTapdTodoList(ctx as ExtensionCommandContext, config, true);
 		},
 	});
 }

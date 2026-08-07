@@ -13,6 +13,7 @@ import {
 	buildUnderstandPrompt,
 } from "../documents/prompts.js";
 import type { CreateDraft, TapdConfig } from "../types.js";
+import { withTapdWorking } from "../working.js";
 
 function resolveTargetCwd(
 	workingDirectory: string | undefined,
@@ -46,17 +47,28 @@ export async function createTapdSession(
 
 	const url =
 		parsed.kind === "bug" ? bugUrl(wsId, itemId) : storyUrl(wsId, itemId);
-	const detail =
-		parsed.kind === "bug"
-			? await fetchBugDetail(wsId, itemId, config)
-			: await fetchStoryDetail(wsId, itemId, config);
-	const description = detail?.description
-		? htmlToText(String(detail.description))
-		: "";
-	const itemTitle =
-		parsed.kind === "bug"
-			? (detail as { title?: string } | null)?.title || itemName || title
-			: (detail as { name?: string } | null)?.name || itemName || title;
+	const prepared = await withTapdWorking(
+		ctx,
+		"tapd-create-session",
+		async (cancel) => {
+			cancel?.setMessage("Working... 正在获取 TAPD 详情...");
+			const detail =
+				parsed.kind === "bug"
+					? await fetchBugDetail(wsId, itemId, config)
+					: await fetchStoryDetail(wsId, itemId, config);
+			cancel?.throwIfAborted();
+			const description = detail?.description
+				? htmlToText(String(detail.description))
+				: "";
+			const itemTitle =
+				parsed.kind === "bug"
+					? (detail as { title?: string } | null)?.title || itemName || title
+					: (detail as { name?: string } | null)?.name || itemName || title;
+			return { description, itemTitle };
+		},
+	);
+	if (!prepared) return;
+	const { description, itemTitle } = prepared;
 	let understandingFile: string | undefined;
 	let sessionPrompt: string;
 	if (parsed.kind === "bug") {

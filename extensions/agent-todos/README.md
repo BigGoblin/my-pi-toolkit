@@ -5,7 +5,7 @@
 ## 行为
 
 1. Agent 在多步骤任务中应先调用 `agent_todo_write` 拆分任务。
-2. 成功后，editor **上方**出现完整 Todos 列表；footer 显示 `📋 completed/active`（分母不含 `cancelled`）。
+2. 成功后，editor **上方**出现完整 Todos 列表；footer 显示 `📋 completed/active`（分母不含 `cancelled`）。若同时有 TAPD Git 的 `Working...` 指示条，TASKS 会 restack 到其下方，保证 Working 始终在最上方。
 3. 后续用 `merge: true` 按 `id` 更新状态；面板与 footer 即时刷新。
 4. `in_progress` 必须对应当前实际工作；只有目标结果已达成并验证后才能标记 `completed`。若后续证据表明该步骤仍需处理，必须先重新打开为 `in_progress`，并将原当前步骤退回 `pending`，再继续操作。
 5. 每次工具结果会向模型重申当前执行焦点；此外，每次 LLM 调用前都会临时注入当前 `in_progress` 与下一条 `pending`，避免长工具链中遗忘切换阶段。

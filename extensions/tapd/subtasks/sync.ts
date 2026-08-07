@@ -15,6 +15,7 @@ import {
 	fetchSubtaskSyncContext,
 	updateSubtaskOnTapd,
 } from "./api-sync.js";
+import { isAbortError, withTapdWorking } from "../working.js";
 import { readSubtaskState, updateSubtaskState } from "./state.js";
 
 export async function createSubtasks(
@@ -119,113 +120,122 @@ export async function createSubtasks(
 			next.subtasks = created;
 		});
 	}
-	let syncContext;
-	let remoteChildren;
-	try {
-		[syncContext, remoteChildren] = await Promise.all([
-			fetchSubtaskSyncContext(config, state.workspaceId, storyId),
-			fetchStoryChildren(state.workspaceId, storyId, config),
-		]);
-	} catch (error) {
-		ctx.ui.notify(
-			`获取 TAPD 远端子需求失败，已停止同步：${error instanceof Error ? error.message : String(error)}`,
-			"error",
-		);
-		return;
-	}
-	if (!syncContext) {
-		ctx.ui.notify("获取父需求或当前 TAPD 用户失败", "error");
-		return;
-	}
-	const { owner, types, inheritedFields } = syncContext;
-	const remoteIds = new Set(remoteChildren.map((child) => child.id));
-	const activeCreated = created.filter((item) => remoteIds.has(item.tapdId));
-	const staleCount = created.length - activeCreated.length;
-	if (staleCount > 0) {
-		created = activeCreated;
-		updateSubtaskState(pi, ctx, (next) => {
-			next.subtasks = created;
-		});
-		ctx.ui.notify(
-			`检测到 ${staleCount} 个远端已删除子需求，将按原计划重建`,
-			"info",
-		);
-	}
-
-	const pendingCount = plan.items.filter(
-		(item) => !created.some((done) => done.localId === item.localId),
-	).length;
-	const updatingCount = plan.items.length - pendingCount;
-	ctx.ui.notify(
-		`正在同步 ${updatingCount} 个已有子需求，并创建 ${pendingCount} 个缺失子需求...`,
-		"info",
-	);
-
-	const persist = (): void => {
-		updateSubtaskState(pi, ctx, (next) => {
-			next.subtasks = created;
-		});
-	};
-
-	for (const item of plan.items) {
-		const existing = created.find((done) => done.localId === item.localId);
-		const description = await buildSubtaskDescription(
-			item,
-			state.itemName,
-			created,
-			collaborationMarkdown,
-		);
-		if (existing) {
-			const ok = await updateSubtaskOnTapd(
-				config,
-				state.workspaceId,
-				existing,
-				item,
-				description,
-				owner,
-			);
-			if (!ok) {
-				ctx.ui.notify(`${item.title} 同步失败，再次执行可重试`, "error");
-				return;
-			}
-			existing.title = item.title;
-			existing.effort = item.effort;
-			existing.updatedAt = new Date().toISOString();
-			persist();
-			ctx.ui.notify(`${item.title} 已同步：${existing.tapdUrl}`, "info");
-			continue;
-		}
-
+	await withTapdWorking(ctx, "tapd-sub-task", async (cancel) => {
+		cancel?.setMessage("Working... 正在获取远端子需求...");
+		let syncContext;
+		let remoteChildren;
 		try {
-			const result = await createSubtaskOnTapd(
-				config,
-				state.workspaceId,
-				storyId,
-				item,
-				description,
-				owner,
-				types,
-				inheritedFields,
-			);
-			created.push(result);
-			persist();
-			ctx.ui.notify(`${item.title} 已创建：${result.tapdUrl}`, "info");
+			[syncContext, remoteChildren] = await Promise.all([
+				fetchSubtaskSyncContext(config, state.workspaceId, storyId),
+				fetchStoryChildren(state.workspaceId, storyId, config),
+			]);
 		} catch (error) {
+			if (isAbortError(error) || cancel?.signal.aborted) throw error;
 			ctx.ui.notify(
-				`${error instanceof Error ? error.message : String(error)}。再次执行可继续补建。`,
+				`获取 TAPD 远端子需求失败，已停止同步：${error instanceof Error ? error.message : String(error)}`,
 				"error",
 			);
 			return;
 		}
-	}
+		cancel?.throwIfAborted();
+		if (!syncContext) {
+			ctx.ui.notify("获取父需求或当前 TAPD 用户失败", "error");
+			return;
+		}
+		const { owner, types, inheritedFields } = syncContext;
+		const remoteIds = new Set(remoteChildren.map((child) => child.id));
+		const activeCreated = created.filter((item) => remoteIds.has(item.tapdId));
+		const staleCount = created.length - activeCreated.length;
+		if (staleCount > 0) {
+			created = activeCreated;
+			updateSubtaskState(pi, ctx, (next) => {
+				next.subtasks = created;
+			});
+			ctx.ui.notify(
+				`检测到 ${staleCount} 个远端已删除子需求，将按原计划重建`,
+				"info",
+			);
+		}
 
-	ctx.ui.notify(
-		`TAPD 子需求已全部创建：\n${created
-			.map(
-				(item, index) =>
-					`${index + 1}. [${item.kind === "design" ? "设计" : "开发"}] ${item.title}\n${item.tapdUrl}`,
-			)
-			.join("\n")}`,
-		"info",
-	);
+		const pendingCount = plan.items.filter(
+			(item) => !created.some((done) => done.localId === item.localId),
+		).length;
+		const updatingCount = plan.items.length - pendingCount;
+		cancel?.setMessage(
+			`Working... 同步 ${updatingCount} 个已有、创建 ${pendingCount} 个缺失子需求`,
+		);
+
+		const persist = (): void => {
+			updateSubtaskState(pi, ctx, (next) => {
+				next.subtasks = created;
+			});
+		};
+
+		for (const [index, item] of plan.items.entries()) {
+			cancel?.throwIfAborted();
+			cancel?.setMessage(
+				`Working... 子需求 ${index + 1}/${plan.items.length}：${item.title}`,
+			);
+			const existing = created.find((done) => done.localId === item.localId);
+			const description = await buildSubtaskDescription(
+				item,
+				state.itemName,
+				created,
+				collaborationMarkdown,
+			);
+			if (existing) {
+				const ok = await updateSubtaskOnTapd(
+					config,
+					state.workspaceId,
+					existing,
+					item,
+					description,
+					owner,
+				);
+				if (!ok) {
+					ctx.ui.notify(`${item.title} 同步失败，再次执行可重试`, "error");
+					return;
+				}
+				existing.title = item.title;
+				existing.effort = item.effort;
+				existing.updatedAt = new Date().toISOString();
+				persist();
+				ctx.ui.notify(`${item.title} 已同步：${existing.tapdUrl}`, "info");
+				continue;
+			}
+
+			try {
+				const result = await createSubtaskOnTapd(
+					config,
+					state.workspaceId,
+					storyId,
+					item,
+					description,
+					owner,
+					types,
+					inheritedFields,
+				);
+				created.push(result);
+				persist();
+				ctx.ui.notify(`${item.title} 已创建：${result.tapdUrl}`, "info");
+			} catch (error) {
+				if (isAbortError(error) || cancel?.signal.aborted) throw error;
+				ctx.ui.notify(
+					`${error instanceof Error ? error.message : String(error)}。再次执行可继续补建。`,
+					"error",
+				);
+				return;
+			}
+		}
+
+		ctx.ui.notify(
+			`TAPD 子需求已全部创建：\n${created
+				.map(
+					(item, index) =>
+						`${index + 1}. [${item.kind === "design" ? "设计" : "开发"}] ${item.title}\n${item.tapdUrl}`,
+				)
+				.join("\n")}`,
+			"info",
+		);
+	});
 }
