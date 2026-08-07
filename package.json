@@ -11,6 +11,7 @@
     "@connectrpc/connect-node": "^1.7.0",
     "@open-cursor/client": "file:./vendor/open-cursor/client",
     "@open-cursor/protocol": "file:./vendor/open-cursor/protocol",
+    "grok-mermaid": "0.2.2",
     "marked": "18.0.5",
     "pi-lens": "3.8.72",
     "typebox": "^1.1.38",
@@ -20,9 +21,9 @@
     "pi-lens"
   ],
   "peerDependencies": {
-    "@earendil-works/pi-ai": "*",
-    "@earendil-works/pi-coding-agent": "*",
-    "@earendil-works/pi-tui": "*"
+    "@earendil-works/pi-ai": ">=0.84.0",
+    "@earendil-works/pi-coding-agent": ">=0.84.0",
+    "@earendil-works/pi-tui": ">=0.84.0"
   },
   "pi": {
     "extensions": [

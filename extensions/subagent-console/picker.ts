@@ -6,6 +6,7 @@ import {
 	type KeybindingsManager,
 	type TUI,
 } from "@earendil-works/pi-tui";
+import { overlayViewportHeight } from "../shared/tui/overlay-shell.js";
 import { fitLine } from "../shared/tui/visual-language.js";
 
 export interface SubagentPickerItem {
@@ -49,12 +50,14 @@ function movedIndex(
 }
 
 function tabHeader(scope: PickerScope, theme: Theme): string {
-	const current = scope === "current"
-		? theme.fg("accent", theme.bold("CURRENT"))
-		: theme.fg("dim", "CURRENT");
-	const all = scope === "all"
-		? theme.fg("accent", theme.bold("ALL"))
-		: theme.fg("dim", "ALL");
+	const current =
+		scope === "current"
+			? theme.fg("accent", theme.bold("CURRENT"))
+			: theme.fg("dim", "CURRENT");
+	const all =
+		scope === "all"
+			? theme.fg("accent", theme.bold("ALL"))
+			: theme.fg("dim", "ALL");
 	return `${theme.bold(theme.fg("text", "SUBAGENTS"))}  ${current}  ${all}`;
 }
 
@@ -69,7 +72,10 @@ function renderPicker(options: {
 	width: number;
 }): string[] {
 	const innerWidth = Math.max(28, options.width - 2);
-	const pageSize = Math.max(3, Math.floor(options.tui.terminal.rows * 0.6) - 7);
+	const pageSize = overlayViewportHeight(options.tui.terminal.rows, {
+		maxHeightRatio: 0.68,
+		margin: 1,
+	});
 	const maximumStart = Math.max(0, options.items.length - pageSize);
 	const start = Math.min(
 		maximumStart,
@@ -100,7 +106,9 @@ function renderPicker(options: {
 		border(`╭${"─".repeat(innerWidth)}╮`),
 		`${border("│")}${header}${border("│")}`,
 		border(`├${"─".repeat(innerWidth)}┤`),
-		...rows.map((row) => `${border("│")}${fitLine(row, innerWidth)}${border("│")}`),
+		...rows.map(
+			(row) => `${border("│")}${fitLine(row, innerWidth)}${border("│")}`,
+		),
 		border(`├${"─".repeat(innerWidth)}┤`),
 		`${border("│")}${help}${border("│")}`,
 		border(`╰${"─".repeat(innerWidth)}╯`),

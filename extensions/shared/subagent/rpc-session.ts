@@ -8,8 +8,8 @@ import {
 	type LiveSubagentRun,
 	type SubagentTranscriptEntry,
 } from "./registry.js";
+import { RpcAssistantStream } from "./rpc-assistant-stream.js";
 import {
-	assistantText,
 	parseRpcEvent,
 	sendRpc,
 	writeRunJson,
@@ -26,10 +26,9 @@ export class RpcSubagentSession {
 	private readonly toolCalls: TerminalSubagentResult["toolCalls"] = [];
 	private status: LiveSubagentRun["status"] = "starting";
 	private streaming = false;
-	private streamingMessage?: Extract<
-		SubagentTranscriptEntry,
-		{ kind: "assistant" }
-	>;
+	private readonly assistantStream = new RpcAssistantStream(this.entries, () =>
+		this.notify(),
+	);
 	private lastOutput = "";
 	private stderr = "";
 	private settled = false;
@@ -157,8 +156,13 @@ export class RpcSubagentSession {
 			case "tool_execution_end":
 				this.handleToolEnd(event);
 				break;
+			case "message_start":
+				this.assistantStream.start(event.message);
+				break;
 			case "message_update":
-				this.handleMessageUpdate(event.message);
+				if (event.message !== undefined)
+					this.assistantStream.update(event.message);
+				else this.assistantStream.apply(event.assistantMessageEvent);
 				break;
 			case "message_end":
 				this.handleMessage(event.message);
@@ -176,7 +180,7 @@ export class RpcSubagentSession {
 
 	private handleAgentStart(): void {
 		this.streaming = true;
-		this.streamingMessage = undefined;
+		this.assistantStream.reset();
 		this.setStatus("running");
 		this.append("Agent started");
 	}
@@ -196,7 +200,8 @@ export class RpcSubagentSession {
 
 	private handleToolEnd(event: RpcEvent): void {
 		if (!event.toolName) return;
-		const entry = [...this.entries]
+		const entry = this.entries
+			.slice()
 			.reverse()
 			.find(
 				(item) =>
@@ -212,27 +217,11 @@ export class RpcSubagentSession {
 		this.append(`${event.isError ? "✗" : "✓"} ${event.toolName}`);
 	}
 
-	private handleMessageUpdate(message: unknown): void {
-		if (!this.isAssistantMessage(message)) return;
-		if (!this.streamingMessage) {
-			this.streamingMessage = { kind: "assistant", message };
-			this.entries.push(this.streamingMessage);
-		} else this.streamingMessage.message = message;
-		this.notify();
-	}
-
 	private handleMessage(message: unknown): void {
-		if (!this.isAssistantMessage(message)) return;
-		if (this.streamingMessage) this.streamingMessage.message = message;
-		else this.entries.push({ kind: "assistant", message });
-		this.streamingMessage = undefined;
-		const text = assistantText(message);
+		const text = this.assistantStream.finish(message);
+		if (text === undefined) return;
 		if (text) this.lastOutput = text;
 		this.append(text ? `AGENT: ${text}` : "Assistant message completed");
-	}
-
-	private isAssistantMessage(message: unknown): boolean {
-		return (message as { role?: unknown } | undefined)?.role === "assistant";
 	}
 
 	private handleSettled(): void {

@@ -8,6 +8,7 @@ import type { TUI } from "@earendil-works/pi-tui";
 import { createConfiguredBuiltinRenderers } from "../built-in-tool-style/renderers.js";
 import type { BuiltinToolName } from "../built-in-tool-style/config.js";
 import type { SubagentTranscriptEntry } from "../shared/subagent/registry.js";
+import type { SharedMarkdownRendering } from "../shared/tui/markdown.js";
 
 interface EntryRenderOptions {
 	toolsExpanded: boolean;
@@ -63,24 +64,35 @@ function renderTool(
 export function createSubagentEntryRenderer(
 	cwd: string,
 	tui: TUI,
+	markdown: SharedMarkdownRendering,
 ): SubagentEntryRenderer {
 	const definitions = createConfiguredBuiltinRenderers(cwd);
 	const markdownTheme = getMarkdownTheme();
 	return (entry, width, options) => {
 		if (entry.kind === "user")
-			return new UserMessageComponent(entry.text, markdownTheme, 0).render(
-				width,
-			);
-		if (entry.kind === "assistant")
-			return new AssistantMessageComponent(
-				entry.message as ConstructorParameters<
-					typeof AssistantMessageComponent
-				>[0],
+			return new UserMessageComponent(
+				entry.text,
+				markdownTheme,
+				0,
+				markdown.transformers,
+			).render(width);
+		if (entry.kind === "assistant") {
+			const component = new AssistantMessageComponent(
+				undefined,
 				options.thinkingHidden,
 				markdownTheme,
 				undefined,
 				0,
-			).render(width);
+				markdown.transformers,
+			);
+			component.updateContent(
+				entry.message as ConstructorParameters<
+					typeof AssistantMessageComponent
+				>[0],
+				entry.streaming ?? false,
+			);
+			return component.render(width);
+		}
 		const definition = definitions[
 			entry.name as BuiltinToolName
 		] as ConstructorParameters<typeof ToolExecutionComponent>[4];

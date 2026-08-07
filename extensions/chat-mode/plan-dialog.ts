@@ -16,7 +16,13 @@ import { fitLine } from "../shared/tui/visual-language.js";
 import {
 	acquireMouseTracking,
 	mouseWheelDirection,
+	overlayWheelSupported,
 } from "../shared/tui/mouse.js";
+import {
+	createSharedMarkdownRendering,
+	type SharedMarkdownRendering,
+} from "../shared/tui/markdown.js";
+import { overlayPanelHeight } from "../shared/tui/overlay-shell.js";
 
 const PANEL_HEIGHT_RATIO = 0.84;
 const WHEEL_STEP = 3;
@@ -26,6 +32,7 @@ interface PlanDialogOptions {
 	theme: Theme;
 	planPath: string;
 	planContent: string | undefined;
+	markdown: SharedMarkdownRendering;
 	close: () => void;
 }
 
@@ -71,6 +78,8 @@ class PlanReviewDialog implements Component {
 				0,
 				0,
 				getMarkdownTheme(),
+				undefined,
+				options.markdown.options("assistant"),
 			),
 		);
 		this.releaseMouse = acquireMouseTracking(options.tui);
@@ -111,10 +120,10 @@ class PlanReviewDialog implements Component {
 		const content = this.contentBox.render(innerWidth);
 		this.contentHeight = content.length;
 
-		const panelHeight = Math.max(
-			8,
-			Math.floor(this.tui.terminal.rows * PANEL_HEIGHT_RATIO),
-		);
+		const panelHeight = overlayPanelHeight(this.tui.terminal.rows, {
+			maxHeightRatio: PANEL_HEIGHT_RATIO,
+			margin: 1,
+		});
 		// top border + separator + footer + bottom border occupy four rows.
 		this.viewportHeight = Math.max(1, panelHeight - title.length - 4);
 		this.scrollOffset = Math.min(this.scrollOffset, this.maximumOffset());
@@ -129,8 +138,11 @@ class PlanReviewDialog implements Component {
 			this.contentHeight,
 			this.scrollOffset + this.viewportHeight,
 		);
+		const scrollHelp = overlayWheelSupported(this.tui)
+			? "↑↓/wheel/PgUp/PgDn scroll"
+			: "↑↓/PgUp/PgDn scroll";
 		const status = [
-			"↑↓/wheel/PgUp/PgDn scroll",
+			scrollHelp,
 			"Enter/Esc close",
 			`${this.scrollOffset + 1}-${end}/${this.contentHeight}`,
 		].join(" · ");
@@ -181,6 +193,7 @@ export async function showPlanDialog(
 				theme,
 				planPath,
 				planContent,
+				markdown: createSharedMarkdownRendering(ctx, theme),
 				close: done,
 			}),
 		{

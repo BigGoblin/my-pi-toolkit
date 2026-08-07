@@ -34,6 +34,8 @@
 
 ## TUI 视觉层
 
-`shared/tui/visual-language.ts` 统一状态字符、模式 badge、间距与行宽处理；`overlay-shell.ts` 统一复杂 Overlay 的 Header/viewport/Footer、高度预算和边框；`tool-render.ts` 和 `tool-format.ts` 为 toolkit 工具提供运行/成功/失败时间线。`built-in-tool-style` 可选择性覆盖仍由 Pi builtin 提供的工具 definition；它不替换 Pi 内置主对话 renderer，也不承诺主对话区鼠标点击。Plan 与 Subagent overlay 仅使用扩展层已有的 SGR 鼠标滚轮支持。
+`shared/tui/visual-language.ts` 统一状态字符、模式 badge、间距与行宽处理；`overlay-shell.ts` 统一复杂 Overlay 的 Header/viewport/Footer、高度预算和边框；`tool-render.ts` 和 `tool-format.ts` 为 toolkit 工具提供运行/成功/失败时间线。`built-in-tool-style` 可选择性覆盖仍由 Pi builtin 提供的工具 definition；它不替换 Pi 内置主对话 renderer，也不承诺主对话区鼠标点击。
+
+TUI 层兼容 Pi 0.84 的 `regular` 与 `fullscreen` renderer：扩展不清屏、不依赖 `pi-tui/dist/*`，Overlay 高度预算与 `maxHeight`/margin 对齐。Plan 与 Subagent overlay 在 regular 模式按引用计数启停 SGR mouse tracking；Pi 0.84 fullscreen 会在 Overlay 前消费 wheel，因此只显示键盘滚动提示，且关闭时不会发送 disable 序列影响宿主。Plan Review 与 Subagent live/history/fallback Markdown 继承 `markdown.mermaid` 设置，并使用 Pi 0.84 Unicode LaTeX。共享 RPC 子 Agent同时接受旧版累计 `message_update.message` 与 0.84 的 `assistantMessageEvent` delta，并以 `message_end` 覆盖最终消息。
 
 新增模块或更新任何 TUI 功能时，必须遵循 [`docs/tui-development-guidelines.md`](../docs/tui-development-guidelines.md)，包括共享视觉语义、响应式宽度、overlay 高度预算、输入与资源释放、工具 renderer、文档和验证清单。

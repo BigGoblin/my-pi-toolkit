@@ -73,7 +73,7 @@ Overlay 返回的总行数必须包含全部固定行：
 总高度 = 顶边框 + Header + 分隔线 + Viewport + 分隔线/状态行 + 底边框
 ```
 
-计算 viewport 时，必须逐项扣除固定行，不得使用未同步的魔法数字。新增或删除 Header、Footer、分隔线时必须同时更新高度预算。使用标准单行 Header/Footer 的复杂 Overlay 应复用 `overlay-shell.ts`；业务模块不得再套第二层 `DynamicBorder` 或手写同构边框。
+计算 viewport 时，必须逐项扣除固定行，不得使用未同步的魔法数字。新增或删除 Header、Footer、分隔线时必须同时更新高度预算。使用标准单行 Header/Footer 的复杂 Overlay 应复用 `overlay-shell.ts`；业务模块不得再套第二层 `DynamicBorder` 或手写同构边框。高度预算还必须与传给 Pi 的 `overlayOptions.maxHeight` 和 `margin` 使用同一组常量；不得先按全部 `terminal.rows` 生成面板，再依赖宿主裁剪。
 
 示例：包含顶边框、标题、分隔线、内容、Footer、底边框时：
 
@@ -98,15 +98,16 @@ viewportHeight = Math.max(1, panelHeight - chromeRows);
 
 - `Esc` 应关闭非破坏性 overlay；滚动视图应支持 ↑/↓、PageUp/PageDown、Home/End。
 - 可展开工具结果保持 Pi 的 `Ctrl+O` 习惯。
-- Footer/help 行必须展示主要键位，窄屏允许截掉次要提示但必须保留关闭方式。
+- Footer/help 行必须展示主要键位，窄屏允许截掉次要提示但必须保留关闭方式；提示必须按 `tui.mode` 反映真实能力，不得在 Pi 0.84 fullscreen Overlay 中展示无效的 wheel 操作。
 - 新快捷键不得覆盖 Pi 或已有 toolkit 快捷键；新增前检查相关模块 README。
 
 ### 4.3 鼠标
 
 - 鼠标支持必须是可选增强，不得成为唯一操作路径。
 - Overlay 滚轮必须复用 `extensions/shared/tui/mouse.ts` 的 `acquireMouseTracking()` 和 `mouseWheelDirection()`。
-- 必须保存并调用 release 函数，确保关闭、异常和 `/reload` 后终端鼠标模式被释放。
-- 不得在普通组件中直接发送 enable/disable 序列，避免多个组件互相关闭捕获。
+- 必须保存并调用 release 函数，确保关闭、异常和 `/reload` 后扩展持有的终端鼠标模式被释放。
+- Pi 0.84 fullscreen renderer 自行拥有 mouse mode，并会在 Overlay `handleInput()` 前消费 wheel；共享 helper 在该模式不得发送 enable/disable 序列，也不得访问/重排私有 `inputListeners` 伪造 Overlay wheel 支持。Overlay 关闭不得禁用宿主滚轮、scrollbar 或文字选择。
+- 不得在普通组件中直接发送 enable/disable 序列，避免多个组件或扩展与宿主互相关闭捕获。
 - 扩展层没有稳定的绝对布局 rect；未修改 Pi 核心前不得宣称支持通用点击命中。
 
 ## 5. 工具调用展示
@@ -140,6 +141,7 @@ renderResult(result, { expanded }, theme) {
 - Pi 内置工具视觉覆盖只能使用 Pi 导出的 `create*ToolDefinition()` factory，并完整保留其 schema、execute、prompt metadata 和 execution mode；不得手写或复制执行逻辑。
 - 同名内置工具覆盖必须遵循 Pi 的扩展加载顺序并检查最终 `sourceInfo`。若 reload 会在 `session_start` 前重建历史 transcript，可在 extension load 阶段预注册 renderer，但必须在 session start 后报告冲突，并提供关闭开关；不得宣称能绕过 Pi 的 first-registration-wins 规则。
 - 不得复制、patch 或 monkey patch 内部 `ToolExecutionComponent`。如果公开 factory 无法保留宿主执行配置，该工具必须保持 native，并在模块 README 说明限制。
+- 自定义 transcript、Plan Review 或历史详情若直接创建 `AssistantMessageComponent`、`UserMessageComponent` 或 `Markdown`，必须同步注入当前 Markdown transformers，并显式保留 Pi 0.84 的 LaTeX 渲染；不能假设复用消息组件会自动继承主 interactive-mode 的 Mermaid transformer。
 
 ## 6. 信息层级
 
@@ -165,6 +167,9 @@ renderResult(result, { expanded }, theme) {
 
 ## 7. 架构与兼容性
 
+- TUI 修改必须同时验证 Pi 的 `regular`（主屏幕/scrollback）与 `fullscreen`（alternate-screen/固定 viewport）模式；不得假设 `TUI` 是可实例化的具体 class。
+- 只从 `@earendil-works/pi-tui` 根入口使用公共导出，不得导入 `pi-tui/dist/*` 或读取 renderer 私有布局状态。
+- 屏幕缓冲区、alternate-screen 进入/退出、清屏和 scrollback 由 Pi 宿主管理；Header、Footer、Widget、Overlay 的 factory 不得自行清屏。
 - 公共视觉 helper 放在 `extensions/shared/tui/`；业务数据和执行逻辑留在模块目录。
 - 不得让 `shared/tui` 依赖具体业务模块，避免循环依赖。
 - 子 Agent 仍走瘦加载路径，不得加载整个 `ming-core`。
@@ -200,7 +205,7 @@ renderResult(result, { expanded }, theme) {
 
 - [ ] tool running / success / error / empty result 均正确。
 - [ ] `Ctrl+O` 折叠与展开正确，长路径和长错误不会越界。
-- [ ] 60、80、120、160 列下人工 resize 验证。
+- [ ] regular/fullscreen 两种模式均在 60、80、120、160 列下人工 resize 验证。
 - [ ] Plan、Todo、Subagent 的打开、更新、滚动、关闭和 `/reload` 正常。
 - [ ] Windows Terminal；条件允许时抽查 tmux/SSH/Termux。
 

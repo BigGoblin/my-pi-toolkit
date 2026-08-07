@@ -12,6 +12,10 @@ import {
 	type TUI,
 } from "@earendil-works/pi-tui";
 import {
+	createSharedMarkdownRendering,
+	type SharedMarkdownRendering,
+} from "../shared/tui/markdown.js";
+import {
 	overlayInnerWidth,
 	overlayViewportHeight,
 	renderOverlayShell,
@@ -21,7 +25,11 @@ import {
 	createSubagentDetailNavigator,
 	type SubagentDetailItem,
 } from "./detail-navigation.js";
-import { acquireMouseTracking, mouseWheelDirection } from "./mouse.js";
+import {
+	acquireMouseTracking,
+	mouseWheelDirection,
+	overlayWheelSupported,
+} from "./mouse.js";
 
 function subagentStatusColor(status: string): "accent" | "success" | "error" {
 	if (status === "running") return "accent";
@@ -46,6 +54,7 @@ interface SubagentOverlayOptions {
 	requestRender: () => void;
 	theme: Theme;
 	keybindings: KeybindingsManager;
+	markdown: SharedMarkdownRendering;
 	close: () => void;
 }
 
@@ -55,6 +64,7 @@ function createSubagentOverlay(options: SubagentOverlayOptions): Component {
 		options.initialId,
 		options.tui,
 		options.requestRender,
+		options.markdown,
 	);
 	const releaseMouseTracking = acquireMouseTracking(options.tui);
 	let scrollOffset = 0;
@@ -142,16 +152,21 @@ function createSubagentOverlay(options: SubagentOverlayOptions): Component {
 			}),
 		);
 		const renderedMarkdown = run.markdown
-			? new Markdown(run.markdown, 0, 0, getMarkdownTheme()).render(innerWidth)
+			? new Markdown(
+					run.markdown,
+					0,
+					0,
+					getMarkdownTheme(),
+					undefined,
+					options.markdown.options("assistant"),
+				).render(innerWidth)
 			: [];
 		const content = renderedEntries?.length
 			? renderedEntries
 			: renderedMarkdown;
 		contentHeight = content.length;
 		const maximum = Math.max(0, content.length - viewportHeight);
-		scrollOffset = autoFollow
-			? maximum
-			: Math.min(scrollOffset, maximum);
+		scrollOffset = autoFollow ? maximum : Math.min(scrollOffset, maximum);
 		const visible = content.slice(scrollOffset, scrollOffset + viewportHeight);
 		while (visible.length < viewportHeight) visible.push("");
 		const statusColor = subagentStatusColor(run.status);
@@ -172,9 +187,12 @@ function createSubagentOverlay(options: SubagentOverlayOptions): Component {
 			toolOutputExpanded ? "collapse tools" : "expand tools",
 			"toggle tools",
 		);
+		const scrollHint = overlayWheelSupported(options.tui)
+			? "↑↓/wheel scroll"
+			: "↑↓/PgUp/PgDn scroll";
 		const footer = options.theme.fg(
 			"dim",
-			`Esc close · ←/→ switch · ↑↓/wheel scroll · ${thinkingHint} · ${toolsHint} · End follow · ${position}`,
+			`Esc close · ←/→ switch · ${scrollHint} · ${thinkingHint} · ${toolsHint} · End follow · ${position}`,
 		);
 		return renderOverlayShell(options.theme, width, {
 			header,
@@ -213,6 +231,7 @@ async function showOverlay(
 				requestRender: () => tui.requestRender(),
 				theme,
 				keybindings,
+				markdown: createSharedMarkdownRendering(ctx, theme),
 				close: () => done(),
 			}),
 		STANDARD_OVERLAY_OPTIONS,

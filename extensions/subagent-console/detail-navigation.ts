@@ -3,6 +3,7 @@ import type {
 	LiveSubagentRun,
 	SubagentTranscriptEntry,
 } from "../shared/subagent/registry.js";
+import type { SharedMarkdownRendering } from "../shared/tui/markdown.js";
 import {
 	createSubagentEntryRenderer,
 	type SubagentEntryRenderer,
@@ -39,6 +40,7 @@ export function createSubagentDetailNavigator(
 	initialId: string,
 	tui: TUI,
 	requestRender: () => void,
+	markdown: SharedMarkdownRendering,
 ): SubagentDetailNavigator {
 	let currentIndex = Math.max(
 		0,
@@ -47,7 +49,7 @@ export function createSubagentDetailNavigator(
 	const initialItem = items[currentIndex];
 	if (!initialItem) throw new Error("Subagent detail list cannot be empty");
 	let run = initialItem.load();
-	let entryRenderer = createSubagentEntryRenderer(run.cwd, tui);
+	let entryRenderer = createSubagentEntryRenderer(run.cwd, tui, markdown);
 	let unsubscribeRun = run.subscribe?.(requestRender) ?? (() => {});
 
 	const clearSubscription = () => {
@@ -68,7 +70,7 @@ export function createSubagentDetailNavigator(
 			clearSubscription();
 			currentIndex = nextIndex;
 			run = nextItem.load();
-			entryRenderer = createSubagentEntryRenderer(run.cwd, tui);
+			entryRenderer = createSubagentEntryRenderer(run.cwd, tui, markdown);
 			unsubscribeRun = run.subscribe?.(requestRender) ?? (() => {});
 			return true;
 		},

@@ -4,7 +4,6 @@ import type {
 	ExtensionContext,
 	ReadonlyFooterDataProvider,
 	SessionInfoChangedEvent,
-	SessionStartEvent,
 	Theme,
 } from "@earendil-works/pi-coding-agent";
 import type { TUI } from "@earendil-works/pi-tui";
@@ -24,21 +23,12 @@ export default function startupDashboard(pi: ExtensionAPI) {
 	let sessionTitle: string | undefined;
 	let requestFooterRender: (() => void) | undefined;
 
-	const installHeader = (
-		ctx: ExtensionContext,
-		clearTerminal = false,
-	): void => {
+	const installHeader = (ctx: ExtensionContext): void => {
 		if (!headerEnabled) {
 			ctx.ui.setHeader(undefined);
 			return;
 		}
-		let shouldClearTerminal = clearTerminal;
-		ctx.ui.setHeader((tui: TUI, theme: Theme) => {
-			if (shouldClearTerminal) {
-				tui.terminal.clearScreen();
-				tui.terminal.write("\x1b[3J");
-				shouldClearTerminal = false;
-			}
+		ctx.ui.setHeader((_tui: TUI, theme: Theme) => {
 			return {
 				render: (width: number) => renderDashboard(width, data, theme),
 				invalidate() {},
@@ -82,16 +72,13 @@ export default function startupDashboard(pi: ExtensionAPI) {
 		);
 	};
 
-	pi.on(
-		"session_start",
-		async (event: SessionStartEvent, ctx: ExtensionContext) => {
-			if (ctx.mode !== "tui") return;
-			sessionTitle = pi.getSessionName();
-			data = await discoverDashboardData(ctx.cwd);
-			installHeader(ctx, event.reason === "startup");
-			installFooter(ctx);
-		},
-	);
+	pi.on("session_start", async (_event: unknown, ctx: ExtensionContext) => {
+		if (ctx.mode !== "tui") return;
+		sessionTitle = pi.getSessionName();
+		data = await discoverDashboardData(ctx.cwd);
+		installHeader(ctx);
+		installFooter(ctx);
+	});
 
 	const refreshFooter = (ctx: ExtensionContext): void => {
 		if (ctx.mode !== "tui") return;

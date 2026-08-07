@@ -2,7 +2,7 @@ export type SubagentRunStatus = "starting" | "running" | "completed" | "failed";
 
 export type SubagentTranscriptEntry =
 	| { kind: "user"; text: string }
-	| { kind: "assistant"; message: unknown }
+	| { kind: "assistant"; message: unknown; streaming?: boolean }
 	| {
 			kind: "tool";
 			id: string;

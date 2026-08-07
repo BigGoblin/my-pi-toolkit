@@ -11,19 +11,19 @@ import {
 	SelectList as RuntimeSelectList,
 	Spacer as RuntimeSpacer,
 	Text as RuntimeText,
+	type Component,
+	type SelectItem,
+	type SelectList as SelectListType,
+	type Spacer as SpacerType,
+	type Text as TextType,
+	type TUI,
 } from "@earendil-works/pi-tui";
-import type {
-	SelectItem,
-	SelectList as SelectListType,
-} from "@earendil-works/pi-tui/dist/components/select-list.js";
-import type { Spacer as SpacerType } from "@earendil-works/pi-tui/dist/components/spacer.js";
-import type { Text as TextType } from "@earendil-works/pi-tui/dist/components/text.js";
-import type {
-	Container as ContainerType,
-	TUI,
-} from "@earendil-works/pi-tui/dist/tui.js";
 
-const Container = RuntimeContainer as typeof ContainerType;
+interface ChildContainer extends Component {
+	addChild(component: Component): void;
+}
+
+const Container = RuntimeContainer as unknown as new () => ChildContainer;
 const SelectList = RuntimeSelectList as typeof SelectListType;
 const Spacer = RuntimeSpacer as typeof SpacerType;
 const Text = RuntimeText as typeof TextType;

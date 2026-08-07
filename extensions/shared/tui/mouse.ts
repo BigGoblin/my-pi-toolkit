@@ -2,8 +2,17 @@ import type { TUI } from "@earendil-works/pi-tui";
 
 const mouseTrackingUsers = new WeakMap<TUI, number>();
 
-/** Enable SGR mouse tracking while at least one focused component needs it. */
+export function overlayWheelSupported(tui: TUI): boolean {
+	return tui.mode === "regular";
+}
+
+function hostOwnsMouseTracking(tui: TUI): boolean {
+	return tui.mode === "fullscreen";
+}
+
+/** Enable SGR mouse tracking in regular mode; fullscreen owns its mouse mode. */
 export function acquireMouseTracking(tui: TUI): () => void {
+	if (hostOwnsMouseTracking(tui)) return () => {};
 	const users = mouseTrackingUsers.get(tui) ?? 0;
 	if (users === 0) tui.terminal.write("\x1b[?1000h\x1b[?1006h");
 	mouseTrackingUsers.set(tui, users + 1);

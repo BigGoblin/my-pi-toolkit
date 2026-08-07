@@ -64,7 +64,7 @@ Plan 用于实施前的只读调研与方案审批：
 | `exit_plan_mode` | 从磁盘读取 Plan，以带背景色的 Markdown 对话框展示全文，再显示审批选项 |
 | `ask_user_choice` | 在写 Plan 前确认关键决策；提供推荐选项和最后一项自定义输入 |
 
-TUI 中 Plan 正文和审批选择分开显示：先在 Grok 风格的 `PLAN REVIEW` 单线边框 Markdown overlay 中展示完整方案，底部单独显示滚动和关闭提示；关闭后选择组件只显示操作。overlay 有固定视口，不会撑高终端内容；支持鼠标滚轮、↑/↓、PageUp/PageDown、Home/End 内部滚动，Enter/Esc 关闭。`/plan review` 仅重新打开该 overlay，不触发审批或切换模式；即使 Agent 正在运行也可只读浏览当前已写入的 Plan。
+TUI 中 Plan 正文和审批选择分开显示：先在 Grok 风格的 `PLAN REVIEW` 单线边框 Markdown overlay 中展示完整方案，底部单独显示滚动和关闭提示；关闭后选择组件只显示操作。overlay 有固定视口，高度预算与 Pi 的 `maxHeight`/margin 对齐，不会撑高终端内容。regular 模式支持鼠标滚轮、↑/↓、PageUp/PageDown、Home/End；Pi 0.84 fullscreen 会先消费 wheel，Overlay 因此只提供键盘滚动，Footer 会隐藏无效的 wheel 提示。Enter/Esc 关闭。Plan Markdown 继承 `markdown.mermaid` 设置并启用 Pi 0.84 Unicode LaTeX；`/plan review` 与审批前的 Plan Review 均支持 Mermaid/LaTeX。`/plan review` 仅重新打开该 overlay，不触发审批或切换模式；即使 Agent 正在运行也可只读浏览当前已写入的 Plan。
 
 审批选项：
 

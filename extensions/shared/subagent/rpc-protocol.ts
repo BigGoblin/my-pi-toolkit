@@ -2,9 +2,17 @@ import { writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { ChildProcessWithoutNullStreams } from "node:child_process";
 
+export interface RpcAssistantMessageEvent {
+	type?: string;
+	contentIndex?: number;
+	delta?: string;
+	content?: string;
+}
+
 export interface RpcEvent {
 	type?: string;
 	message?: unknown;
+	assistantMessageEvent?: RpcAssistantMessageEvent;
 	toolCallId?: string;
 	toolName?: string;
 	args?: Record<string, unknown>;

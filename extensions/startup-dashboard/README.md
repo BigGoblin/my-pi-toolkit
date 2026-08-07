@@ -6,7 +6,7 @@
 
 ## 功能
 
-- `mpi` 首次启动时清理当前终端画面和回滚缓冲区，避免 Dashboard 上方残留 PowerShell 命令；`/reload` 和会话切换不会清屏。
+- Dashboard 只通过 Pi 公共 Header API 挂载，不直接清屏或清除 scrollback；终端缓冲区由 Pi 管理，兼容 0.84 的 regular 与 fullscreen TUI。
 - 使用 Grok Build 风格的轻量品牌行、工作区说明、资源分栏和 Ready 快捷提示，减少装饰性卡片与重边框。
 - Context、Skills、Extensions 和 Themes 始终完整展示，不使用折叠或展开快捷键。
 - 中屏自动变为两行双栏，窄屏变为紧凑单栏，避免内容超出终端宽度。
@@ -33,7 +33,7 @@
 /dashboard-footer # 在自定义和内置 Footer 之间切换
 ```
 
-切换状态仅在当前 Pi 进程中保存；重启或 `/reload` 后恢复自定义界面。Footer 与 Git 分支订阅按 session 建立，并在 `/new`、`/resume`、`/fork`、`/reload` 和退出时释放；渲染不会复用已失效的 session context。
+切换状态仅在当前 Pi 进程中保存；重启或 `/reload` 后恢复自定义界面。Footer 与 Git 分支订阅按 session 建立，并在 `/new`、`/resume`、`/fork`、`/reload` 和退出时释放；渲染不会复用已失效的 session context。Pi 0.84 的 fullscreen 模式会把 Footer 固定在 viewport dock 中，现有响应式布局会按宽度隐藏或换行低价值字段，不依赖具体 renderer。
 
 ## 推荐主题
 
