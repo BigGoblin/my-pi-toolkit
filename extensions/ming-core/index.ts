@@ -9,6 +9,7 @@ import agentTodos from "../agent-todos/index.js";
 import builtInToolStyle from "../built-in-tool-style/index.js";
 import chatMode from "../chat-mode/index.js";
 import cursorModels from "../cursor-models/index.js";
+import helps from "../helps/index.js";
 import modelManager from "../model-manager/index.js";
 import multiTask from "../multi-task/index.js";
 import openaiCompatModels from "../openai-compat-models/index.js";
@@ -33,4 +34,5 @@ export default async function mingCore(pi: ExtensionAPI): Promise<void> {
 	sessionBranchGuard(pi);
 	taskDuration(pi);
 	startupDashboard(pi);
+	helps(pi);
 }

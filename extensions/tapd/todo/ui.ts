@@ -1,5 +1,5 @@
-import { execFile } from "node:child_process";
 import type { ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
+import { openUrl } from "../../shared/open-url.js";
 import { fetchAll } from "../core/workspace-api.js";
 import { buildTapdCatalog, listTapdSessions } from "../sessions/catalog.js";
 import type {
@@ -217,29 +217,3 @@ async function linkedSessionOutcome(
 		: undefined;
 }
 
-function browserCandidates(url: string): Array<[string, string[]]> {
-	if (process.platform === "win32")
-		return [["cmd.exe", ["/d", "/s", "/c", "start", "", url]]];
-	if (process.platform === "darwin") return [["open", [url]]];
-	return [
-		["xdg-open", [url]],
-		["gio", ["open", url]],
-		["sensible-browser", [url]],
-		["wslview", [url]],
-		["cmd.exe", ["/d", "/s", "/c", "start", "", url]],
-	];
-}
-
-async function openUrl(url: string): Promise<string | null> {
-	const candidates = browserCandidates(url);
-	const errors: string[] = [];
-	for (const [command, args] of candidates) {
-		const error = await new Promise<Error | null>((resolve) =>
-			execFile(command, args, (value) => resolve(value)),
-		);
-		if (!error) return null;
-		if ((error as NodeJS.ErrnoException).code !== "ENOENT")
-			errors.push(`${command}: ${error.message}`);
-	}
-	return errors.pop() ?? "系统中未找到可用的浏览器打开命令";
-}

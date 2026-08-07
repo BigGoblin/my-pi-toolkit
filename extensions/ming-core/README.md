@@ -19,6 +19,7 @@
 11. `session-branch-guard` — 会话与 Git 分支绑定门禁（`/session-branch`），恢复会话时校验分支，dirty 时提供 stash/直接切换/rebind
 12. `task-duration` — 在最终回复下方持久显示首次 `agent_start` 到最终 `agent_settled` 的任务耗时，不进入 LLM 上下文
 13. `startup-dashboard` — 启动面板与 Footer
+14. `helps` — `/helps` 在浏览器打开 [my-pi-toolkit](https://github.com/BigGoblin/my-pi-toolkit) 仓库页
 
 实现仍在各自目录；本入口只做组合注册。新增或更新这些模块的终端 UI 时，必须遵循 [`docs/tui-development-guidelines.md`](../../docs/tui-development-guidelines.md)，并优先复用 `extensions/shared/tui/`。
 

@@ -115,6 +115,7 @@ pi --no-session
 | `/context7 <query>` | 查询第三方库文档 |
 | `/subagents` | 管理子 Agent |
 | `/settings` | 切换主题等设置 |
+| `/helps` | 打开 [my-pi-toolkit](https://github.com/BigGoblin/my-pi-toolkit) 文档仓库 |
 | `/reload` | 修改扩展后重新加载运行时 |
 
 ## Configuration
