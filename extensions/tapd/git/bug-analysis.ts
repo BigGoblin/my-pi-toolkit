@@ -155,10 +155,6 @@ export async function selectIntroducedCommitCandidate(
 	targetBranch: string,
 	bugId: string,
 ): Promise<IntroducedCommitCandidate | undefined> {
-	ctx.ui.notify(
-		`正在根据修复 diff 和 git blame 分析 Bug ${bugId} 的引入 commit 候选...`,
-		"info",
-	);
 	const candidates = await analyzeIntroducedCommitCandidates(cwd, targetBranch);
 	if (candidates.length === 0) {
 		ctx.ui.notify(

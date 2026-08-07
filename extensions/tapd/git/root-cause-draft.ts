@@ -67,8 +67,6 @@ export function parseBugRootCauseEditor(
 	const introducedCommit = sectionValue(text, "引入commit", "commit信息");
 	const commitInfo = sectionValue(text, "commit信息", "修复");
 	const fix = sectionValue(text, "修复");
-	if (!cause) throw new Error(`Bug ${bugId}: 请填写【产生原因】`);
-	if (!fix) throw new Error(`Bug ${bugId}: 请填写【修复】`);
 	if (!introducedCommit)
 		throw new Error(`Bug ${bugId}: 请保留【引入commit】，或填写“未能定位”`);
 	if (!commitInfo) throw new Error(`Bug ${bugId}: 请保留【commit信息】`);
