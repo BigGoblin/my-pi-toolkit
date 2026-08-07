@@ -127,6 +127,7 @@ pi --no-session
 | Context7 | `~/.pi/agent/context7.json` 或环境变量 `CONTEXT7_API_KEY` |
 | GitLab（TAPD MR 等） | `tapd.json` 的 `gitlab.token` 或 `GITLAB_PERSONAL_ACCESS_TOKEN` |
 | Cursor 模型 | Pi 内 `/login`（OAuth） |
+| OpenAI 兼容模型自动发现 | `~/.pi/agent/models.json` 中省略 `models`（或 `[]`）；打开 `/model` 时刷新；详见 [`extensions/openai-compat-models/README.md`](extensions/openai-compat-models/README.md) |
 
 ## Components
 

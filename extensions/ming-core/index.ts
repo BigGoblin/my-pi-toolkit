@@ -11,6 +11,7 @@ import chatMode from "../chat-mode/index.js";
 import cursorModels from "../cursor-models/index.js";
 import modelManager from "../model-manager/index.js";
 import multiTask from "../multi-task/index.js";
+import openaiCompatModels from "../openai-compat-models/index.js";
 import piLens from "../pi-lens/index.js";
 import repoSearchSubagent from "../repo-search-subagent/index.js";
 import { sessionBranchGuard } from "../session-branch-guard/index.js";
@@ -19,6 +20,7 @@ import subagentConsole from "../subagent-console/index.js";
 import taskDuration from "../task-duration/index.js";
 
 export default async function mingCore(pi: ExtensionAPI): Promise<void> {
+	openaiCompatModels(pi);
 	cursorModels(pi);
 	modelManager(pi);
 	await piLens(pi);

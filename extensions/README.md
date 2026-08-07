@@ -23,6 +23,7 @@
 | Agent Todos | Cursor TodoWrite 风格任务清单，editor 上方完整进度 | [`agent-todos/README.md`](agent-todos/README.md) |
 | Chat Mode | 使用 `Shift+Tab` 循环 Build/Plan/Ask；Plan 支持关键决策选项确认，仅可写 session `plan.md`，含 enter/exit_plan_mode 审批 | [`chat-mode/README.md`](chat-mode/README.md) |
 | Built-in Tool Style | 通过官方 tool factory 为 Pi 七个内置工具提供可选 Grok 时间线；`/grok-tools` 配置 | [`built-in-tool-style/README.md`](built-in-tool-style/README.md) |
+| OpenAI Compat Models | 对 `models.json` 中未手写 `models` 的 OpenAI 兼容 provider 在 `/model` 时拉取 `/models` | [`openai-compat-models/README.md`](openai-compat-models/README.md) |
 | Cursor Models | Cursor 模型折叠、思考等级和 Fast 模式 | [`cursor-models/README.md`](cursor-models/README.md) |
 | Model Manager | 为新对话应用可配置的默认模型和思考等级；`/effort` 选择当前模型思考等级 | [`model-manager/README.md`](model-manager/README.md) |
 | Pi Lens | LSP、AST 搜索、诊断和代码分析扩展加载入口 | [`pi-lens/README.md`](pi-lens/README.md) |
