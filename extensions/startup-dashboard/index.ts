@@ -55,7 +55,7 @@ export default function startupDashboard(pi: ExtensionAPI) {
 								ctx,
 								footerData.getGitBranch(),
 								sessionTitle,
-								footerData.getExtensionStatuses().get("chat-mode"),
+								undefined,
 								footerData.getExtensionStatuses().get("subagent"),
 							),
 							theme,

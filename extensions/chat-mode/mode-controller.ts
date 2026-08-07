@@ -7,7 +7,7 @@ import {
 	enterPlanFromUser,
 	leavePlan,
 } from "./plan-lifecycle.js";
-import { modeBadge } from "../shared/tui/visual-language.js";
+import { refreshChatModeEditor } from "./editor.js";
 import { restrictedModeToolNames } from "./policy.js";
 import {
 	getChatMode,
@@ -41,7 +41,9 @@ export function createModeController(
 	let toolsBeforeRestricted: string[] | undefined;
 
 	function updateStatus(ctx: ExtensionContext): void {
-		ctx.ui.setStatus("chat-mode", modeBadge(ctx.ui.theme, getChatMode()));
+		// Mode is shown on the editor top border; clear legacy footer badge.
+		ctx.ui.setStatus("chat-mode", undefined);
+		refreshChatModeEditor();
 	}
 
 	function restoreBuildTools(): void {

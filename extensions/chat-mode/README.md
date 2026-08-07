@@ -16,10 +16,10 @@ BUILD → PLAN → ASK → BUILD
 
 ## Build
 
-默认模式，不限制工具和项目写入。Footer 显示：
+默认模式，不限制工具和项目写入。输入框顶边线显示：
 
 ```text
-● BUILD
+─ BUILD ───────
 ```
 
 ## Plan
@@ -31,7 +31,7 @@ Plan 用于实施前的只读调研与方案审批：
 - 用户取消选择时停止规划，不推测答案，也不进入 Plan 审批。
 - `write` / `edit` 只能修改本 session 固定的 `plan.md`。
 - 禁止修改项目源码或其他 session 的 Plan。
-- Footer 显示主题 warning 色的 `● PLAN`。
+- 输入框顶边线显示主题 warning 色的 `─ PLAN ─`。
 
 ### 固定 Plan 文件
 
@@ -90,7 +90,7 @@ Ask 用于问答、解释、诊断和只读调研：
 - `write` / `edit` 只能修改当前项目 `.pi/**`。
 - 禁止 bash、AST 替换及未登记工具。
 - 可调用 `enter_plan_mode` 升级到规划阶段（TAPD 文档工作流的 prompt 会明确禁止该调用）。
-- Footer 显示主题 success 色的 `● ASK`。
+- 输入框顶边线显示主题 success 色的 `─ ASK ─`。
 
 ## 安全边界
 

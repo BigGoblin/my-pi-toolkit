@@ -5,13 +5,13 @@ import type {
 	ContextEvent,
 	ExtensionAPI,
 	ExtensionContext,
+	KeybindingsManager,
 	SessionCompactEvent,
 	SessionStartEvent,
-	Theme,
 	ToolCallEvent,
 } from "@earendil-works/pi-coding-agent";
-import type { KeybindingsManager, TUI } from "@earendil-works/pi-tui";
-import { ChatModeEditor } from "./editor.js";
+import type { EditorTheme, TUI } from "@earendil-works/pi-tui";
+import { ChatModeEditor, unbindChatModeEditor } from "./editor.js";
 import { type ModeController, toggleMode } from "./mode-controller.js";
 import {
 	enterPlanFromTool,
@@ -74,6 +74,9 @@ export function registerChatModeLifecycle(
 	pi.on("before_agent_start", createBeforeAgentStartHandler(options));
 	pi.on("context", createContextHandler(options));
 	pi.on("tool_call", createToolCallHandler(options));
+	pi.on("session_shutdown", () => {
+		unbindChatModeEditor();
+	});
 }
 
 function createSessionStartHandler(options: ChatModeLifecycleOptions) {
@@ -81,6 +84,7 @@ function createSessionStartHandler(options: ChatModeLifecycleOptions) {
 		await restoreSessionModeState(options, ctx);
 		if (ctx.mode !== "tui") return;
 		ctx.ui.setEditorComponent(createChatModeEditor(options, ctx));
+		options.modeController.updateStatus(ctx);
 	};
 }
 
@@ -130,8 +134,14 @@ function createChatModeEditor(
 	options: ChatModeLifecycleOptions,
 	ctx: ExtensionContext,
 ) {
-	return (tui: TUI, theme: Theme, keybindings: KeybindingsManager) => {
-		const editor = new ChatModeEditor(tui, theme, keybindings);
+	return (tui: TUI, theme: EditorTheme, keybindings: KeybindingsManager) => {
+		// EditorFactory / CustomEditor resolve KeybindingsManager via different pi-tui copies.
+		const editor = new ChatModeEditor(
+			tui,
+			theme,
+			keybindings as ConstructorParameters<typeof ChatModeEditor>[2],
+		);
+		editor.resolveTheme = () => ctx.ui.theme;
 		editor.onToggle = () =>
 			toggleMode(options.modeController, ctx, () =>
 				options.enterPlan(ctx, "user"),

@@ -32,11 +32,27 @@ export function statusGlyph(theme: Theme, status: VisualStatus): string {
 	return theme.fg(STATUS_COLORS[status], UI_GLYPHS[status]);
 }
 
-export function modeBadge(theme: Theme, mode: ModeName): string {
-	return theme.fg(
-		MODE_COLORS[mode],
-		`${UI_GLYPHS.active} ${mode.toUpperCase()}`,
-	);
+/** Embed a mode label in an editor top border: `─ BUILD ───────`. */
+export function modeEditorBorder(
+	theme: Theme,
+	mode: ModeName,
+	width: number,
+	border: (text: string) => string,
+): string {
+	if (width <= 0) return "";
+	if (width === 1) return border("─");
+
+	let label = theme.fg(MODE_COLORS[mode], ` ${mode.toUpperCase()} `);
+	const fixedWidth = 2; // leading and trailing ─
+	const minimumGap = 3;
+	while (
+		fixedWidth + visibleWidth(label) + minimumGap > width &&
+		visibleWidth(label) > 0
+	) {
+		label = truncateToWidth(label, Math.max(0, visibleWidth(label) - 1), "");
+	}
+	const gapWidth = Math.max(0, width - fixedWidth - visibleWidth(label));
+	return `${border("─")}${label}${border("─".repeat(gapWidth))}${border("─")}`;
 }
 
 export function secondaryLine(theme: Theme, text: string): string {
